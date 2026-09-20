@@ -1,0 +1,47 @@
+# Built application files
+*.apk
+*.aab
+*.ap_
+*.dex
+
+# Files for the ART/Dalvik VM
+*.class
+
+# Java / JVM crash logs
+hs_err_pid*
+replay_pid*
+
+# Gradle cache and temporary files
+.gradle/
+build/
+app/build/
+
+# Local configuration file (contains local Android SDK paths)
+local.properties
+
+# Log files
+*.log
+
+# Android Studio / IntelliJ IDEA project files
+*.iml
+.idea/
+.idea/caches
+.idea/libraries
+.idea/modules.xml
+.idea/workspace.xml
+
+# Keystore files (Security sensitive)
+*.jks
+*.keystore
+
+# Google Services credentials
+google-services.json
+
+# OS-generated files
+.DS_Store
+Thumbs.db
+
+# Android Profiling & Captures
+captures/
+.externalNativeBuild/
+.cxx/
