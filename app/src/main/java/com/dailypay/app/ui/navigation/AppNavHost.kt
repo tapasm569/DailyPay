@@ -72,6 +72,7 @@ fun AppNavHost(
         }
 
         // ================= LENDER FLOW =================
+        // Lender Home (Tabbed: Pending Dues & Paid Today)
         composable(
             route = Screen.LenderHome.route,
             arguments = listOf(navArgument("lenderId") { type = NavType.StringType })
@@ -90,6 +91,7 @@ fun AppNavHost(
             )
         }
 
+        // Lender Dashboard Grid Menu
         composable(
             route = Screen.LenderDashboard.route,
             arguments = listOf(navArgument("lenderId") { type = NavType.StringType })
@@ -102,13 +104,14 @@ fun AppNavHost(
                 onNewLoanRequestClick = { navController.navigate(Screen.NewLoanRequest.createRoute(lenderId)) },
                 onSetInterestClick = { navController.navigate(Screen.SetInterest.createRoute(lenderId)) },
                 onGiveLoanManualClick = { navController.navigate(Screen.GiveLoanManual.createRoute(lenderId)) },
-                onTodaysDueClick = { navController.navigate(Screen.LenderHome.createRoute(lenderId)) },
+                onTodaysDueClick = { navController.navigate(Screen.TodaysDue.createRoute(lenderId)) },
                 onTodaysPaymentClick = { navController.navigate(Screen.TodaysPayment.createRoute(lenderId)) },
                 onMasterClientClick = { navController.navigate(Screen.MasterClient.createRoute(lenderId)) },
                 onLedgerBookClick = { navController.navigate(Screen.LenderLedger.createRoute(lenderId)) }
             )
         }
 
+        // Add Borrower Screen
         composable(
             route = Screen.AddBorrower.route,
             arguments = listOf(navArgument("lenderId") { type = NavType.StringType })
@@ -117,6 +120,7 @@ fun AppNavHost(
             AddBorrowerScreen(lenderId = lenderId, onNavigateBack = { navController.popBackStack() })
         }
 
+        // Give Loan Manually
         composable(
             route = Screen.GiveLoanManual.route,
             arguments = listOf(navArgument("lenderId") { type = NavType.StringType })
@@ -125,6 +129,7 @@ fun AppNavHost(
             GiveLoanManualScreen(lenderId = lenderId, onNavigateBack = { navController.popBackStack() })
         }
 
+        // New Loan Requests (Approval / Disburse)
         composable(
             route = Screen.NewLoanRequest.route,
             arguments = listOf(navArgument("lenderId") { type = NavType.StringType })
@@ -133,6 +138,7 @@ fun AppNavHost(
             NewLoanRequestScreen(lenderId = lenderId, onNavigateBack = { navController.popBackStack() })
         }
 
+        // Set Interest Rate
         composable(
             route = Screen.SetInterest.route,
             arguments = listOf(navArgument("lenderId") { type = NavType.StringType })
@@ -141,6 +147,16 @@ fun AppNavHost(
             SetInterestScreen(lenderId = lenderId, onNavigateBack = { navController.popBackStack() })
         }
 
+        // Today's Due (Auto-clearing unpaid list)
+        composable(
+            route = Screen.TodaysDue.route,
+            arguments = listOf(navArgument("lenderId") { type = NavType.StringType })
+        ) { backStackEntry ->
+            val lenderId = backStackEntry.arguments?.getString("lenderId") ?: ""
+            TodaysDueScreen(lenderId = lenderId, onNavigateBack = { navController.popBackStack() })
+        }
+
+        // Today's Payment (Collected payments list)
         composable(
             route = Screen.TodaysPayment.route,
             arguments = listOf(navArgument("lenderId") { type = NavType.StringType })
@@ -149,6 +165,7 @@ fun AppNavHost(
             TodaysPaymentScreen(lenderId = lenderId, onNavigateBack = { navController.popBackStack() })
         }
 
+        // Master Client List
         composable(
             route = Screen.MasterClient.route,
             arguments = listOf(navArgument("lenderId") { type = NavType.StringType })
@@ -161,6 +178,7 @@ fun AppNavHost(
             )
         }
 
+        // Business Ledger Book
         composable(
             route = Screen.LenderLedger.route,
             arguments = listOf(navArgument("lenderId") { type = NavType.StringType })
