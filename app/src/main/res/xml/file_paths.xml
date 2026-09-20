@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths>
+    <!-- Internal cache directory for temporary generated statement PDFs -->
+    <cache-path
+        name="cached_pdfs"
+        path="." />
+
+    <!-- External app-specific files directory -->
+    <external-files-path
+        name="external_pdf_docs"
+        path="Documents" />
+
+    <!-- Public shared Documents folder on device -->
+    <external-path
+        name="external_storage_root"
+        path="Documents/DailyPay" />
+</paths>
