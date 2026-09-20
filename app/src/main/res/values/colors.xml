@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Brand Primary -->
+    <color name="brand_primary">#4F46E5</color>
+    <color name="brand_primary_dark">#3730A3</color>
+    <color name="brand_accent">#6366F1</color>
+
+    <!-- Financial Semantic Colors -->
+    <color name="money_green">#10B981</color>
+    <color name="money_green_subtle">#ECFDF5</color>
+    <color name="alert_orange">#F59E0B</color>
+    <color name="alert_orange_subtle">#FFFBEB</color>
+    <color name="danger_red">#EF4444</color>
+    <color name="danger_red_subtle">#FEF2F2</color>
+
+    <!-- Action Accents -->
+    <color name="whatsapp_green">#25D366</color>
+    <color name="call_blue">#0284C7</color>
+
+    <!-- Surfaces & Neutrals -->
+    <color name="surface_light">#F8FAFC</color>
+    <color name="card_light">#FFFFFF</color>
+    <color name="text_primary_light">#0F172A</color>
+    <color name="text_secondary_light">#64748B</color>
+    <color name="border_light">#E2E8F0</color>
+
+    <color name="surface_dark">#0A0F1D</color>
+    <color name="card_dark">#131C31</color>
+    <color name="text_primary_dark">#F8FAFC</color>
+    <color name="text_secondary_dark">#94A3B8</color>
+    <color name="border_dark">#1E293B</color>
+</resources>
