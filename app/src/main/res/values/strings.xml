@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">DailyPay</string>
+
+    <!-- Role Titles -->
+    <string name="role_admin">Admin</string>
+    <string name="role_lender">Lender</string>
+    <string name="role_borrower">Borrower</string>
+
+    <!-- Common Actions -->
+    <string name="action_login">Login</string>
+    <string name="action_logout">Logout</string>
+    <string name="action_submit">Submit</string>
+    <string name="action_save">Save Changes</string>
+    <string name="action_cancel">Cancel</string>
+    <string name="action_download_pdf">Download PDF</string>
+
+    <!-- Financial Labels -->
+    <string name="currency_symbol">₹</string>
+    <string name="pending_due">Pending Due</string>
+    <string name="received_payment">Received Payment</string>
+    <string name="total_disbursed">Total Disbursed</string>
+    <string name="remaining_balance">Remaining Balance</string>
+    <string name="todays_due">Today\'s Due</string>
+    <string name="todays_payment">Today\'s Payment</string>
+
+    <!-- Admin Options -->
+    <string name="admin_create_lender">Create Lender Account</string>
+    <string name="admin_manage_lender">Manage Lender</string>
+    <string name="admin_subscription">Subscription</string>
+    <string name="admin_payment_history">Payment History</string>
+    <string name="admin_reminder">Reminder</string>
+    <string name="admin_set_password">Reset Password Requests</string>
+
+    <!-- Lender Options -->
+    <string name="lender_add_borrower">Add Borrower</string>
+    <string name="lender_new_loan_request">New Loan Request</string>
+    <string name="lender_set_interest">Set Interest</string>
+    <string name="lender_give_loan_manually">Give Loan Manually</string>
+    <string name="lender_master_client">Master Client</string>
+    <string name="lender_ledger_book">Ledger Book</string>
+
+    <!-- Borrower Options -->
+    <string name="borrower_apply_loan">Apply Loan</string>
+    <string name="borrower_approved_loan">Approved Loan</string>
+    <string name="borrower_pay_now">Pay Now (UPI)</string>
+</resources>
