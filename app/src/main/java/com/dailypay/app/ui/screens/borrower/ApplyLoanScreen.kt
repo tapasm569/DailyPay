@@ -41,10 +41,24 @@ fun ApplyLoanScreen(
     var selectedPrincipal by remember { mutableDoubleStateOf(10000.0) }
     var manualAmountInput by remember { mutableStateOf("10000") }
     var selectedTenureDays by remember { mutableIntStateOf(30) }
-    val defaultMonthlyRate = 10.0 // Lender preset rate
+    val defaultMonthlyRate = 10.0
+    var assignedLenderId by remember { mutableStateOf<String?>(null) }
     var isSubmitting by remember { mutableStateOf(false) }
+    var isProfileLoading by remember { mutableStateOf(true) }
 
-    // Computations
+    // Fetch the real lenderId linked to this borrower
+    LaunchedEffect(borrowerId) {
+        borrowerRepo.getBorrowerProfile(borrowerId)
+            .onSuccess { profile ->
+                assignedLenderId = profile.lenderId
+                isProfileLoading = false
+            }
+            .onFailure {
+                isProfileLoading = false
+                Toast.makeText(context, "Could not load lender details", Toast.LENGTH_SHORT).show()
+            }
+    }
+
     val months = selectedTenureDays / 30.0
     val totalInterest = selectedPrincipal * (defaultMonthlyRate / 100.0) * months
     val totalPayable = selectedPrincipal + totalInterest
@@ -64,133 +78,148 @@ fun ApplyLoanScreen(
         },
         containerColor = MaterialTheme.colorScheme.background
     ) { paddingValues ->
-        Column(
-            modifier = modifier
-                .fillMaxSize()
-                .padding(paddingValues)
-                .verticalScroll(rememberScrollState())
-                .padding(20.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            Text("Choose Amount", style = MaterialTheme.typography.titleMedium)
-
-            // Preset Amount Chips (2x3 Grid)
-            LazyVerticalGrid(
-                columns = GridCells.Fixed(3),
-                modifier = Modifier.height(110.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
+        if (isProfileLoading) {
+            Box(
+                modifier = Modifier.fillMaxSize().padding(paddingValues),
+                contentAlignment = Alignment.Center
             ) {
-                items(presetAmounts) { amt ->
-                    val isSelected = selectedPrincipal == amt.toDouble()
-                    FilterChip(
-                        selected = isSelected,
-                        onClick = {
-                            selectedPrincipal = amt.toDouble()
-                            manualAmountInput = amt.toString()
-                        },
-                        label = { Text("₹$amt") }
-                    )
-                }
+                CircularProgressIndicator(color = BrandPrimary)
             }
-
-            // Or Manual Input
-            OutlinedTextField(
-                value = manualAmountInput,
-                onValueChange = {
-                    manualAmountInput = it.filter { ch -> ch.isDigit() }
-                    selectedPrincipal = it.toDoubleOrNull() ?: 0.0
-                },
-                label = { Text("Or Enter Custom Amount (₹)") },
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp)
-            )
-
-            // Tenure Selector (30 / 60 / 90 Days)
-            Text("Select Tenure", style = MaterialTheme.typography.titleMedium)
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                listOf(30, 60, 90).forEach { days ->
-                    FilterChip(
-                        selected = selectedTenureDays == days,
-                        onClick = { selectedTenureDays = days },
-                        label = { Text("$days Days") },
-                        modifier = Modifier.weight(1f)
-                    )
-                }
-            }
-
-            // Calculations Card Preview
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .border(1.dp, BrandPrimary.copy(alpha = 0.2f), RoundedCornerShape(16.dp)),
-                shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = BrandPrimary.copy(alpha = 0.05f))
+        } else {
+            Column(
+                modifier = modifier
+                    .fillMaxSize()
+                    .padding(paddingValues)
+                    .verticalScroll(rememberScrollState())
+                    .padding(20.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                        Text("Rate:", style = MaterialTheme.typography.bodyMedium, color = TextSecondaryLight)
-                        Text("$defaultMonthlyRate% / Month", style = MaterialTheme.typography.titleMedium)
-                    }
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                        Text("Interest Amount:", style = MaterialTheme.typography.bodyMedium, color = TextSecondaryLight)
-                        Text("₹${String.format("%.2f", totalInterest)}", style = MaterialTheme.typography.titleMedium)
-                    }
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                        Text("Total Repayment:", style = MaterialTheme.typography.bodyMedium, color = TextSecondaryLight)
-                        Text("₹${String.format("%.2f", totalPayable)}", style = MaterialTheme.typography.titleMedium, color = BrandPrimary)
-                    }
-                    HorizontalDivider()
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                        Text("Daily Due:", style = MaterialTheme.typography.titleMedium)
-                        Text("₹${String.format("%.2f", dailyInstallment)} / day", style = MaterialTheme.typography.titleMedium, color = AlertOrange)
-                    }
-                }
-            }
+                Text("Choose Amount", style = MaterialTheme.typography.titleMedium)
 
-            Spacer(modifier = Modifier.height(8.dp))
-
-            // Submit Button
-            Button(
-                onClick = {
-                    if (selectedPrincipal <= 0.0) {
-                        Toast.makeText(context, "Please select or enter an amount", Toast.LENGTH_SHORT).show()
-                        return@Button
-                    }
-
-                    isSubmitting = true
-                    scope.launch {
-                        val loanApplication = Loan(
-                            lenderId = "00000000-0000-0000-0000-000000000000", // Dynamically populated from borrower profile record
-                            borrowerId = borrowerId,
-                            principalAmount = selectedPrincipal,
-                            tenureDays = selectedTenureDays,
-                            monthlyInterestRate = defaultMonthlyRate,
-                            status = LoanStatus.PENDING
+                LazyVerticalGrid(
+                    columns = GridCells.Fixed(3),
+                    modifier = Modifier.height(110.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    items(presetAmounts) { amt ->
+                        val isSelected = selectedPrincipal == amt.toDouble()
+                        FilterChip(
+                            selected = isSelected,
+                            onClick = {
+                                selectedPrincipal = amt.toDouble()
+                                manualAmountInput = amt.toString()
+                            },
+                            label = { Text("₹$amt") }
                         )
-
-                        borrowerRepo.applyLoan(loanApplication)
-                            .onSuccess {
-                                isSubmitting = false
-                                Toast.makeText(context, "Loan application sent to lender for approval!", Toast.LENGTH_LONG).show()
-                                onNavigateBack()
-                            }
-                            .onFailure {
-                                isSubmitting = false
-                                Toast.makeText(context, "Application submitted: ${it.message}", Toast.LENGTH_SHORT).show()
-                            }
                     }
-                },
-                modifier = Modifier.fillMaxWidth().height(52.dp),
-                shape = RoundedCornerShape(14.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = BrandPrimary),
-                enabled = !isSubmitting
-            ) {
-                if (isSubmitting) {
-                    CircularProgressIndicator(color = Color.White, modifier = Modifier.size(24.dp))
-                } else {
-                    Text("Submit Loan Request", style = MaterialTheme.typography.titleMedium)
+                }
+
+                OutlinedTextField(
+                    value = manualAmountInput,
+                    onValueChange = {
+                        manualAmountInput = it.filter { ch -> ch.isDigit() }
+                        selectedPrincipal = it.toDoubleOrNull() ?: 0.0
+                    },
+                    label = { Text("Or Enter Custom Amount (₹)") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp)
+                )
+
+                Text("Select Tenure", style = MaterialTheme.typography.titleMedium)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    listOf(30, 60, 90).forEach { days ->
+                        FilterChip(
+                            selected = selectedTenureDays == days,
+                            onClick = { selectedTenureDays = days },
+                            label = { Text("$days Days") },
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                }
+
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .border(1.dp, BrandPrimary.copy(alpha = 0.2f), RoundedCornerShape(16.dp)),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = BrandPrimary.copy(alpha = 0.05f))
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                            Text("Rate:", style = MaterialTheme.typography.bodyMedium, color = TextSecondaryLight)
+                            Text("$defaultMonthlyRate% / Month", style = MaterialTheme.typography.titleMedium)
+                        }
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                            Text("Interest Amount:", style = MaterialTheme.typography.bodyMedium, color = TextSecondaryLight)
+                            Text("₹${String.format("%.2f", totalInterest)}", style = MaterialTheme.typography.titleMedium)
+                        }
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                            Text("Total Repayment:", style = MaterialTheme.typography.bodyMedium, color = TextSecondaryLight)
+                            Text("₹${String.format("%.2f", totalPayable)}", style = MaterialTheme.typography.titleMedium, color = BrandPrimary)
+                        }
+                        HorizontalDivider()
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                            Text("Daily Due:", style = MaterialTheme.typography.titleMedium)
+                            Text("₹${String.format("%.2f", dailyInstallment)} / day", style = MaterialTheme.typography.titleMedium, color = AlertOrange)
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                Button(
+                    onClick = {
+                        val realLenderId = assignedLenderId
+                        if (realLenderId.isNullOrBlank()) {
+                            Toast.makeText(context, "Cannot identify lender account. Please relogin.", Toast.LENGTH_LONG).show()
+                            return@Button
+                        }
+                        if (selectedPrincipal <= 0.0) {
+                            Toast.makeText(context, "Please select or enter an amount", Toast.LENGTH_SHORT).show()
+                            return@Button
+                        }
+
+                        isSubmitting = true
+                        scope.launch {
+                            val loanApplication = Loan(
+                                lenderId = realLenderId,
+                                borrowerId = borrowerId,
+                                principalAmount = selectedPrincipal,
+                                tenureDays = selectedTenureDays,
+                                monthlyInterestRate = defaultMonthlyRate,
+                                status = LoanStatus.PENDING
+                            )
+
+                            borrowerRepo.applyLoan(loanApplication)
+                                .onSuccess {
+                                    isSubmitting = false
+                                    Toast.makeText(context, "Loan application sent to lender!", Toast.LENGTH_LONG).show()
+                                    onNavigateBack()
+                                }
+                                .onFailure {
+                                    isSubmitting = false
+                                    Toast.makeText(context, "Error: ${it.message}", Toast.LENGTH_SHORT).show()
+                                }
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth().height(52.dp),
+                    shape = RoundedCornerShape(14.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = BrandPrimary),
+                    enabled = !isSubmitting
+                ) {
+                    if (isSubmitting) {
+                        CircularProgressIndicator(color = Color.White, modifier = Modifier.size(24.dp))
+                    } else {
+                        Text("Submit Loan Request", style = MaterialTheme.typography.titleMedium)
+                    }
                 }
             }
         }
