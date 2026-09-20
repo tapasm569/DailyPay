@@ -387,4 +387,120 @@ fun LenderHomeScreen(
                                                 style = MaterialTheme.typography.titleLarge,
                                                 color = MoneyGreen
                                             )
-                                    
+                                        }
+
+                                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                            Text("Daily Installment", style = MaterialTheme.typography.labelMedium, color = TextSecondaryLight)
+                                            Text("₹${item.dailyInstallment}", style = MaterialTheme.typography.titleMedium)
+                                        }
+
+                                        Column(horizontalAlignment = Alignment.End) {
+                                            Text("Remaining Balance", style = MaterialTheme.typography.labelMedium, color = TextSecondaryLight)
+                                            Text("₹${item.remainingBalance}", style = MaterialTheme.typography.titleMedium)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Collect Payment Dialog
+        selectedDueItem?.let { dueItem ->
+            val pendingAmountToday = maxOf(0.0, dueItem.todayDueBalance - dueItem.todayPaidAmount)
+
+            AlertDialog(
+                onDismissRequest = { if (!isSubmittingPayment) selectedDueItem = null },
+                title = { Text("Collect Due - ${dueItem.borrowerName}") },
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Text(
+                            text = "Remaining Due Today: ₹$pendingAmountToday | Total Left: ₹${dueItem.remainingBalance}",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = TextSecondaryLight
+                        )
+
+                        OutlinedTextField(
+                            value = collectAmount,
+                            onValueChange = { collectAmount = it.filter { ch -> ch.isDigit() || ch == '.' } },
+                            label = { Text("Amount Received (₹)") },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(12.dp)
+                        )
+
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            FilterChip(
+                                selected = selectedPaymentMode == PaymentMode.CASH,
+                                onClick = { selectedPaymentMode = PaymentMode.CASH },
+                                label = { Text("Cash") }
+                            )
+                            FilterChip(
+                                selected = selectedPaymentMode == PaymentMode.UPI,
+                                onClick = { selectedPaymentMode = PaymentMode.UPI },
+                                label = { Text("UPI Intent") }
+                            )
+                        }
+                    }
+                },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            val parsedAmount = collectAmount.toDoubleOrNull() ?: 0.0
+                            if (parsedAmount <= 0.0) {
+                                Toast.makeText(context, "Enter a valid amount", Toast.LENGTH_SHORT).show()
+                                return@Button
+                            }
+
+                            if (selectedPaymentMode == PaymentMode.UPI) {
+                                UpiIntentLauncher.initiateUpiPayment(
+                                    context = context,
+                                    payeeUpiId = "${dueItem.borrowerMobile}@upi",
+                                    payeeName = dueItem.borrowerName,
+                                    amount = parsedAmount,
+                                    transactionNote = "Repayment-${dueItem.borrowerName}"
+                                )
+                            }
+
+                            isSubmittingPayment = true
+                            scope.launch {
+                                val repayment = Repayment(
+                                    loanId = dueItem.loanId,
+                                    borrowerId = dueItem.borrowerId,
+                                    lenderId = lenderId,
+                                    paymentDate = DateUtils.getTodaySqlFormat(),
+                                    amountPaid = parsedAmount,
+                                    paymentMode = selectedPaymentMode,
+                                    notes = "Daily collection"
+                                )
+
+                                lenderRepo.recordRepayment(repayment)
+                                    .onSuccess {
+                                        isSubmittingPayment = false
+                                        selectedDueItem = null
+                                        Toast.makeText(context, "Payment recorded! Moved to Paid Today.", Toast.LENGTH_SHORT).show()
+                                        loadData()
+                                    }
+                                    .onFailure {
+                                        isSubmittingPayment = false
+                                        Toast.makeText(context, "Error: ${it.message}", Toast.LENGTH_SHORT).show()
+                                    }
+                            }
+                        },
+                        enabled = !isSubmittingPayment,
+                        colors = ButtonDefaults.buttonColors(containerColor = BrandPrimary)
+                    ) {
+                        Text(if (isSubmittingPayment) "Saving..." else "Confirm Payment")
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { selectedDueItem = null }, enabled = !isSubmittingPayment) {
+                        Text("Cancel")
+                    }
+                }
+            )
+        }
+    }
+}
