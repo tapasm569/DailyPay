@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Base activity launch theme before Jetpack Compose renders -->
+    <style name="Theme.DailyPay" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:statusBarColor">@color/surface_light</item>
+        <item name="android:navigationBarColor">@color/surface_light</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:windowBackground">@color/surface_light</item>
+    </style>
+</resources>
