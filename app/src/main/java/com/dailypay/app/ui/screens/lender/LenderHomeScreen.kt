@@ -8,6 +8,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -39,7 +40,7 @@ fun LenderHomeScreen(
     val scope = rememberCoroutineScope()
     val lenderRepo = remember { LenderRepository() }
 
-    var duesList by remember { mutableStateOf<List<DailyDueItem>>(emptyList()) }
+    var allDuesList by remember { mutableStateOf<List<DailyDueItem>>(emptyList()) }
     var searchQuery by remember { mutableStateOf("") }
     var isSearchActive by remember { mutableStateOf(false) }
     var isLoading by remember { mutableStateOf(true) }
@@ -53,7 +54,7 @@ fun LenderHomeScreen(
         scope.launch {
             lenderRepo.getDailyDues(lenderId)
                 .onSuccess {
-                    duesList = it
+                    allDuesList = it
                     isLoading = false
                 }
                 .onFailure { isLoading = false }
@@ -64,13 +65,22 @@ fun LenderHomeScreen(
         loadData()
     }
 
-    val totalPendingDue = duesList.sumOf { it.todayDueBalance }
-    val totalReceivedToday = duesList.sumOf { it.todayPaidAmount }
+    // Top metrics reflect overall totals
+    val totalPendingDue = allDuesList.sumOf { maxOf(0.0, it.todayDueBalance - it.todayPaidAmount) }
+    val totalReceivedToday = allDuesList.sumOf { it.todayPaidAmount }
 
+    // FILTER: Only include customers who have NOT cleared today's due
+    val pendingBorrowersOnly = allDuesList.filter { item ->
+        val hasPendingDue = item.todayPaidAmount < item.todayDueBalance && item.todayDueBalance > 0
+        val hasRemainingLoan = item.remainingBalance > 0
+        hasPendingDue && hasRemainingLoan
+    }
+
+    // Apply search filter on the pending list
     val filteredList = if (searchQuery.isBlank()) {
-        duesList
+        pendingBorrowersOnly
     } else {
-        duesList.filter {
+        pendingBorrowersOnly.filter {
             it.borrowerName.contains(searchQuery, ignoreCase = true) ||
             it.borrowerMobile.contains(searchQuery)
         }
@@ -98,7 +108,7 @@ fun LenderHomeScreen(
                     OutlinedTextField(
                         value = searchQuery,
                         onValueChange = { searchQuery = it },
-                        placeholder = { Text("Search by customer name or mobile...") },
+                        placeholder = { Text("Search by pending customer name or mobile...") },
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(horizontal = 16.dp, vertical = 8.dp),
@@ -136,35 +146,74 @@ fun LenderHomeScreen(
                 verticalArrangement = Arrangement.spacedBy(14.dp)
             ) {
                 item {
-                    Text(
-                        text = "Today's Due Collections",
-                        style = MaterialTheme.typography.titleMedium,
-                        color = MaterialTheme.colorScheme.onBackground
-                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Pending Dues Today",
+                            style = MaterialTheme.typography.titleMedium,
+                            color = MaterialTheme.colorScheme.onBackground
+                        )
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = if (filteredList.isEmpty()) MoneyGreenSubtle else AlertOrangeSubtle
+                        ) {
+                            Text(
+                                text = "${filteredList.size} Pending",
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                                style = MaterialTheme.typography.labelMedium,
+                                color = if (filteredList.isEmpty()) MoneyGreen else AlertOrange
+                            )
+                        }
+                    }
                 }
 
                 if (filteredList.isEmpty()) {
                     item {
-                        Box(
+                        Card(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(vertical = 40.dp),
-                            contentAlignment = Alignment.Center
+                                .padding(vertical = 24.dp),
+                            shape = RoundedCornerShape(16.dp),
+                            colors = CardDefaults.cardColors(containerColor = MoneyGreenSubtle)
                         ) {
-                            Text(
-                                text = "No dues found for today.",
-                                style = MaterialTheme.typography.bodyLarge,
-                                color = TextSecondaryLight
-                            )
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(24.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.CheckCircle,
+                                    contentDescription = null,
+                                    tint = MoneyGreen,
+                                    modifier = Modifier.size(48.dp)
+                                )
+                                Spacer(modifier = Modifier.height(10.dp))
+                                Text(
+                                    text = "All Dues Collected!",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    color = MoneyGreen
+                                )
+                                Text(
+                                    text = "No pending payments remaining for today.",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = TextSecondaryLight
+                                )
+                            }
                         }
                     }
                 } else {
-                    items(filteredList) { item ->
+                    items(filteredList, key = { it.loanId }) { item ->
                         DueBorrowerCard(
                             item = item,
                             onCollectPaymentClick = {
                                 selectedDueItem = it
-                                collectAmount = it.todayDueBalance.toString()
+                                // Pre-fill with the exact remaining balance for today
+                                val remainingDueToday = maxOf(0.0, it.todayDueBalance - it.todayPaidAmount)
+                                collectAmount = if (remainingDueToday > 0.0) remainingDueToday.toString() else it.dailyInstallment.toString()
                             }
                         )
                     }
@@ -172,14 +221,17 @@ fun LenderHomeScreen(
             }
         }
 
+        // Collect Payment Dialog
         selectedDueItem?.let { dueItem ->
+            val pendingAmountToday = maxOf(0.0, dueItem.todayDueBalance - dueItem.todayPaidAmount)
+
             AlertDialog(
                 onDismissRequest = { if (!isSubmittingPayment) selectedDueItem = null },
-                title = { Text("Record Payment for ${dueItem.borrowerName}") },
+                title = { Text("Collect Due - ${dueItem.borrowerName}") },
                 text = {
                     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                         Text(
-                            text = "Daily Due: ₹${dueItem.todayDueBalance} | Total Left: ₹${dueItem.remainingBalance}",
+                            text = "Remaining Due Today: ₹$pendingAmountToday | Total Left: ₹${dueItem.remainingBalance}",
                             style = MaterialTheme.typography.bodyMedium,
                             color = TextSecondaryLight
                         )
@@ -219,7 +271,7 @@ fun LenderHomeScreen(
                             if (selectedPaymentMode == PaymentMode.UPI) {
                                 UpiIntentLauncher.initiateUpiPayment(
                                     context = context,
-                                    payeeUpiId = "business@upi",
+                                    payeeUpiId = "${dueItem.borrowerMobile}@upi",
                                     payeeName = dueItem.borrowerName,
                                     amount = parsedAmount,
                                     transactionNote = "Repayment-${dueItem.borrowerName}"
@@ -235,15 +287,15 @@ fun LenderHomeScreen(
                                     paymentDate = DateUtils.getTodaySqlFormat(),
                                     amountPaid = parsedAmount,
                                     paymentMode = selectedPaymentMode,
-                                    notes = "Collected via DailyPay"
+                                    notes = "Daily payment"
                                 )
 
                                 lenderRepo.recordRepayment(repayment)
                                     .onSuccess {
                                         isSubmittingPayment = false
                                         selectedDueItem = null
-                                        Toast.makeText(context, "Payment recorded successfully!", Toast.LENGTH_SHORT).show()
-                                        loadData()
+                                        Toast.makeText(context, "Payment recorded! Cleared from list.", Toast.LENGTH_SHORT).show()
+                                        loadData() // Refreshes list; customer is now filtered out immediately
                                     }
                                     .onFailure {
                                         isSubmittingPayment = false
@@ -254,7 +306,7 @@ fun LenderHomeScreen(
                         enabled = !isSubmittingPayment,
                         colors = ButtonDefaults.buttonColors(containerColor = BrandPrimary)
                     ) {
-                        Text(if (isSubmittingPayment) "Saving..." else "Confirm & Save")
+                        Text(if (isSubmittingPayment) "Saving..." else "Confirm Payment")
                     }
                 },
                 dismissButton = {
