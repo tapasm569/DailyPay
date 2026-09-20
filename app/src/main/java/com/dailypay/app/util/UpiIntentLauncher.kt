@@ -4,13 +4,10 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.widget.Toast
+import java.util.Locale
 
 object UpiIntentLauncher {
 
-    /**
-     * Launches installed UPI apps using native Android intent.
-     * Free payment execution with zero gateway fees.
-     */
     fun initiateUpiPayment(
         context: Context,
         payeeUpiId: String,
