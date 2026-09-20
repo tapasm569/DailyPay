@@ -1,5 +1,6 @@
 package com.dailypay.app.data.repository
 
+import com.dailypay.app.data.model.Borrower
 import com.dailypay.app.data.model.DailyDueItem
 import com.dailypay.app.data.model.Loan
 import com.dailypay.app.data.model.Repayment
@@ -9,6 +10,18 @@ import io.github.jan.supabase.postgrest.from
 class BorrowerRepository {
 
     private val db = SupabaseClientProvider.db
+
+    /**
+     * Fetches borrower profile to retrieve the assigned lenderId
+     */
+    suspend fun getBorrowerProfile(borrowerId: String): Result<Borrower> = runCatching {
+        db.from("borrowers")
+            .select {
+                filter {
+                    eq("id", borrowerId)
+                }
+            }.decodeSingle<Borrower>()
+    }
 
     /**
      * Borrower submits a loan request
