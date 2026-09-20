@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <paths>
-    <!-- Internal cache directory for temporary generated statement PDFs -->
+    <!-- Internal cache directory for generated statement PDFs -->
     <cache-path
         name="cached_pdfs"
         path="." />
