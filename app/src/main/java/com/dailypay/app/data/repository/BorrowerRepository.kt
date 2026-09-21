@@ -25,6 +25,27 @@ class BorrowerRepository {
             }.decodeSingle<Borrower>()
     }
 
+    suspend fun applyLoan(loan: Loan): Result<Unit> = runCatching {
+        db.from("loans").insert(loan)
+    }
+
+    suspend fun requestLoan(loan: Loan): Result<Unit> = applyLoan(loan)
+
+    suspend fun getBorrowerDueDetails(borrowerId: String): Result<DailyDueItem?> = runCatching {
+        db.from("v_lender_daily_dues")
+            .select {
+                filter { eq("borrower_id", borrowerId) }
+            }.decodeList<DailyDueItem>().firstOrNull()
+    }
+
+    suspend fun getRepaymentHistory(borrowerId: String): Result<List<Repayment>> = runCatching {
+        db.from("repayments")
+            .select {
+                filter { eq("borrower_id", borrowerId) }
+                order("payment_date", Order.DESCENDING)
+            }.decodeList<Repayment>()
+    }
+
     suspend fun getCustomerApprovedLoans(borrowerId: String): Result<List<ApprovedLoanDetail>> = runCatching {
         val loans = db.from("loans").select {
             filter {
@@ -68,10 +89,6 @@ class BorrowerRepository {
                 filter { eq("loan_id", loanId) }
                 order("payment_date", Order.DESCENDING)
             }.decodeList<Repayment>()
-    }
-
-    suspend fun requestLoan(loan: Loan): Result<Unit> = runCatching {
-        db.from("loans").insert(loan)
     }
 
     suspend fun getDashboardSummary(borrowerId: String): Result<BorrowerDashboardSummary> = runCatching {
