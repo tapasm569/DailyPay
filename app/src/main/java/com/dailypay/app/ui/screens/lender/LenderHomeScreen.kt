@@ -23,6 +23,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import com.dailypay.app.R
 import com.dailypay.app.data.model.Borrower
 import com.dailypay.app.data.model.DailyDueItem
@@ -67,6 +68,12 @@ fun LenderHomeScreen(
     var borrowerToDelete by remember { mutableStateOf<Borrower?>(null) }
     var isProcessingAction by remember { mutableStateOf(false) }
 
+    // Repayment History Dialog States
+    var inspectingRepaymentLoanId by remember { mutableStateOf<String?>(null) }
+    var inspectingRepaymentBorrowerName by remember { mutableStateOf("") }
+    var repaymentHistoryList by remember { mutableStateOf<List<Repayment>>(emptyList()) }
+    var isLoadingRepayments by remember { mutableStateOf(false) }
+
     fun loadData() {
         scope.launch {
             lenderRepo.getBorrowers(lenderId).onSuccess {
@@ -81,15 +88,17 @@ fun LenderHomeScreen(
         }
     }
 
-    LaunchedEffect(lenderId) {
+    // Auto-refresh when returning back to this screen
+    LifecycleResumeEffect(lenderId) {
         loadData()
+        onPauseOrDispose { }
     }
 
-    // Top metrics
-    val totalPendingDue = allDuesList.sumOf { it.todayDueBalance }
+    // Top metrics with value clamping
+    val totalPendingDue = allDuesList.sumOf { maxOf(0.0, it.todayDueBalance) }
     val totalReceivedToday = allDuesList.sumOf { it.todayPaidAmount }
 
-    // Standard Tab Lists
+    // Tab lists
     val pendingBorrowers = allDuesList.filter { item ->
         item.todayDueBalance > 0.0 && item.remainingBalance > 0.0
     }
@@ -97,7 +106,7 @@ fun LenderHomeScreen(
         item.todayPaidAmount > 0.0
     }
 
-    // Dynamic Search Filter across all registered borrowers
+    // Search Filter
     val isSearching = isSearchActive && searchQuery.isNotBlank()
     val searchResults = if (isSearching) {
         allBorrowersList.filter { b ->
@@ -129,12 +138,11 @@ fun LenderHomeScreen(
                     onLogoutClick = onLogoutClick
                 )
 
-                // Search Bar
                 if (isSearchActive) {
                     OutlinedTextField(
                         value = searchQuery,
                         onValueChange = { searchQuery = it },
-                        placeholder = { Text("Search by customer name or mobile number...") },
+                        placeholder = { Text("Search by borrower name or mobile...") },
                         leadingIcon = {
                             Icon(Icons.Default.Search, contentDescription = null, tint = BrandPrimary)
                         },
@@ -154,7 +162,6 @@ fun LenderHomeScreen(
                     )
                 }
 
-                // Dual-Segmented Tab Selector (Only shown when not searching)
                 if (!isSearching) {
                     Surface(
                         modifier = Modifier
@@ -170,7 +177,6 @@ fun LenderHomeScreen(
                                 .padding(4.dp),
                             horizontalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
-                            // Pending Tab
                             Surface(
                                 modifier = Modifier.weight(1f),
                                 shape = RoundedCornerShape(10.dp),
@@ -197,7 +203,6 @@ fun LenderHomeScreen(
                                 }
                             }
 
-                            // Paid Today Tab
                             Surface(
                                 modifier = Modifier.weight(1f),
                                 shape = RoundedCornerShape(10.dp),
@@ -247,7 +252,6 @@ fun LenderHomeScreen(
                     .padding(horizontal = 16.dp, vertical = 8.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                // ==================== SEARCH RESULT VIEW ====================
                 if (isSearching) {
                     item {
                         Text(
@@ -274,11 +278,14 @@ fun LenderHomeScreen(
                         }
                     } else {
                         items(searchResults, key = { it.id ?: it.mobileNumber }) { borrower ->
-                            val dueItem = allDuesList.firstOrNull { it.borrowerId == borrower.id }
+                            // Prioritize active loan with balance over closed zero-balance loans
+                            val dueItem = allDuesList.firstOrNull { it.borrowerId == borrower.id && it.remainingBalance > 0.0 }
+                                ?: allDuesList.firstOrNull { it.borrowerId == borrower.id }
+
                             val approvedLoan = dueItem?.totalPayable ?: 0.0
-                            val todayDue = dueItem?.todayDueBalance ?: 0.0
+                            val todayDue = maxOf(0.0, dueItem?.todayDueBalance ?: 0.0)
                             val paidBalance = dueItem?.totalPaid ?: 0.0
-                            val remainingBalance = dueItem?.remainingBalance ?: 0.0
+                            val remainingBalance = maxOf(0.0, dueItem?.remainingBalance ?: 0.0)
 
                             Card(
                                 modifier = Modifier
@@ -292,7 +299,6 @@ fun LenderHomeScreen(
                                         .fillMaxWidth()
                                         .padding(16.dp)
                                 ) {
-                                    // Header: Borrower Name, Mobile & Contact Actions
                                     Row(
                                         modifier = Modifier.fillMaxWidth(),
                                         horizontalArrangement = Arrangement.SpaceBetween,
@@ -354,7 +360,6 @@ fun LenderHomeScreen(
                                     HorizontalDivider(color = BorderSubtleLight)
                                     Spacer(modifier = Modifier.height(10.dp))
 
-                                    // Loan Metrics Grid
                                     Row(
                                         modifier = Modifier.fillMaxWidth(),
                                         horizontalArrangement = Arrangement.SpaceBetween
@@ -387,10 +392,9 @@ fun LenderHomeScreen(
 
                                     Spacer(modifier = Modifier.height(14.dp))
 
-                                    // Action Buttons: Payment Collect & View Profile
                                     Row(
                                         modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                                     ) {
                                         Button(
                                             onClick = {
@@ -406,30 +410,54 @@ fun LenderHomeScreen(
                                             colors = ButtonDefaults.buttonColors(containerColor = BrandPrimary)
                                         ) {
                                             Icon(Icons.Default.Payment, contentDescription = null, modifier = Modifier.size(16.dp))
-                                            Spacer(modifier = Modifier.width(6.dp))
-                                            Text("Collect Due")
+                                            Spacer(modifier = Modifier.width(4.dp))
+                                            Text("Collect")
                                         }
 
                                         OutlinedButton(
                                             onClick = {
-                                                selectedBorrowerForDetails = borrower
+                                                if (dueItem != null) {
+                                                    inspectingRepaymentLoanId = dueItem.loanId
+                                                    inspectingRepaymentBorrowerName = borrower.name
+                                                    isLoadingRepayments = true
+                                                    scope.launch {
+                                                        lenderRepo.getRepaymentsForLoan(dueItem.loanId)
+                                                            .onSuccess {
+                                                                repaymentHistoryList = it
+                                                                isLoadingRepayments = false
+                                                            }
+                                                            .onFailure {
+                                                                isLoadingRepayments = false
+                                                                Toast.makeText(context, "Could not load receipts: ${it.message}", Toast.LENGTH_SHORT).show()
+                                                            }
+                                                    }
+                                                } else {
+                                                    Toast.makeText(context, "No active loan found.", Toast.LENGTH_SHORT).show()
+                                                }
                                             },
                                             modifier = Modifier.weight(1f),
                                             shape = RoundedCornerShape(12.dp)
                                         ) {
+                                            Icon(Icons.Default.ReceiptLong, contentDescription = null, modifier = Modifier.size(16.dp))
+                                            Spacer(modifier = Modifier.width(4.dp))
+                                            Text("Receipts")
+                                        }
+
+                                        OutlinedButton(
+                                            onClick = { selectedBorrowerForDetails = borrower },
+                                            modifier = Modifier.weight(1f),
+                                            shape = RoundedCornerShape(12.dp)
+                                        ) {
                                             Icon(Icons.Default.AccountBox, contentDescription = null, modifier = Modifier.size(16.dp))
-                                            Spacer(modifier = Modifier.width(6.dp))
-                                            Text("View Profile")
+                                            Spacer(modifier = Modifier.width(4.dp))
+                                            Text("Profile")
                                         }
                                     }
                                 }
                             }
                         }
                     }
-                }
-
-                // ==================== DEFAULT TAB 0: PENDING DUES ====================
-                else if (selectedTab == 0) {
+                } else if (selectedTab == 0) {
                     if (pendingBorrowers.isEmpty()) {
                         item {
                             Card(
@@ -476,10 +504,7 @@ fun LenderHomeScreen(
                             )
                         }
                     }
-                }
-
-                // ==================== DEFAULT TAB 1: PAID TODAY ====================
-                else {
+                } else {
                     if (paidBorrowers.isEmpty()) {
                         item {
                             Box(
@@ -589,7 +614,7 @@ fun LenderHomeScreen(
                                         }
                                         Column(horizontalAlignment = Alignment.End) {
                                             Text("Remaining Balance", style = MaterialTheme.typography.labelMedium, color = TextSecondaryLight)
-                                            Text("₹${item.remainingBalance}", style = MaterialTheme.typography.titleMedium)
+                                            Text("₹${maxOf(0.0, item.remainingBalance)}", style = MaterialTheme.typography.titleMedium)
                                         }
                                     }
                                 }
@@ -600,7 +625,7 @@ fun LenderHomeScreen(
             }
         }
 
-        // ==================== COLLECT PAYMENT DIALOG ====================
+        // Collect Payment Dialog
         selectedDueItem?.let { dueItem ->
             AlertDialog(
                 onDismissRequest = { if (!isSubmittingPayment) selectedDueItem = null },
@@ -608,7 +633,7 @@ fun LenderHomeScreen(
                 text = {
                     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                         Text(
-                            text = "Remaining Due Today: ₹${dueItem.todayDueBalance} | Total Loan Left: ₹${dueItem.remainingBalance}",
+                            text = "Remaining Due Today: ₹${maxOf(0.0, dueItem.todayDueBalance)} | Total Loan Left: ₹${maxOf(0.0, dueItem.remainingBalance)}",
                             style = MaterialTheme.typography.bodyMedium,
                             color = TextSecondaryLight
                         )
@@ -694,7 +719,86 @@ fun LenderHomeScreen(
             )
         }
 
-        // ==================== VIEW BORROWER PROFILE DIALOG ====================
+        // Repayment Details Dialog for Search Results
+        inspectingRepaymentLoanId?.let {
+            AlertDialog(
+                onDismissRequest = { inspectingRepaymentLoanId = null },
+                title = {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("Payment Receipts", style = MaterialTheme.typography.titleLarge)
+                        IconButton(onClick = { inspectingRepaymentLoanId = null }) {
+                            Icon(Icons.Default.Close, contentDescription = "Close")
+                        }
+                    }
+                },
+                text = {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(max = 380.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Text(
+                            text = "Borrower: $inspectingRepaymentBorrowerName",
+                            style = MaterialTheme.typography.titleSmall,
+                            color = BrandPrimary
+                        )
+
+                        if (isLoadingRepayments) {
+                            Box(modifier = Modifier.fillMaxWidth().height(100.dp), contentAlignment = Alignment.Center) {
+                                CircularProgressIndicator(modifier = Modifier.size(28.dp), color = BrandPrimary)
+                            }
+                        } else if (repaymentHistoryList.isEmpty()) {
+                            Box(modifier = Modifier.fillMaxWidth().height(100.dp), contentAlignment = Alignment.Center) {
+                                Text("No repayments recorded for this loan yet.", color = TextSecondaryLight)
+                            }
+                        } else {
+                            LazyColumn(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                items(repaymentHistoryList, key = { it.id ?: "${it.paymentDate}_${it.amountPaid}" }) { r ->
+                                    Card(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        shape = RoundedCornerShape(10.dp),
+                                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                                        border = CardDefaults.outlinedCardBorder()
+                                    ) {
+                                        Row(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(12.dp),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Column {
+                                                Text("₹${r.amountPaid}", style = MaterialTheme.typography.titleMedium, color = MoneyGreen)
+                                                Text(r.paymentDate, style = MaterialTheme.typography.bodySmall, color = TextSecondaryLight)
+                                            }
+                                            SuggestionChip(onClick = {}, label = { Text(r.paymentMode.name) })
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                confirmButton = {
+                    Button(
+                        onClick = { inspectingRepaymentLoanId = null },
+                        colors = ButtonDefaults.buttonColors(containerColor = BrandPrimary)
+                    ) {
+                        Text("Close")
+                    }
+                }
+            )
+        }
+
+        // View Borrower Profile Dialog
         selectedBorrowerForDetails?.let { borrower ->
             AlertDialog(
                 onDismissRequest = { selectedBorrowerForDetails = null },
@@ -801,7 +905,6 @@ fun LenderHomeScreen(
 
                         Spacer(modifier = Modifier.height(6.dp))
 
-                        // Action Buttons: Update & Delete
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.spacedBy(10.dp)
@@ -840,7 +943,7 @@ fun LenderHomeScreen(
             )
         }
 
-        // ==================== UPDATE BORROWER PROFILE DIALOG ====================
+        // Update Borrower Profile Dialog
         borrowerToEdit?.let { borrower ->
             var editName by remember { mutableStateOf(borrower.name) }
             var editMobile by remember { mutableStateOf(borrower.mobileNumber) }
@@ -970,7 +1073,7 @@ fun LenderHomeScreen(
             )
         }
 
-        // ==================== DELETE BORROWER DIALOG ====================
+        // Delete Borrower Confirmation Dialog
         borrowerToDelete?.let { borrower ->
             AlertDialog(
                 onDismissRequest = { if (!isProcessingAction) borrowerToDelete = null },
