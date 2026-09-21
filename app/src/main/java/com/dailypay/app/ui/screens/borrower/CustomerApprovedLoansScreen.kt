@@ -18,7 +18,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.compose.LifecycleResumeEffect
 import com.dailypay.app.data.model.ApprovedLoanDetail
 import com.dailypay.app.data.model.Repayment
 import com.dailypay.app.data.repository.BorrowerRepository
@@ -57,9 +56,8 @@ fun CustomerApprovedLoansScreen(
         }
     }
 
-    LifecycleResumeEffect(borrowerId) {
+    LaunchedEffect(borrowerId) {
         loadData()
-        onPauseOrDispose { }
     }
 
     Scaffold(
@@ -181,7 +179,6 @@ fun CustomerApprovedLoansScreen(
 
                             Spacer(modifier = Modifier.height(12.dp))
 
-                            // Start & End Date Badge
                             Surface(
                                 modifier = Modifier.fillMaxWidth(),
                                 shape = RoundedCornerShape(10.dp),
@@ -249,7 +246,7 @@ fun CustomerApprovedLoansScreen(
             }
         }
 
-        selectedLoanForHistory?.let { loan ->
+        selectedLoanForHistory?.let {
             AlertDialog(
                 onDismissRequest = { selectedLoanForHistory = null },
                 title = {
@@ -300,7 +297,7 @@ fun CustomerApprovedLoansScreen(
                                         ) {
                                             Column {
                                                 Text("₹${item.amountPaid}", style = MaterialTheme.typography.titleMedium, color = MoneyGreen)
-                                                Text(item.paymentDate, style = MaterialTheme.typography.bodySmall, color = TextSecondaryLight)
+                                                Text(item.paymentDate ?: "-", style = MaterialTheme.typography.bodySmall, color = TextSecondaryLight)
                                             }
                                             SuggestionChip(
                                                 onClick = {},
