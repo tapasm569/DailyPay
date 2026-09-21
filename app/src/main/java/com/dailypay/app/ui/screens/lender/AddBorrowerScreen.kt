@@ -1,11 +1,12 @@
 package com.dailypay.app.ui.screens.lender
 
+import android.content.Context
+import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.net.Uri
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -16,7 +17,6 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
@@ -26,6 +26,7 @@ import com.dailypay.app.data.model.Borrower
 import com.dailypay.app.data.repository.LenderRepository
 import com.dailypay.app.ui.theme.*
 import kotlinx.coroutines.launch
+import java.io.ByteArrayOutputStream
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -46,7 +47,7 @@ fun AddBorrowerScreen(
     var dist by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
 
-    // KYC file byte buffers
+    // KYC file byte buffers & selection labels
     var aadhaarBytes by remember { mutableStateOf<ByteArray?>(null) }
     var aadhaarFileName by remember { mutableStateOf<String?>(null) }
 
@@ -58,25 +59,25 @@ fun AddBorrowerScreen(
 
     var isSubmitting by remember { mutableStateOf(false) }
 
-    // Activity result launchers for file selection
+    // Activity result launchers with automatic compression
     val aadhaarLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
         uri?.let {
-            aadhaarBytes = context.contentResolver.openInputStream(it)?.readBytes()
-            aadhaarFileName = "Aadhaar Card Selected"
+            aadhaarBytes = compressImageUri(context, it)
+            aadhaarFileName = if (aadhaarBytes != null) "Aadhaar Card Attached" else "Failed to load image"
         }
     }
 
     val panLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
         uri?.let {
-            panBytes = context.contentResolver.openInputStream(it)?.readBytes()
-            panFileName = "PAN Card Selected"
+            panBytes = compressImageUri(context, it)
+            panFileName = if (panBytes != null) "PAN Card Attached" else "Failed to load image"
         }
     }
 
     val avatarLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
         uri?.let {
-            avatarBytes = context.contentResolver.openInputStream(it)?.readBytes()
-            avatarFileName = "Profile Photo Selected"
+            avatarBytes = compressImageUri(context, it)
+            avatarFileName = if (avatarBytes != null) "Profile Photo Attached" else "Failed to load image"
         }
     }
 
@@ -156,7 +157,7 @@ fun AddBorrowerScreen(
             OutlinedTextField(
                 value = password,
                 onValueChange = { password = it },
-                label = { Text("Initial Borrower Password *") },
+                label = { Text("Set Login Password *") },
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(12.dp)
@@ -201,7 +202,7 @@ fun AddBorrowerScreen(
             Button(
                 onClick = {
                     if (name.isBlank() || mobileNumber.length != 10 || password.isBlank()) {
-                        Toast.makeText(context, "Fill in all required (*) details.", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(context, "Please fill in all required (*) fields.", Toast.LENGTH_SHORT).show()
                         return@Button
                     }
 
@@ -226,7 +227,7 @@ fun AddBorrowerScreen(
                             }
                             .onFailure {
                                 isSubmitting = false
-                                Toast.makeText(context, "Error: ${it.message}", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(context, "Error: ${it.message}", Toast.LENGTH_LONG).show()
                             }
                     }
                 },
@@ -244,5 +245,35 @@ fun AddBorrowerScreen(
                 }
             }
         }
+    }
+}
+
+/**
+ * Resizes and compresses image data to prevent network timeouts and payload limits.
+ */
+private fun compressImageUri(context: Context, uri: Uri): ByteArray? {
+    return try {
+        val inputStream = context.contentResolver.openInputStream(uri) ?: return null
+        val originalBitmap = BitmapFactory.decodeStream(inputStream)
+        inputStream.close()
+
+        val maxDimension = 1280
+        val ratio = originalBitmap.width.toFloat() / originalBitmap.height.toFloat()
+        val width: Int
+        val height: Int
+        if (originalBitmap.width > originalBitmap.height) {
+            width = minOf(originalBitmap.width, maxDimension)
+            height = (width / ratio).toInt()
+        } else {
+            height = minOf(originalBitmap.height, maxDimension)
+            width = (height * ratio).toInt()
+        }
+
+        val resizedBitmap = Bitmap.createScaledBitmap(originalBitmap, width, height, true)
+        val outputStream = ByteArrayOutputStream()
+        resizedBitmap.compress(Bitmap.CompressFormat.JPEG, 80, outputStream)
+        outputStream.toByteArray()
+    } catch (e: Exception) {
+        null
     }
 }
