@@ -18,7 +18,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.compose.LifecycleResumeEffect
 import com.dailypay.app.data.model.Borrower
 import com.dailypay.app.data.model.BorrowerDashboardSummary
 import com.dailypay.app.data.repository.BorrowerRepository
@@ -60,10 +59,8 @@ fun BorrowerDashboardScreen(
         }
     }
 
-    // Auto-refresh when customer navigates back to dashboard
-    LifecycleResumeEffect(borrowerId) {
+    LaunchedEffect(borrowerId) {
         loadData()
-        onPauseOrDispose { }
     }
 
     Scaffold(
@@ -116,7 +113,6 @@ fun BorrowerDashboardScreen(
                     .padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                // Today's Due Highlight Card
                 Card(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -141,7 +137,6 @@ fun BorrowerDashboardScreen(
                     }
                 }
 
-                // Balance Breakdown
                 Card(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -184,7 +179,6 @@ fun BorrowerDashboardScreen(
 
                 Text("Quick Actions", style = MaterialTheme.typography.titleMedium)
 
-                // 1. Approved Loans
                 CustomerActionCard(
                     title = "Approved Loans",
                     subtitle = "View loan details, tenure, start date & end date",
@@ -193,7 +187,6 @@ fun BorrowerDashboardScreen(
                     onClick = onApprovedLoansClick
                 )
 
-                // 2. Apply for New Loan
                 CustomerActionCard(
                     title = "Apply For Loan",
                     subtitle = "Submit a new daily repayment loan request",
@@ -202,7 +195,6 @@ fun BorrowerDashboardScreen(
                     onClick = onApplyLoanClick
                 )
 
-                // 3. View Ledger / History
                 CustomerActionCard(
                     title = "My Ledger & Passbook",
                     subtitle = "Detailed date-by-date statement and receipts",
