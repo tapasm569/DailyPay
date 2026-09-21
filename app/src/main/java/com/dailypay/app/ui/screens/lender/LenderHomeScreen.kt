@@ -23,7 +23,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.compose.LifecycleResumeEffect
 import com.dailypay.app.R
 import com.dailypay.app.data.model.Borrower
 import com.dailypay.app.data.model.DailyDueItem
@@ -51,24 +50,21 @@ fun LenderHomeScreen(
 
     var allDuesList by remember { mutableStateOf<List<DailyDueItem>>(emptyList()) }
     var allBorrowersList by remember { mutableStateOf<List<Borrower>>(emptyList()) }
-    var selectedTab by remember { mutableIntStateOf(0) } // 0 = Pending Dues, 1 = Paid Today
+    var selectedTab by remember { mutableIntStateOf(0) }
     var searchQuery by remember { mutableStateOf("") }
     var isSearchActive by remember { mutableStateOf(false) }
     var isLoading by remember { mutableStateOf(true) }
 
-    // Payment Collection Dialog State
     var selectedDueItem by remember { mutableStateOf<DailyDueItem?>(null) }
     var collectAmount by remember { mutableStateOf("") }
     var selectedPaymentMode by remember { mutableStateOf(PaymentMode.CASH) }
     var isSubmittingPayment by remember { mutableStateOf(false) }
 
-    // Profile Inspection, Update, and Delete States
     var selectedBorrowerForDetails by remember { mutableStateOf<Borrower?>(null) }
     var borrowerToEdit by remember { mutableStateOf<Borrower?>(null) }
     var borrowerToDelete by remember { mutableStateOf<Borrower?>(null) }
     var isProcessingAction by remember { mutableStateOf(false) }
 
-    // Repayment History Dialog States
     var inspectingRepaymentLoanId by remember { mutableStateOf<String?>(null) }
     var inspectingRepaymentBorrowerName by remember { mutableStateOf("") }
     var repaymentHistoryList by remember { mutableStateOf<List<Repayment>>(emptyList()) }
@@ -88,17 +84,13 @@ fun LenderHomeScreen(
         }
     }
 
-    // Auto-refresh when returning back to this screen
-    LifecycleResumeEffect(lenderId) {
+    LaunchedEffect(lenderId) {
         loadData()
-        onPauseOrDispose { }
     }
 
-    // Top metrics with value clamping
     val totalPendingDue = allDuesList.sumOf { maxOf(0.0, it.todayDueBalance) }
     val totalReceivedToday = allDuesList.sumOf { it.todayPaidAmount }
 
-    // Tab lists
     val pendingBorrowers = allDuesList.filter { item ->
         item.todayDueBalance > 0.0 && item.remainingBalance > 0.0
     }
@@ -106,7 +98,6 @@ fun LenderHomeScreen(
         item.todayPaidAmount > 0.0
     }
 
-    // Search Filter
     val isSearching = isSearchActive && searchQuery.isNotBlank()
     val searchResults = if (isSearching) {
         allBorrowersList.filter { b ->
@@ -278,7 +269,6 @@ fun LenderHomeScreen(
                         }
                     } else {
                         items(searchResults, key = { it.id ?: it.mobileNumber }) { borrower ->
-                            // Prioritize active loan with balance over closed zero-balance loans
                             val dueItem = allDuesList.firstOrNull { it.borrowerId == borrower.id && it.remainingBalance > 0.0 }
                                 ?: allDuesList.firstOrNull { it.borrowerId == borrower.id }
 
@@ -625,7 +615,6 @@ fun LenderHomeScreen(
             }
         }
 
-        // Collect Payment Dialog
         selectedDueItem?.let { dueItem ->
             AlertDialog(
                 onDismissRequest = { if (!isSubmittingPayment) selectedDueItem = null },
@@ -719,7 +708,6 @@ fun LenderHomeScreen(
             )
         }
 
-        // Repayment Details Dialog for Search Results
         inspectingRepaymentLoanId?.let {
             AlertDialog(
                 onDismissRequest = { inspectingRepaymentLoanId = null },
@@ -777,7 +765,7 @@ fun LenderHomeScreen(
                                         ) {
                                             Column {
                                                 Text("₹${r.amountPaid}", style = MaterialTheme.typography.titleMedium, color = MoneyGreen)
-                                                Text(r.paymentDate, style = MaterialTheme.typography.bodySmall, color = TextSecondaryLight)
+                                                Text(r.paymentDate ?: "-", style = MaterialTheme.typography.bodySmall, color = TextSecondaryLight)
                                             }
                                             SuggestionChip(onClick = {}, label = { Text(r.paymentMode.name) })
                                         }
@@ -798,7 +786,6 @@ fun LenderHomeScreen(
             )
         }
 
-        // View Borrower Profile Dialog
         selectedBorrowerForDetails?.let { borrower ->
             AlertDialog(
                 onDismissRequest = { selectedBorrowerForDetails = null },
@@ -943,7 +930,6 @@ fun LenderHomeScreen(
             )
         }
 
-        // Update Borrower Profile Dialog
         borrowerToEdit?.let { borrower ->
             var editName by remember { mutableStateOf(borrower.name) }
             var editMobile by remember { mutableStateOf(borrower.mobileNumber) }
@@ -1073,7 +1059,6 @@ fun LenderHomeScreen(
             )
         }
 
-        // Delete Borrower Confirmation Dialog
         borrowerToDelete?.let { borrower ->
             AlertDialog(
                 onDismissRequest = { if (!isProcessingAction) borrowerToDelete = null },
