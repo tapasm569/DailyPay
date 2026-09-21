@@ -26,23 +26,32 @@ data class PasswordResetRequest(
 )
 
 @Serializable
-data class Subscription(
+data class SubscriptionMonitorItem(
     val id: String? = null,
 
     @SerialName("lender_id")
-    val lenderId: String,
+    val lenderId: String = "",
+
+    @SerialName("lender_name")
+    val lenderName: String = "",
+
+    @SerialName("business_name")
+    val businessName: String = "",
+
+    @SerialName("mobile_number")
+    val mobileNumber: String = "",
 
     @SerialName("plan_name")
     val planName: String = "MONTHLY",
 
     @SerialName("start_date")
-    val startDate: String? = null,
+    val startDate: String = "",
 
     @SerialName("end_date")
-    val endDate: String? = null,
+    val endDate: String = "",
 
-    val status: SubscriptionStatus = SubscriptionStatus.ACTIVE,
+    @SerialName("days_remaining")
+    val daysRemaining: Int = 0,
 
-    @SerialName("created_at")
-    val createdAt: String? = null
+    val status: SubscriptionStatus = SubscriptionStatus.ACTIVE
 )
