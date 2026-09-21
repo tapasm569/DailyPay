@@ -10,19 +10,32 @@ data class Lender(
     @SerialName("user_id")
     val userId: String? = null,
 
-    @SerialName("business_name")
-    val businessName: String = "",
+    val name: String = "",
 
     @SerialName("owner_name")
     val ownerName: String = "",
 
+    @SerialName("business_name")
+    val businessName: String = "",
+
     @SerialName("mobile_number")
     val mobileNumber: String = "",
 
-    @SerialName("upi_id")
-    val upiId: String? = null,
+    @SerialName("village_town")
+    val villageTown: String? = null,
+
+    @SerialName("post_office")
+    val postOffice: String? = null,
+
+    val dist: String? = null,
 
     val address: String? = null,
+
+    @SerialName("password_hash")
+    val passwordHash: String = "",
+
+    @SerialName("upi_id")
+    val upiId: String? = null,
 
     @SerialName("created_at")
     val createdAt: String? = null
