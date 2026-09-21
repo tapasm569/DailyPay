@@ -74,21 +74,21 @@ fun LenderHomeScreen(
         loadData()
     }
 
-    // Top metrics
-    val totalPendingDue = allDuesList.sumOf { maxOf(0.0, it.todayDueBalance - it.todayPaidAmount) }
+    // Top summary totals
+    val totalPendingDue = allDuesList.sumOf { it.todayDueBalance }
     val totalReceivedToday = allDuesList.sumOf { it.todayPaidAmount }
 
-    // 1. Pending List: Only borrowers who have not cleared today's installment
+    // 1. Pending List: Only borrowers who still owe money today (today_due_balance > 0)
     val pendingBorrowers = allDuesList.filter { item ->
-        item.todayPaidAmount < item.todayDueBalance && item.todayDueBalance > 0 && item.remainingBalance > 0
+        item.todayDueBalance > 0.0 && item.remainingBalance > 0.0
     }
 
     // 2. Paid List: Borrowers who made payments today
     val paidBorrowers = allDuesList.filter { item ->
-        item.todayPaidAmount > 0
+        item.todayPaidAmount > 0.0
     }
 
-    // Filter by search query based on active tab
+    // Filter by search query based on selected tab
     val currentDisplayList = if (selectedTab == 0) {
         if (searchQuery.isBlank()) pendingBorrowers else pendingBorrowers.filter {
             it.borrowerName.contains(searchQuery, ignoreCase = true) || it.borrowerMobile.contains(searchQuery)
@@ -138,7 +138,7 @@ fun LenderHomeScreen(
                     )
                 }
 
-                // Segmented Tab Selector (Pending Due vs Paid Today)
+                // Dual-Segmented Tab Selector
                 Surface(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -153,7 +153,7 @@ fun LenderHomeScreen(
                             .padding(4.dp),
                         horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
-                        // Pending Dues Tab
+                        // Pending Tab
                         Surface(
                             modifier = Modifier.weight(1f),
                             shape = RoundedCornerShape(10.dp),
@@ -254,7 +254,7 @@ fun LenderHomeScreen(
                                     )
                                     Spacer(modifier = Modifier.height(10.dp))
                                     Text(
-                                        text = "All Dues Collected!",
+                                        text = "All Dues Cleared!",
                                         style = MaterialTheme.typography.titleMedium,
                                         color = MoneyGreen
                                     )
@@ -272,8 +272,7 @@ fun LenderHomeScreen(
                                 item = item,
                                 onCollectPaymentClick = {
                                     selectedDueItem = it
-                                    val remainingDueToday = maxOf(0.0, it.todayDueBalance - it.todayPaidAmount)
-                                    collectAmount = if (remainingDueToday > 0.0) remainingDueToday.toString() else it.dailyInstallment.toString()
+                                    collectAmount = if (it.todayDueBalance > 0.0) it.todayDueBalance.toString() else it.dailyInstallment.toString()
                                 }
                             )
                         }
@@ -329,14 +328,13 @@ fun LenderHomeScreen(
                                             )
                                         }
 
-                                        // WhatsApp & Dial shortcuts
                                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                             IconButton(
                                                 onClick = {
                                                     CommunicationUtils.openWhatsAppChat(
                                                         context = context,
                                                         rawMobileNumber = item.borrowerMobile,
-                                                        message = "Thank you ${item.borrowerName}! We received your payment of ₹${item.todayPaidAmount} for today. Remaining balance: ₹${item.remainingBalance}."
+                                                        message = "Thank you ${item.borrowerName}! We received your payment of ₹${item.todayPaidAmount} for today. Remaining loan balance: ₹${item.remainingBalance}."
                                                     )
                                                 },
                                                 modifier = Modifier
@@ -407,17 +405,15 @@ fun LenderHomeScreen(
             }
         }
 
-        // Collect Payment Dialog
+        // Payment Collection Modal
         selectedDueItem?.let { dueItem ->
-            val pendingAmountToday = maxOf(0.0, dueItem.todayDueBalance - dueItem.todayPaidAmount)
-
             AlertDialog(
                 onDismissRequest = { if (!isSubmittingPayment) selectedDueItem = null },
                 title = { Text("Collect Due - ${dueItem.borrowerName}") },
                 text = {
                     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                         Text(
-                            text = "Remaining Due Today: ₹$pendingAmountToday | Total Left: ₹${dueItem.remainingBalance}",
+                            text = "Remaining Due Today: ₹${dueItem.todayDueBalance} | Total Loan Left: ₹${dueItem.remainingBalance}",
                             style = MaterialTheme.typography.bodyMedium,
                             color = TextSecondaryLight
                         )
@@ -480,7 +476,7 @@ fun LenderHomeScreen(
                                     .onSuccess {
                                         isSubmittingPayment = false
                                         selectedDueItem = null
-                                        Toast.makeText(context, "Payment recorded! Moved to Paid Today.", Toast.LENGTH_SHORT).show()
+                                        Toast.makeText(context, "Payment recorded successfully!", Toast.LENGTH_SHORT).show()
                                         loadData()
                                     }
                                     .onFailure {
