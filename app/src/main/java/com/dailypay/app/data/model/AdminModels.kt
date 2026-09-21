@@ -53,5 +53,8 @@ data class SubscriptionMonitorItem(
     @SerialName("days_remaining")
     val daysRemaining: Int = 0,
 
-    val status: SubscriptionStatus = SubscriptionStatus.ACTIVE
+    val status: SubscriptionStatus = SubscriptionStatus.ACTIVE,
+
+    @SerialName("needs_reminder")
+    val needsReminder: Boolean = false
 )
