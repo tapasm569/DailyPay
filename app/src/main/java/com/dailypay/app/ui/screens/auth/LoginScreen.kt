@@ -2,7 +2,6 @@ package com.dailypay.app.ui.screens.auth
 
 import android.widget.Toast
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
@@ -19,8 +18,8 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
-import com.dailypay.app.data.model.UserRole
 import com.dailypay.app.data.repository.AuthRepository
+import com.dailypay.app.data.repository.LoginResult
 import com.dailypay.app.ui.theme.*
 import kotlinx.coroutines.launch
 
@@ -35,7 +34,6 @@ fun LoginScreen(
     val scope = rememberCoroutineScope()
     val authRepo = remember { AuthRepository() }
 
-    var selectedRole by remember { mutableStateOf(UserRole.LENDER) }
     var mobileNumber by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var passwordVisible by remember { mutableStateOf(false) }
@@ -55,8 +53,8 @@ fun LoginScreen(
         ) {
             Box(
                 modifier = Modifier
-                    .size(68.dp)
-                    .clip(RoundedCornerShape(20.dp))
+                    .size(72.dp)
+                    .clip(RoundedCornerShape(22.dp))
                     .background(BrandPrimary),
                 contentAlignment = Alignment.Center
             ) {
@@ -64,11 +62,11 @@ fun LoginScreen(
                     imageVector = Icons.Default.CurrencyRupee,
                     contentDescription = null,
                     tint = Color.White,
-                    modifier = Modifier.size(36.dp)
+                    modifier = Modifier.size(40.dp)
                 )
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(18.dp))
 
             Text(
                 text = "DailyPay",
@@ -81,57 +79,13 @@ fun LoginScreen(
                 color = TextSecondaryLight
             )
 
-            Spacer(modifier = Modifier.height(32.dp))
-
-            Surface(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .border(1.dp, BorderSubtleLight, RoundedCornerShape(16.dp)),
-                shape = RoundedCornerShape(16.dp),
-                color = MaterialTheme.colorScheme.surface
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(4.dp)
-                ) {
-                    val roles = listOf(
-                        UserRole.ADMIN to "Admin",
-                        UserRole.LENDER to "Lender",
-                        UserRole.BORROWER to "Customer"
-                    )
-
-                    roles.forEach { (role, label) ->
-                        val isSelected = selectedRole == role
-                        Surface(
-                            modifier = Modifier
-                                .weight(1f)
-                                .clip(RoundedCornerShape(12.dp)),
-                            color = if (isSelected) BrandPrimary else Color.Transparent,
-                            onClick = { selectedRole = role }
-                        ) {
-                            Box(
-                                modifier = Modifier.padding(vertical = 10.dp),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text(
-                                    text = label,
-                                    style = MaterialTheme.typography.labelMedium,
-                                    color = if (isSelected) Color.White else TextSecondaryLight
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(36.dp))
 
             OutlinedTextField(
                 value = mobileNumber,
                 onValueChange = { if (it.length <= 10) mobileNumber = it.filter { ch -> ch.isDigit() } },
                 label = { Text("Mobile Number") },
-                placeholder = { Text("Enter 10-digit number") },
+                placeholder = { Text("Enter 10-digit registered number") },
                 leadingIcon = {
                     Icon(imageVector = Icons.Default.Phone, contentDescription = null, tint = BrandPrimary)
                 },
@@ -151,7 +105,7 @@ fun LoginScreen(
                 value = password,
                 onValueChange = { password = it },
                 label = { Text("Password") },
-                placeholder = { Text("Enter password") },
+                placeholder = { Text("Enter your password") },
                 leadingIcon = {
                     Icon(imageVector = Icons.Default.Lock, contentDescription = null, tint = BrandPrimary)
                 },
@@ -179,7 +133,7 @@ fun LoginScreen(
             Button(
                 onClick = {
                     if (mobileNumber.length != 10) {
-                        Toast.makeText(context, "Enter a 10-digit mobile number", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(context, "Enter a valid 10-digit mobile number", Toast.LENGTH_SHORT).show()
                         return@Button
                     }
                     if (password.isBlank()) {
@@ -189,41 +143,23 @@ fun LoginScreen(
 
                     isLoading = true
                     scope.launch {
-                        when (selectedRole) {
-                            UserRole.ADMIN -> {
-                                authRepo.loginAdmin(mobileNumber, password)
-                                    .onSuccess {
-                                        isLoading = false
-                                        onAdminLoginSuccess()
-                                    }
-                                    .onFailure {
-                                        isLoading = false
-                                        Toast.makeText(context, it.message ?: "Admin login failed", Toast.LENGTH_SHORT).show()
-                                    }
+                        authRepo.unifiedLogin(mobileNumber, password)
+                            .onSuccess { result ->
+                                isLoading = false
+                                when (result) {
+                                    is LoginResult.Admin -> onAdminLoginSuccess()
+                                    is LoginResult.LenderUser -> onLenderLoginSuccess(result.lenderId)
+                                    is LoginResult.BorrowerUser -> onBorrowerLoginSuccess(result.borrowerId)
+                                }
                             }
-                            UserRole.LENDER -> {
-                                authRepo.loginLender(mobileNumber, password)
-                                    .onSuccess { lender ->
-                                        isLoading = false
-                                        onLenderLoginSuccess(lender.id ?: "")
-                                    }
-                                    .onFailure {
-                                        isLoading = false
-                                        Toast.makeText(context, it.message ?: "Lender login failed", Toast.LENGTH_SHORT).show()
-                                    }
+                            .onFailure {
+                                isLoading = false
+                                Toast.makeText(
+                                    context,
+                                    it.message ?: "Invalid login details",
+                                    Toast.LENGTH_LONG
+                                ).show()
                             }
-                            UserRole.BORROWER -> {
-                                authRepo.loginBorrower(mobileNumber, password)
-                                    .onSuccess { borrower ->
-                                        isLoading = false
-                                        onBorrowerLoginSuccess(borrower.id ?: "")
-                                    }
-                                    .onFailure {
-                                        isLoading = false
-                                        Toast.makeText(context, it.message ?: "Borrower login failed", Toast.LENGTH_SHORT).show()
-                                    }
-                            }
-                        }
                     }
                 },
                 modifier = Modifier
@@ -237,7 +173,7 @@ fun LoginScreen(
                     CircularProgressIndicator(color = Color.White, modifier = Modifier.size(22.dp))
                 } else {
                     Text(
-                        text = "Sign In as ${selectedRole.name.lowercase().replaceFirstChar { it.uppercase() }}",
+                        text = "Sign In",
                         style = MaterialTheme.typography.titleMedium,
                         color = Color.White
                     )
