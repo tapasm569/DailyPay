@@ -1,14 +1,19 @@
 package com.dailypay.app.ui.screens.lender
 
+import android.widget.Toast
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.PersonAdd
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -16,6 +21,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.dailypay.app.R
 import com.dailypay.app.data.model.Borrower
@@ -39,15 +45,28 @@ fun MasterClientScreen(
     var borrowers by remember { mutableStateOf<List<Borrower>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
 
-    LaunchedEffect(lenderId) {
+    // Dialog interaction states
+    var selectedBorrowerForDetails by remember { mutableStateOf<Borrower?>(null) }
+    var borrowerToEdit by remember { mutableStateOf<Borrower?>(null) }
+    var borrowerToDelete by remember { mutableStateOf<Borrower?>(null) }
+    var isProcessingAction by remember { mutableStateOf(false) }
+
+    fun loadBorrowers() {
         scope.launch {
             lenderRepo.getBorrowers(lenderId)
                 .onSuccess {
                     borrowers = it
                     isLoading = false
                 }
-                .onFailure { isLoading = false }
+                .onFailure {
+                    isLoading = false
+                    Toast.makeText(context, "Error: ${it.message}", Toast.LENGTH_SHORT).show()
+                }
         }
+    }
+
+    LaunchedEffect(lenderId) {
+        loadBorrowers()
     }
 
     Scaffold(
@@ -74,11 +93,21 @@ fun MasterClientScreen(
         containerColor = MaterialTheme.colorScheme.background
     ) { paddingValues ->
         if (isLoading) {
-            Box(modifier = Modifier.fillMaxSize().padding(paddingValues), contentAlignment = Alignment.Center) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(paddingValues),
+                contentAlignment = Alignment.Center
+            ) {
                 CircularProgressIndicator(color = BrandPrimary)
             }
         } else if (borrowers.isEmpty()) {
-            Box(modifier = Modifier.fillMaxSize().padding(paddingValues), contentAlignment = Alignment.Center) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(paddingValues),
+                contentAlignment = Alignment.Center
+            ) {
                 Text("No registered borrowers found.", color = TextSecondaryLight)
             }
         } else {
@@ -89,11 +118,14 @@ fun MasterClientScreen(
                     .padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                items(borrowers) { borrower ->
+                items(borrowers, key = { it.id ?: it.mobileNumber }) { borrower ->
                     Card(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .border(1.dp, BorderSubtleLight, RoundedCornerShape(16.dp)),
+                            .border(1.dp, BorderSubtleLight, RoundedCornerShape(16.dp))
+                            .clickable {
+                                selectedBorrowerForDetails = borrower
+                            },
                         shape = RoundedCornerShape(16.dp),
                         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
                     ) {
@@ -105,17 +137,30 @@ fun MasterClientScreen(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = borrower.name,
-                                    style = MaterialTheme.typography.titleMedium,
-                                    color = MaterialTheme.colorScheme.onSurface
-                                )
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text(
+                                        text = borrower.name,
+                                        style = MaterialTheme.typography.titleMedium,
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Icon(
+                                        imageVector = Icons.Default.ChevronRight,
+                                        contentDescription = "Manage",
+                                        tint = TextSecondaryLight,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
+
                                 Text(
                                     text = "+91 ${borrower.mobileNumber}",
                                     style = MaterialTheme.typography.bodyMedium,
                                     color = TextSecondaryLight
                                 )
-                                val location = listOfNotNull(borrower.villageCity, borrower.dist).filter { it.isNotBlank() }.joinToString(", ")
+
+                                val location = listOfNotNull(borrower.villageCity, borrower.dist)
+                                    .filter { it.isNotBlank() }
+                                    .joinToString(", ")
                                 if (location.isNotBlank()) {
                                     Text(
                                         text = location,
@@ -167,5 +212,198 @@ fun MasterClientScreen(
                 }
             }
         }
-    }
-}
+
+        // ================= 1. VIEW PROFILE DETAILS TABLE MODAL =================
+        selectedBorrowerForDetails?.let { borrower ->
+            AlertDialog(
+                onDismissRequest = { selectedBorrowerForDetails = null },
+                title = {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("Borrower Profile", style = MaterialTheme.typography.titleLarge)
+                        IconButton(onClick = { selectedBorrowerForDetails = null }) {
+                            Icon(Icons.Default.Close, contentDescription = "Close")
+                        }
+                    }
+                },
+                text = {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .verticalScroll(rememberScrollState()),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Surface(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(12.dp),
+                            color = BrandPrimary.copy(alpha = 0.08f)
+                        ) {
+                            Column(modifier = Modifier.padding(14.dp)) {
+                                Text(
+                                    text = borrower.name,
+                                    style = MaterialTheme.typography.titleLarge,
+                                    color = BrandPrimary
+                                )
+                                Text(
+                                    text = "Mobile: +91 ${borrower.mobileNumber}",
+                                    style = MaterialTheme.typography.bodyMedium
+                                )
+                            }
+                        }
+
+                        // Profile Details Table
+                        Card(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .border(1.dp, BorderSubtleLight, RoundedCornerShape(12.dp)),
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(12.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                ProfileDetailRow("Village / City", borrower.villageCity ?: "-")
+                                HorizontalDivider(color = BorderSubtleLight)
+                                ProfileDetailRow("Post Office", borrower.postOffice ?: "-")
+                                HorizontalDivider(color = BorderSubtleLight)
+                                ProfileDetailRow("Police Station", borrower.policeStation ?: "-")
+                                HorizontalDivider(color = BorderSubtleLight)
+                                ProfileDetailRow("District", borrower.dist ?: "-")
+                                HorizontalDivider(color = BorderSubtleLight)
+                                ProfileDetailRow("Password", borrower.passwordHash)
+                            }
+                        }
+
+                        // KYC Document Status
+                        Text("KYC Documents Attached:", style = MaterialTheme.typography.labelMedium)
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            SuggestionChip(
+                                onClick = {},
+                                label = { Text(if (!borrower.aadhaarCardUrl.isNullOrBlank()) "Aadhaar ✓" else "No Aadhaar") }
+                            )
+                            SuggestionChip(
+                                onClick = {},
+                                label = { Text(if (!borrower.panCardUrl.isNullOrBlank()) "PAN ✓" else "No PAN") }
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.height(6.dp))
+
+                        // Action Buttons: Update and Delete
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            Button(
+                                onClick = {
+                                    borrowerToEdit = borrower
+                                    selectedBorrowerForDetails = null
+                                },
+                                modifier = Modifier.weight(1f),
+                                shape = RoundedCornerShape(12.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = BrandPrimary)
+                            ) {
+                                Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(18.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Update")
+                            }
+
+                            Button(
+                                onClick = {
+                                    borrowerToDelete = borrower
+                                    selectedBorrowerForDetails = null
+                                },
+                                modifier = Modifier.weight(1f),
+                                shape = RoundedCornerShape(12.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = DangerRed)
+                            ) {
+                                Icon(Icons.Default.Delete, contentDescription = null, modifier = Modifier.size(18.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Delete")
+                            }
+                        }
+                    }
+                },
+                confirmButton = {}
+            )
+        }
+
+        // ================= 2. UPDATE BORROWER PROFILE MODAL =================
+        borrowerToEdit?.let { borrower ->
+            var editName by remember { mutableStateOf(borrower.name) }
+            var editMobile by remember { mutableStateOf(borrower.mobileNumber) }
+            var editVillage by remember { mutableStateOf(borrower.villageCity ?: "") }
+            var editPostOffice by remember { mutableStateOf(borrower.postOffice ?: "") }
+            var editPoliceStation by remember { mutableStateOf(borrower.policeStation ?: "") }
+            var editDist by remember { mutableStateOf(borrower.dist ?: "") }
+            var editPassword by remember { mutableStateOf(borrower.passwordHash) }
+
+            AlertDialog(
+                onDismissRequest = { if (!isProcessingAction) borrowerToEdit = null },
+                title = { Text("Update Borrower Profile") },
+                text = {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .verticalScroll(rememberScrollState()),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        OutlinedTextField(
+                            value = editName,
+                            onValueChange = { editName = it },
+                            label = { Text("Full Name *") },
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(12.dp)
+                        )
+
+                        OutlinedTextField(
+                            value = editMobile,
+                            onValueChange = { if (it.length <= 10) editMobile = it.filter { ch -> ch.isDigit() } },
+                            label = { Text("Mobile Number *") },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(12.dp)
+                        )
+
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            OutlinedTextField(
+                                value = editVillage,
+                                onValueChange = { editVillage = it },
+                                label = { Text("Village/City") },
+                                modifier = Modifier.weight(1f),
+                                shape = RoundedCornerShape(12.dp)
+                            )
+                            OutlinedTextField(
+                                value = editPostOffice,
+                                onValueChange = { editPostOffice = it },
+                                label = { Text("Post Office") },
+                                modifier = Modifier.weight(1f),
+                                shape = RoundedCornerShape(12.dp)
+                            )
+                        }
+
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            OutlinedTextField(
+                                value = editPoliceStation,
+                                onValueChange = { editPoliceStation = it },
+                                label = { Text("Police Station") },
+                                modifier = Modifier.weight(1f),
+                                shape = RoundedCornerShape(12.dp)
+                            )
+                            OutlinedTextField(
+                                value = editDist,
+                                onValueChange = { editDist = it },
+                                label = { Text("District") },
+                                modifier = Modifier.weight(1f),
+                                shape = RoundedCornerShape(12.dp)
+                            )
+                        }
+
+                        OutlinedTextField(
+                            value = editPassword,
+                            onValueChange = { editPassword = it },
+                            label = { Text("Password *") },
+                            mod
