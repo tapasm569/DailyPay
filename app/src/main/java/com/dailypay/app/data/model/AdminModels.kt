@@ -1,20 +1,39 @@
-
 package com.dailypay.app.data.model
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 @Serializable
-data class Lender(
+data class PasswordResetRequest(
     val id: String? = null,
 
     @SerialName("user_id")
     val userId: String? = null,
 
-    val name: String = "",
+    @SerialName("lender_id")
+    val lenderId: String? = null,
 
-    @SerialName("owner_name")
-    val ownerName: String = "",
+    @SerialName("mobile_number")
+    val mobileNumber: String? = null,
+
+    @SerialName("user_role")
+    val userRole: UserRole = UserRole.LENDER,
+
+    val status: ResetStatus = ResetStatus.PENDING,
+
+    @SerialName("created_at")
+    val createdAt: String? = null
+)
+
+@Serializable
+data class SubscriptionMonitorItem(
+    val id: String? = null,
+
+    @SerialName("lender_id")
+    val lenderId: String = "",
+
+    @SerialName("lender_name")
+    val lenderName: String = "",
 
     @SerialName("business_name")
     val businessName: String = "",
@@ -22,62 +41,20 @@ data class Lender(
     @SerialName("mobile_number")
     val mobileNumber: String = "",
 
-    @SerialName("village_town")
-    val villageTown: String? = null,
-
-    @SerialName("post_office")
-    val postOffice: String? = null,
-
-    val dist: String? = null,
-
-    val address: String? = null,
-
-    @SerialName("password_hash")
-    val passwordHash: String = "",
-
-    @SerialName("upi_id")
-    val upiId: String? = null,
-
-    @SerialName("created_at")
-    val createdAt: String? = null
-)
-
-@Serializable
-data class Subscription(
-    val id: String? = null,
-
-    @SerialName("lender_id")
-    val lenderId: String,
-
     @SerialName("plan_name")
     val planName: String = "MONTHLY",
 
     @SerialName("start_date")
-    val startDate: String? = null,
+    val startDate: String = "",
 
     @SerialName("end_date")
-    val endDate: String? = null,
+    val endDate: String = "",
+
+    @SerialName("days_remaining")
+    val daysRemaining: Int = 0,
 
     val status: SubscriptionStatus = SubscriptionStatus.ACTIVE,
 
-    @SerialName("created_at")
-    val createdAt: String? = null
-)
-
-@Serializable
-data class LenderLedgerSummary(
-    @SerialName("lender_id")
-    val lenderId: String = "",
-
-    @SerialName("total_disbursed")
-    val totalDisbursed: Double = 0.0,
-
-    @SerialName("total_due_balance")
-    val totalDueBalance: Double = 0.0,
-
-    @SerialName("total_paid")
-    val totalPaid: Double = 0.0,
-
-    @SerialName("total_remaining_balance")
-    val totalRemainingBalance: Double = 0.0
+    @SerialName("needs_reminder")
+    val needsReminder: Boolean = false
 )
