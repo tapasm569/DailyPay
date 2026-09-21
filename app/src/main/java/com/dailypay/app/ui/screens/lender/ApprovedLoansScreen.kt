@@ -1,7 +1,6 @@
 package com.dailypay.app.ui.screens.lender
 
 import android.widget.Toast
-import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -13,7 +12,6 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.ReceiptLong
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -23,7 +21,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.compose.LifecycleResumeEffect
 import com.dailypay.app.R
 import com.dailypay.app.data.model.ApprovedLoanDetail
 import com.dailypay.app.data.model.Repayment
@@ -46,7 +43,6 @@ fun ApprovedLoansScreen(
     var approvedLoans by remember { mutableStateOf<List<ApprovedLoanDetail>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
 
-    // Repayment History Dialog States
     var selectedLoanForHistory by remember { mutableStateOf<ApprovedLoanDetail?>(null) }
     var repaymentHistory by remember { mutableStateOf<List<Repayment>>(emptyList()) }
     var isLoadingHistory by remember { mutableStateOf(false) }
@@ -65,9 +61,8 @@ fun ApprovedLoansScreen(
         }
     }
 
-    LifecycleResumeEffect(lenderId) {
+    LaunchedEffect(lenderId) {
         loadData()
-        onPauseOrDispose { }
     }
 
     Scaffold(
@@ -127,7 +122,6 @@ fun ApprovedLoansScreen(
                                 .fillMaxWidth()
                                 .padding(16.dp)
                         ) {
-                            // Borrower Header & Call/WhatsApp
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -189,7 +183,6 @@ fun ApprovedLoansScreen(
                             HorizontalDivider(color = BorderSubtleLight)
                             Spacer(modifier = Modifier.height(10.dp))
 
-                            // Principal & Total Payable
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.SpaceBetween
@@ -207,7 +200,6 @@ fun ApprovedLoansScreen(
 
                             Spacer(modifier = Modifier.height(8.dp))
 
-                            // Paid vs Remaining
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.SpaceBetween
@@ -242,7 +234,6 @@ fun ApprovedLoansScreen(
 
                             Spacer(modifier = Modifier.height(12.dp))
 
-                            // Date Tracking Badge
                             Surface(
                                 modifier = Modifier.fillMaxWidth(),
                                 shape = RoundedCornerShape(10.dp),
@@ -310,7 +301,6 @@ fun ApprovedLoansScreen(
             }
         }
 
-        // Repayment Details Dialog
         selectedLoanForHistory?.let { loan ->
             AlertDialog(
                 onDismissRequest = { selectedLoanForHistory = null },
@@ -373,7 +363,7 @@ fun ApprovedLoansScreen(
                                         ) {
                                             Column {
                                                 Text("₹${item.amountPaid}", style = MaterialTheme.typography.titleMedium, color = MoneyGreen)
-                                                Text(item.paymentDate, style = MaterialTheme.typography.bodySmall, color = TextSecondaryLight)
+                                                Text(item.paymentDate ?: "-", style = MaterialTheme.typography.bodySmall, color = TextSecondaryLight)
                                             }
                                             SuggestionChip(
                                                 onClick = {},
