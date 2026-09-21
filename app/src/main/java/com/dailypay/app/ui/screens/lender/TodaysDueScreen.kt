@@ -3,7 +3,7 @@ package com.dailypay.app.ui.screens.lender
 import android.widget.Toast
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
@@ -48,14 +48,15 @@ fun TodaysDueScreen(
     fun loadData() {
         scope.launch {
             lenderRepo.getDailyDues(lenderId)
-                .onSuccess { allDues ->
-                    // Show only borrowers with remaining dues (including rolled-over arrears)
-                    duesList = allDues.filter { item ->
-                        item.todayDueBalance > 0.0 && item.remainingBalance > 0.0
-                    }
+                .onSuccess { list ->
+                    // Show borrowers who have an unpaid balance today and still have remaining loan balance
+                    duesList = list.filter { it.todayDueBalance > 0.0 && it.remainingBalance > 0.0 }
                     isLoading = false
                 }
-                .onFailure { isLoading = false }
+                .onFailure {
+                    isLoading = false
+                    Toast.makeText(context, "Error: ${it.message}", Toast.LENGTH_SHORT).show()
+                }
         }
     }
 
@@ -63,10 +64,21 @@ fun TodaysDueScreen(
         loadData()
     }
 
+    val totalPendingToday = duesList.sumOf { it.todayDueBalance }
+
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Today's Due (${duesList.size} Pending)") },
+                title = {
+                    Column {
+                        Text("Today's Due Dues (${duesList.size})")
+                        Text(
+                            text = "Total Pending: ₹$totalPendingToday",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = AlertOrange
+                        )
+                    }
+                },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
@@ -90,39 +102,22 @@ fun TodaysDueScreen(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(paddingValues)
-                    .padding(24.dp),
+                    .padding(paddingValues),
                 contentAlignment = Alignment.Center
             ) {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(16.dp),
-                    colors = CardDefaults.cardColors(containerColor = MoneyGreenSubtle)
-                ) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(24.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.CheckCircle,
-                            contentDescription = null,
-                            tint = MoneyGreen,
-                            modifier = Modifier.size(48.dp)
-                        )
-                        Spacer(modifier = Modifier.height(10.dp))
-                        Text(
-                            text = "All Dues Cleared!",
-                            style = MaterialTheme.typography.titleMedium,
-                            color = MoneyGreen
-                        )
-                        Text(
-                            text = "All borrowers have paid their dues for today.",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = TextSecondaryLight
-                        )
-                    }
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Icon(
+                        imageVector = Icons.Default.CheckCircle,
+                        contentDescription = null,
+                        tint = MoneyGreen,
+                        modifier = Modifier.size(48.dp)
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = "All customer dues are cleared for today!",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MoneyGreen
+                    )
                 }
             }
         } else {
@@ -131,25 +126,20 @@ fun TodaysDueScreen(
                     .fillMaxSize()
                     .padding(paddingValues)
                     .padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(14.dp)
+                verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                items(duesList, key = { it.loanId }) { item ->
+                itemsIndexed(duesList, key = { index, item -> item.loanId.ifBlank { "due_$index" } }) { _, item ->
                     DueBorrowerCard(
                         item = item,
                         onCollectPaymentClick = {
                             selectedDueItem = it
-                            collectAmount = if (it.todayDueBalance > 0.0) {
-                                it.todayDueBalance.toString()
-                            } else {
-                                it.dailyInstallment.toString()
-                            }
+                            collectAmount = it.todayDueBalance.toString()
                         }
                     )
                 }
             }
         }
 
-        // Collect Payment Dialog
         selectedDueItem?.let { dueItem ->
             AlertDialog(
                 onDismissRequest = { if (!isSubmittingPayment) selectedDueItem = null },
@@ -157,7 +147,7 @@ fun TodaysDueScreen(
                 text = {
                     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                         Text(
-                            text = "Total Due Today: ₹${dueItem.todayDueBalance} | Total Loan Left: ₹${dueItem.remainingBalance}",
+                            text = "Daily Due: ₹${dueItem.dailyInstallment} | Left for Today: ₹${dueItem.todayDueBalance}",
                             style = MaterialTheme.typography.bodyMedium,
                             color = TextSecondaryLight
                         )
@@ -213,15 +203,15 @@ fun TodaysDueScreen(
                                     paymentDate = DateUtils.getTodaySqlFormat(),
                                     amountPaid = parsedAmount,
                                     paymentMode = selectedPaymentMode,
-                                    notes = "Collected from Today Due screen"
+                                    notes = "Daily installment collected"
                                 )
 
                                 lenderRepo.recordRepayment(repayment)
                                     .onSuccess {
                                         isSubmittingPayment = false
                                         selectedDueItem = null
-                                        Toast.makeText(context, "Payment recorded! Cleared from list.", Toast.LENGTH_SHORT).show()
-                                        loadData() // Refreshes and removes borrower immediately once fully cleared
+                                        Toast.makeText(context, "Payment recorded successfully!", Toast.LENGTH_SHORT).show()
+                                        loadData()
                                     }
                                     .onFailure {
                                         isSubmittingPayment = false
@@ -232,7 +222,7 @@ fun TodaysDueScreen(
                         enabled = !isSubmittingPayment,
                         colors = ButtonDefaults.buttonColors(containerColor = BrandPrimary)
                     ) {
-                        Text(if (isSubmittingPayment) "Saving..." else "Confirm Payment")
+                        Text(if (isSubmittingPayment) "Saving..." else "Confirm Collection")
                     }
                 },
                 dismissButton = {
