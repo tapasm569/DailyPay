@@ -3,17 +3,7 @@ package com.dailypay.app.ui.screens.lender
 import android.widget.Toast
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
@@ -23,38 +13,9 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.ChevronRight
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.PersonAdd
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FloatingActionButton
-import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SuggestionChip
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -65,14 +26,21 @@ import androidx.compose.ui.unit.dp
 import com.dailypay.app.R
 import com.dailypay.app.data.model.Borrower
 import com.dailypay.app.data.repository.LenderRepository
-import com.dailypay.app.ui.theme.BorderSubtleLight
-import com.dailypay.app.ui.theme.BrandPrimary
-import com.dailypay.app.ui.theme.CallBlue
-import com.dailypay.app.ui.theme.DangerRed
-import com.dailypay.app.ui.theme.TextSecondaryLight
-import com.dailypay.app.ui.theme.WhatsAppGreen
+import com.dailypay.app.ui.theme.*
 import com.dailypay.app.util.CommunicationUtils
 import kotlinx.coroutines.launch
+
+@Composable
+private fun ProfileRow(label: String, value: String) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(text = label, style = MaterialTheme.typography.bodyMedium, color = TextSecondaryLight)
+        Text(text = value, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface)
+    }
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -89,7 +57,6 @@ fun MasterClientScreen(
     var borrowers by remember { mutableStateOf<List<Borrower>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
 
-    // Dialog interaction states
     var selectedBorrowerForDetails by remember { mutableStateOf<Borrower?>(null) }
     var borrowerToEdit by remember { mutableStateOf<Borrower?>(null) }
     var borrowerToDelete by remember { mutableStateOf<Borrower?>(null) }
@@ -167,9 +134,7 @@ fun MasterClientScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .border(1.dp, BorderSubtleLight, RoundedCornerShape(16.dp))
-                            .clickable {
-                                selectedBorrowerForDetails = borrower
-                            },
+                            .clickable { selectedBorrowerForDetails = borrower },
                         shape = RoundedCornerShape(16.dp),
                         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
                     ) {
@@ -257,10 +222,15 @@ fun MasterClientScreen(
             }
         }
 
-        // ================= 1. VIEW PROFILE DETAILS MODAL =================
+        // 1. View Profile Modal
         selectedBorrowerForDetails?.let { borrower ->
             AlertDialog(
                 onDismissRequest = { selectedBorrowerForDetails = null },
+                confirmButton = {
+                    TextButton(onClick = { selectedBorrowerForDetails = null }) {
+                        Text("Close")
+                    }
+                },
                 title = {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -298,7 +268,6 @@ fun MasterClientScreen(
                             }
                         }
 
-                        // Profile Details Table
                         Card(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -309,19 +278,18 @@ fun MasterClientScreen(
                                 modifier = Modifier.padding(12.dp),
                                 verticalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
-                                ProfileDetailRow("Village / City", borrower.villageCity ?: "-")
+                                ProfileRow("Village / City", borrower.villageCity ?: "-")
                                 HorizontalDivider(color = BorderSubtleLight)
-                                ProfileDetailRow("Post Office", borrower.postOffice ?: "-")
+                                ProfileRow("Post Office", borrower.postOffice ?: "-")
                                 HorizontalDivider(color = BorderSubtleLight)
-                                ProfileDetailRow("Police Station", borrower.policeStation ?: "-")
+                                ProfileRow("Police Station", borrower.policeStation ?: "-")
                                 HorizontalDivider(color = BorderSubtleLight)
-                                ProfileDetailRow("District", borrower.dist ?: "-")
+                                ProfileRow("District", borrower.dist ?: "-")
                                 HorizontalDivider(color = BorderSubtleLight)
-                                ProfileDetailRow("Password", borrower.passwordHash)
+                                ProfileRow("Password", borrower.passwordHash)
                             }
                         }
 
-                        // KYC Document Status
                         Text("KYC Documents Attached:", style = MaterialTheme.typography.labelMedium)
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             SuggestionChip(
@@ -336,7 +304,6 @@ fun MasterClientScreen(
 
                         Spacer(modifier = Modifier.height(6.dp))
 
-                        // Action Buttons: Update and Delete
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.spacedBy(10.dp)
@@ -370,12 +337,11 @@ fun MasterClientScreen(
                             }
                         }
                     }
-                },
-                confirmButton = {}
+                }
             )
         }
 
-        // ================= 2. UPDATE BORROWER PROFILE MODAL =================
+        // 2. Update Profile Modal
         borrowerToEdit?.let { borrower ->
             var editName by remember { mutableStateOf(borrower.name) }
             var editMobile by remember { mutableStateOf(borrower.mobileNumber) }
@@ -408,4 +374,154 @@ fun MasterClientScreen(
                             onValueChange = { if (it.length <= 10) editMobile = it.filter { ch -> ch.isDigit() } },
                             label = { Text("Mobile Number *") },
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                            modifier = Modifier.fillMaxWid
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(12.dp)
+                        )
+
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            OutlinedTextField(
+                                value = editVillage,
+                                onValueChange = { editVillage = it },
+                                label = { Text("Village/City") },
+                                modifier = Modifier.weight(1f),
+                                shape = RoundedCornerShape(12.dp)
+                            )
+                            OutlinedTextField(
+                                value = editPostOffice,
+                                onValueChange = { editPostOffice = it },
+                                label = { Text("Post Office") },
+                                modifier = Modifier.weight(1f),
+                                shape = RoundedCornerShape(12.dp)
+                            )
+                        }
+
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            OutlinedTextField(
+                                value = editPoliceStation,
+                                onValueChange = { editPoliceStation = it },
+                                label = { Text("Police Station") },
+                                modifier = Modifier.weight(1f),
+                                shape = RoundedCornerShape(12.dp)
+                            )
+                            OutlinedTextField(
+                                value = editDist,
+                                onValueChange = { editDist = it },
+                                label = { Text("District") },
+                                modifier = Modifier.weight(1f),
+                                shape = RoundedCornerShape(12.dp)
+                            )
+                        }
+
+                        OutlinedTextField(
+                            value = editPassword,
+                            onValueChange = { editPassword = it },
+                            label = { Text("Password *") },
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(12.dp)
+                        )
+                    }
+                },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            if (editName.isBlank() || editMobile.length != 10 || editPassword.isBlank()) {
+                                Toast.makeText(context, "Please fill required fields properly.", Toast.LENGTH_SHORT).show()
+                            } else {
+                                isProcessingAction = true
+                                scope.launch {
+                                    val updated = borrower.copy(
+                                        name = editName.trim(),
+                                        mobileNumber = editMobile.trim(),
+                                        villageCity = editVillage.trim(),
+                                        postOffice = editPostOffice.trim(),
+                                        policeStation = editPoliceStation.trim(),
+                                        dist = editDist.trim(),
+                                        passwordHash = editPassword.trim()
+                                    )
+
+                                    lenderRepo.updateBorrower(updated)
+                                        .onSuccess {
+                                            isProcessingAction = false
+                                            borrowerToEdit = null
+                                            Toast.makeText(context, "Borrower profile updated successfully!", Toast.LENGTH_SHORT).show()
+                                            loadBorrowers()
+                                        }
+                                        .onFailure {
+                                            isProcessingAction = false
+                                            Toast.makeText(context, "Update failed: ${it.message}", Toast.LENGTH_SHORT).show()
+                                        }
+                                }
+                            }
+                        },
+                        enabled = !isProcessingAction,
+                        colors = ButtonDefaults.buttonColors(containerColor = BrandPrimary)
+                    ) {
+                        Text(if (isProcessingAction) "Saving..." else "Save Changes")
+                    }
+                },
+                dismissButton = {
+                    TextButton(
+                        onClick = { borrowerToEdit = null },
+                        enabled = !isProcessingAction
+                    ) {
+                        Text("Cancel")
+                    }
+                }
+            )
+        }
+
+        // 3. Delete Confirmation Modal
+        borrowerToDelete?.let { borrower ->
+            AlertDialog(
+                onDismissRequest = { if (!isProcessingAction) borrowerToDelete = null },
+                title = { Text("Delete Borrower?") },
+                text = {
+                    Text(
+                        text = "Are you sure you want to permanently delete \"${borrower.name}\" (+91 ${borrower.mobileNumber})? Note: Borrowers with active loans or payment history cannot be deleted until those records are cleared.",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            val bId = borrower.id
+                            if (!bId.isNullOrBlank()) {
+                                isProcessingAction = true
+                                scope.launch {
+                                    lenderRepo.deleteBorrower(bId)
+                                        .onSuccess {
+                                            isProcessingAction = false
+                                            borrowerToDelete = null
+                                            Toast.makeText(context, "Borrower deleted successfully.", Toast.LENGTH_SHORT).show()
+                                            loadBorrowers()
+                                        }
+                                        .onFailure { error ->
+                                            isProcessingAction = false
+                                            val errorMsg = if (error.message?.contains("violates foreign key constraint", ignoreCase = true) == true) {
+                                                "Cannot delete borrower with existing loans or repayments. Remove their loans first."
+                                            } else {
+                                                error.message ?: "Deletion failed"
+                                            }
+                                            Toast.makeText(context, errorMsg, Toast.LENGTH_LONG).show()
+                                        }
+                                }
+                            }
+                        },
+                        enabled = !isProcessingAction,
+                        colors = ButtonDefaults.buttonColors(containerColor = DangerRed)
+                    ) {
+                        Text(if (isProcessingAction) "Deleting..." else "Confirm Delete")
+                    }
+                },
+                dismissButton = {
+                    TextButton(
+                        onClick = { borrowerToDelete = null },
+                        enabled = !isProcessingAction
+                    ) {
+                        Text("Cancel")
+                    }
+                }
+            )
+        }
+    }
+}
