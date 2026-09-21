@@ -1,5 +1,6 @@
 package com.dailypay.app.data.repository
 
+import com.dailypay.app.data.model.ApprovedLoanDetail
 import com.dailypay.app.data.model.Borrower
 import com.dailypay.app.data.model.DailyDueItem
 import com.dailypay.app.data.model.LenderLedgerSummary
@@ -10,19 +11,19 @@ import com.dailypay.app.data.model.Repayment
 import com.dailypay.app.data.remote.SupabaseClientProvider
 import com.dailypay.app.util.DateUtils
 import io.github.jan.supabase.postgrest.from
+import io.github.jan.supabase.postgrest.query.Order
 import io.github.jan.supabase.storage.storage
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
+import java.text.SimpleDateFormat
+import java.util.Calendar
+import java.util.Locale
 
 class LenderRepository {
 
     private val db = SupabaseClientProvider.db
     private val storage = SupabaseClientProvider.storage
 
-    /**
-     * Registers a new borrower, uploads KYC docs & photo to Supabase Storage,
-     * and persists the resulting URLs in the borrowers table.
-     */
     suspend fun addBorrower(
         borrower: Borrower,
         aadhaarBytes: ByteArray?,
@@ -36,28 +37,24 @@ class LenderRepository {
         var panUrl: String? = null
         var avatarUrl: String? = null
 
-        // 1. Upload Aadhaar Card
         if (aadhaarBytes != null && aadhaarBytes.isNotEmpty()) {
             val path = "aadhaar_${mobile}_$timestamp.jpg"
             storage.from("kyc-documents").upload(path = path, data = aadhaarBytes, upsert = true)
             aadhaarUrl = storage.from("kyc-documents").publicUrl(path)
         }
 
-        // 2. Upload PAN Card
         if (panBytes != null && panBytes.isNotEmpty()) {
             val path = "pan_${mobile}_$timestamp.jpg"
             storage.from("kyc-documents").upload(path = path, data = panBytes, upsert = true)
             panUrl = storage.from("kyc-documents").publicUrl(path)
         }
 
-        // 3. Upload Profile Photo
         if (avatarBytes != null && avatarBytes.isNotEmpty()) {
             val path = "avatar_${mobile}_$timestamp.jpg"
             storage.from("profile-avatars").upload(path = path, data = avatarBytes, upsert = true)
             avatarUrl = storage.from("profile-avatars").publicUrl(path)
         }
 
-        // 4. Save Borrower with public image URLs
         val updatedBorrower = borrower.copy(
             aadhaarCardUrl = aadhaarUrl,
             panCardUrl = panUrl,
@@ -67,9 +64,6 @@ class LenderRepository {
         db.from("borrowers").insert(updatedBorrower)
     }
 
-    /**
-     * Fetches all registered borrowers under this lender
-     */
     suspend fun getBorrowers(lenderId: String): Result<List<Borrower>> = runCatching {
         db.from("borrowers")
             .select {
@@ -79,9 +73,6 @@ class LenderRepository {
             }.decodeList<Borrower>()
     }
 
-    /**
-     * Updates an existing borrower's profile details
-     */
     suspend fun updateBorrower(borrower: Borrower): Result<Unit> = runCatching {
         val id = borrower.id ?: throw IllegalArgumentException("Borrower ID cannot be null")
         db.from("borrowers").update(
@@ -99,18 +90,12 @@ class LenderRepository {
         }
     }
 
-    /**
-     * Deletes a borrower profile
-     */
     suspend fun deleteBorrower(borrowerId: String): Result<Unit> = runCatching {
         db.from("borrowers").delete {
             filter { eq("id", borrowerId) }
         }
     }
 
-    /**
-     * Fetches daily dues from the database view
-     */
     suspend fun getDailyDues(lenderId: String): Result<List<DailyDueItem>> = runCatching {
         db.from("v_lender_daily_dues")
             .select {
@@ -120,23 +105,24 @@ class LenderRepository {
             }.decodeList<DailyDueItem>()
     }
 
-    /**
-     * Records a repayment transaction
-     */
     suspend fun recordRepayment(repayment: Repayment): Result<Unit> = runCatching {
         db.from("repayments").insert(repayment)
     }
 
-    /**
-     * Disburses a loan manually
-     */
+    suspend fun getRepaymentsForLoan(loanId: String): Result<List<Repayment>> = runCatching {
+        db.from("repayments")
+            .select {
+                filter {
+                    eq("loan_id", loanId)
+                }
+                order("payment_date", Order.DESCENDING)
+            }.decodeList<Repayment>()
+    }
+
     suspend fun giveLoanManually(loan: Loan): Result<Unit> = runCatching {
         db.from("loans").insert(loan)
     }
 
-    /**
-     * Fetches pending loan applications awaiting lender approval
-     */
     suspend fun getPendingLoanRequests(lenderId: String): Result<List<Loan>> = runCatching {
         db.from("loans")
             .select {
@@ -147,9 +133,6 @@ class LenderRepository {
             }.decodeList<Loan>()
     }
 
-    /**
-     * Approves and activates a requested loan using strongly typed JSON serialization
-     */
     suspend fun approveAndDisburseLoan(
         loanId: String,
         interestRate: Double,
@@ -171,15 +154,48 @@ class LenderRepository {
         }
     }
 
-    /**
-     * Calculates summary metrics for the ledger screen
-     */
+    suspend fun getApprovedLoans(lenderId: String): Result<List<ApprovedLoanDetail>> = runCatching {
+        val loans = db.from("loans").select {
+            filter {
+                eq("lender_id", lenderId)
+                eq("status", LoanStatus.ACTIVE.name)
+            }
+            order("created_at", Order.DESCENDING)
+        }.decodeList<Loan>()
+
+        val borrowers = getBorrowers(lenderId).getOrDefault(emptyList()).associateBy { it.id }
+        val duesMap = getDailyDues(lenderId).getOrDefault(emptyList()).associateBy { it.loanId }
+
+        loans.map { loan ->
+            val borrower = borrowers[loan.borrowerId]
+            val dueItem = duesMap[loan.id]
+            val sDate = loan.startDate ?: "Not Set"
+            val eDate = loan.endDate ?: calculateEndDate(loan.startDate, loan.tenureDays)
+
+            ApprovedLoanDetail(
+                loanId = loan.id ?: "",
+                borrowerId = loan.borrowerId,
+                borrowerName = borrower?.name ?: "Customer",
+                borrowerMobile = borrower?.mobileNumber ?: "N/A",
+                principalAmount = loan.principalAmount,
+                totalPayable = loan.totalPayable,
+                dailyInstallment = loan.dailyInstallment,
+                tenureDays = loan.tenureDays,
+                startDate = sDate,
+                endDate = eDate,
+                totalPaid = dueItem?.totalPaid ?: 0.0,
+                remainingBalance = dueItem?.remainingBalance ?: (loan.totalPayable),
+                status = loan.status.name
+            )
+        }
+    }
+
     suspend fun getLedgerSummary(lenderId: String): Result<LenderLedgerSummary> = runCatching {
         val dues = getDailyDues(lenderId).getOrThrow()
         val totalDisbursed = dues.sumOf { it.totalPayable }
-        val totalDue = dues.sumOf { it.todayDueBalance }
+        val totalDue = dues.sumOf { maxOf(0.0, it.todayDueBalance) }
         val totalPaid = dues.sumOf { it.totalPaid }
-        val totalRemaining = dues.sumOf { it.remainingBalance }
+        val totalRemaining = dues.sumOf { maxOf(0.0, it.remainingBalance) }
 
         LenderLedgerSummary(
             lenderId = lenderId,
@@ -188,5 +204,20 @@ class LenderRepository {
             totalPaid = totalPaid,
             totalRemainingBalance = totalRemaining
         )
+    }
+
+    private fun calculateEndDate(startDateStr: String?, tenureDays: Int): String {
+        if (startDateStr.isNullOrBlank()) return "Pending"
+        return try {
+            val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+            val date = sdf.parse(startDateStr) ?: return "Pending"
+            val calendar = Calendar.getInstance().apply {
+                time = date
+                add(Calendar.DAY_OF_YEAR, tenureDays)
+            }
+            sdf.format(calendar.time)
+        } catch (e: Exception) {
+            "Pending"
+        }
     }
 }
