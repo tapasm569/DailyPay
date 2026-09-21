@@ -4,12 +4,13 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Payment
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
@@ -25,22 +26,20 @@ fun DueBorrowerCard(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
-    val isPaidToday = item.todayPaidAmount >= item.todayDueBalance && item.todayDueBalance > 0
+    val arrears = maxOf(0.0, item.todayDueBalance - item.dailyInstallment)
 
     Card(
         modifier = modifier
             .fillMaxWidth()
-            .border(1.dp, BorderSubtleLight, RoundedCornerShape(18.dp)),
-        shape = RoundedCornerShape(18.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+            .border(1.dp, BorderSubtleLight, RoundedCornerShape(16.dp)),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(16.dp)
         ) {
-            // Header: Name & Communication Shortcuts
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -54,23 +53,22 @@ fun DueBorrowerCard(
                     )
                     Text(
                         text = "+91 ${item.borrowerMobile}",
-                        style = MaterialTheme.typography.bodyMedium,
+                        style = MaterialTheme.typography.bodySmall,
                         color = TextSecondaryLight
                     )
                 }
 
-                // WhatsApp & Call Icon Actions
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     IconButton(
                         onClick = {
                             CommunicationUtils.openWhatsAppChat(
                                 context = context,
                                 rawMobileNumber = item.borrowerMobile,
-                                message = "Hello ${item.borrowerName}, reminder from DailyPay: Today's due installment is ₹${item.todayDueBalance}. Please pay on time."
+                                message = "Hello ${item.borrowerName}, your total pending installment for today is ₹${item.todayDueBalance} (Base EMI: ₹${item.dailyInstallment}${if (arrears > 0) " + Previous Due: ₹$arrears" else ""}). Please clear it on DailyPay."
                             )
                         },
                         modifier = Modifier
-                            .size(38.dp)
+                            .size(36.dp)
                             .clip(CircleShape)
                             .border(1.dp, WhatsAppGreen.copy(alpha = 0.3f), CircleShape)
                     ) {
@@ -78,16 +76,14 @@ fun DueBorrowerCard(
                             painter = painterResource(id = R.drawable.ic_whatsapp),
                             contentDescription = "WhatsApp",
                             tint = WhatsAppGreen,
-                            modifier = Modifier.size(20.dp)
+                            modifier = Modifier.size(18.dp)
                         )
                     }
 
                     IconButton(
-                        onClick = {
-                            CommunicationUtils.openPhoneDialer(context, item.borrowerMobile)
-                        },
+                        onClick = { CommunicationUtils.openPhoneDialer(context, item.borrowerMobile) },
                         modifier = Modifier
-                            .size(38.dp)
+                            .size(36.dp)
                             .clip(CircleShape)
                             .border(1.dp, CallBlue.copy(alpha = 0.3f), CircleShape)
                     ) {
@@ -95,75 +91,59 @@ fun DueBorrowerCard(
                             painter = painterResource(id = R.drawable.ic_call),
                             contentDescription = "Call",
                             tint = CallBlue,
-                            modifier = Modifier.size(20.dp)
+                            modifier = Modifier.size(18.dp)
                         )
                     }
                 }
             }
 
-            Spacer(modifier = Modifier.height(14.dp))
+            Spacer(modifier = Modifier.height(12.dp))
             HorizontalDivider(color = BorderSubtleLight)
-            Spacer(modifier = Modifier.height(14.dp))
+            Spacer(modifier = Modifier.height(12.dp))
 
-            // Metrics: Today's Due, Paid, and Remaining
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
                 Column {
-                    Text(text = "Today's Due", style = MaterialTheme.typography.labelMedium, color = AlertOrange)
+                    Text("Total Due Today", style = MaterialTheme.typography.labelMedium, color = AlertOrange)
                     Text(
                         text = "₹${item.todayDueBalance}",
-                        style = MaterialTheme.typography.titleMedium,
+                        style = MaterialTheme.typography.titleLarge,
                         color = AlertOrange
                     )
+                    if (arrears > 0.0) {
+                        Text(
+                            text = "(EMI ₹${item.dailyInstallment} + Due ₹$arrears)",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = DangerRed
+                        )
+                    }
                 }
 
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(text = "Paid Today", style = MaterialTheme.typography.labelMedium, color = MoneyGreen)
-                    Text(
-                        text = "₹${item.todayPaidAmount}",
-                        style = MaterialTheme.typography.titleMedium,
-                        color = MoneyGreen
-                    )
+                    Text("Paid Today", style = MaterialTheme.typography.labelMedium, color = MoneyGreen)
+                    Text("₹${item.todayPaidAmount}", style = MaterialTheme.typography.titleMedium, color = MoneyGreen)
                 }
 
                 Column(horizontalAlignment = Alignment.End) {
-                    Text(text = "Outstanding", style = MaterialTheme.typography.labelMedium, color = TextSecondaryLight)
-                    Text(
-                        text = "₹${item.remainingBalance}",
-                        style = MaterialTheme.typography.titleMedium,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
+                    Text("Remaining", style = MaterialTheme.typography.labelMedium, color = TextSecondaryLight)
+                    Text("₹${item.remainingBalance}", style = MaterialTheme.typography.titleMedium)
                 }
             }
 
             Spacer(modifier = Modifier.height(14.dp))
 
-            // Action Button
-            if (!isPaidToday) {
-                Button(
-                    onClick = { onCollectPaymentClick(item) },
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = BrandPrimary)
-                ) {
-                    Text("Collect Payment")
-                }
-            } else {
-                Surface(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp),
-                    color = MoneyGreenSubtle
-                ) {
-                    Text(
-                        text = "✓ Today's Installment Paid",
-                        modifier = Modifier.padding(vertical = 10.dp),
-                        style = MaterialTheme.typography.titleMedium,
-                        color = MoneyGreen,
-                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
-                    )
-                }
+            Button(
+                onClick = { onCollectPaymentClick(item) },
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = BrandPrimary)
+            ) {
+                Icon(Icons.Default.Payment, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("Collect Payment")
             }
         }
     }
