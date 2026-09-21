@@ -1,11 +1,6 @@
 package com.dailypay.app.data.repository
 
-import com.dailypay.app.data.model.ApprovedLoanDetail
-import com.dailypay.app.data.model.Borrower
-import com.dailypay.app.data.model.BorrowerDashboardSummary
-import com.dailypay.app.data.model.Loan
-import com.dailypay.app.data.model.LoanStatus
-import com.dailypay.app.data.model.Repayment
+import com.dailypay.app.data.model.*
 import com.dailypay.app.data.remote.SupabaseClientProvider
 import com.dailypay.app.util.DateUtils
 import io.github.jan.supabase.postgrest.from
@@ -26,6 +21,13 @@ class BorrowerRepository {
             }.decodeSingle<Borrower>()
     }
 
+    suspend fun getLenderProfile(lenderId: String): Result<Lender> = runCatching {
+        db.from("lenders")
+            .select {
+                filter { eq("id", lenderId) }
+            }.decodeSingle<Lender>()
+    }
+
     suspend fun applyLoan(loan: Loan): Result<Unit> = runCatching {
         val tenure = if (loan.tenureDays > 0) loan.tenureDays else 30
         val prepared = loan.copy(
@@ -36,20 +38,17 @@ class BorrowerRepository {
         db.from("loans").insert(prepared)
     }
 
-    suspend fun requestLoan(loan: Loan): Result<Unit> = applyLoan(loan)
+    suspend fun submitEmiPayment(repayment: Repayment): Result<Unit> = runCatching {
+        db.from("repayments").insert(repayment.copy(status = RepaymentStatus.PENDING))
+    }
 
     suspend fun getRepaymentHistory(borrowerId: String): Result<List<Repayment>> = runCatching {
         db.from("repayments")
             .select {
-                filter { eq("borrower_id", borrowerId) }
-                order("created_at", Order.DESCENDING)
-            }.decodeList<Repayment>()
-    }
-
-    suspend fun getRepaymentsForLoan(loanId: String): Result<List<Repayment>> = runCatching {
-        db.from("repayments")
-            .select {
-                filter { eq("loan_id", loanId) }
+                filter {
+                    eq("borrower_id", borrowerId)
+                    eq("status", RepaymentStatus.VERIFIED.name)
+                }
                 order("created_at", Order.DESCENDING)
             }.decodeList<Repayment>()
     }
@@ -64,11 +63,11 @@ class BorrowerRepository {
         }.decodeList<Loan>()
 
         val borrower = getBorrowerProfile(borrowerId).getOrNull()
-        val allRepayments = getRepaymentHistory(borrowerId).getOrDefault(emptyList())
+        val verifiedRepayments = getRepaymentHistory(borrowerId).getOrDefault(emptyList())
         val todayStr = DateUtils.getTodaySqlFormat()
 
         loans.map { loan ->
-            val loanRepayments = allRepayments.filter { it.loanId == loan.id }
+            val loanRepayments = verifiedRepayments.filter { it.loanId == loan.id }
             val totalPaid = loanRepayments.sumOf { it.amountPaid }
             val remainingBalance = maxOf(0.0, loan.totalPayable - totalPaid)
 
@@ -105,6 +104,17 @@ class BorrowerRepository {
                 status = loan.status.name
             )
         }
+    }
+
+    suspend fun getRepaymentsForLoan(loanId: String): Result<List<Repayment>> = runCatching {
+        db.from("repayments")
+            .select {
+                filter {
+                    eq("loan_id", loanId)
+                    eq("status", RepaymentStatus.VERIFIED.name)
+                }
+                order("created_at", Order.DESCENDING)
+            }.decodeList<Repayment>()
     }
 
     suspend fun getDashboardSummary(borrowerId: String): Result<BorrowerDashboardSummary> = runCatching {

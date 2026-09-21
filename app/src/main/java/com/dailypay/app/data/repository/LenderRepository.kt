@@ -1,13 +1,6 @@
 package com.dailypay.app.data.repository
 
-import com.dailypay.app.data.model.ApprovedLoanDetail
-import com.dailypay.app.data.model.Borrower
-import com.dailypay.app.data.model.DailyDueItem
-import com.dailypay.app.data.model.LenderLedgerSummary
-import com.dailypay.app.data.model.Loan
-import com.dailypay.app.data.model.LoanStatus
-import com.dailypay.app.data.model.PaymentMode
-import com.dailypay.app.data.model.Repayment
+import com.dailypay.app.data.model.*
 import com.dailypay.app.data.remote.SupabaseClientProvider
 import com.dailypay.app.util.DateUtils
 import io.github.jan.supabase.postgrest.from
@@ -25,6 +18,7 @@ class LenderRepository {
     private val db = SupabaseClientProvider.db
     private val storage = SupabaseClientProvider.storage
 
+    // 1. Borrower Management
     suspend fun addBorrower(
         borrower: Borrower,
         aadhaarBytes: ByteArray?,
@@ -67,9 +61,8 @@ class LenderRepository {
 
     suspend fun getBorrowers(lenderId: String): Result<List<Borrower>> = runCatching {
         db.from("borrowers")
-            .select {
-                filter { eq("lender_id", lenderId) }
-            }.decodeList<Borrower>()
+            .select { filter { eq("lender_id", lenderId) } }
+            .decodeList<Borrower>()
     }
 
     suspend fun updateBorrower(borrower: Borrower): Result<Unit> = runCatching {
@@ -90,30 +83,10 @@ class LenderRepository {
     }
 
     suspend fun deleteBorrower(borrowerId: String): Result<Unit> = runCatching {
-        db.from("borrowers").delete {
-            filter { eq("id", borrowerId) }
-        }
+        db.from("borrowers").delete { filter { eq("id", borrowerId) } }
     }
 
-    suspend fun getDailyDues(lenderId: String): Result<List<DailyDueItem>> = runCatching {
-        db.from("v_lender_daily_dues")
-            .select {
-                filter { eq("lender_id", lenderId) }
-            }.decodeList<DailyDueItem>()
-    }
-
-    suspend fun recordRepayment(repayment: Repayment): Result<Unit> = runCatching {
-        db.from("repayments").insert(repayment)
-    }
-
-    suspend fun getRepaymentsForLoan(loanId: String): Result<List<Repayment>> = runCatching {
-        db.from("repayments")
-            .select {
-                filter { eq("loan_id", loanId) }
-                order("created_at", Order.DESCENDING)
-            }.decodeList<Repayment>()
-    }
-
+    // 2. Loan Management & Creation
     suspend fun giveLoanManually(loan: Loan): Result<Unit> = runCatching {
         val tenure = if (loan.tenureDays > 0) loan.tenureDays else 30
         val totalInterest = loan.principalAmount * (loan.monthlyInterestRate / 100.0) * (tenure / 30.0)
@@ -134,14 +107,13 @@ class LenderRepository {
     }
 
     suspend fun getPendingLoanRequests(lenderId: String): Result<List<Loan>> = runCatching {
-        db.from("loans")
-            .select {
-                filter {
-                    eq("lender_id", lenderId)
-                    eq("status", LoanStatus.PENDING.name)
-                }
-                order("created_at", Order.DESCENDING)
-            }.decodeList<Loan>()
+        db.from("loans").select {
+            filter {
+                eq("lender_id", lenderId)
+                eq("status", LoanStatus.PENDING.name)
+            }
+            order("created_at", Order.DESCENDING)
+        }.decodeList<Loan>()
     }
 
     suspend fun approveAndDisburseLoan(
@@ -218,19 +190,78 @@ class LenderRepository {
         }
     }
 
+    // 3. Payments, Collections & Verification
+    suspend fun getDailyDues(lenderId: String): Result<List<DailyDueItem>> = runCatching {
+        db.from("v_lender_daily_dues")
+            .select { filter { eq("lender_id", lenderId) } }
+            .decodeList<DailyDueItem>()
+    }
+
+    suspend fun recordRepayment(repayment: Repayment): Result<Unit> = runCatching {
+        db.from("repayments").insert(repayment.copy(status = RepaymentStatus.VERIFIED))
+    }
+
+    suspend fun getPendingVerifications(lenderId: String): Result<List<PendingPaymentItem>> = runCatching {
+        val pendingRepayments = db.from("repayments").select {
+            filter {
+                eq("lender_id", lenderId)
+                eq("status", RepaymentStatus.PENDING.name)
+            }
+            order("created_at", Order.DESCENDING)
+        }.decodeList<Repayment>()
+
+        val borrowers = getBorrowers(lenderId).getOrDefault(emptyList()).associateBy { it.id }
+
+        pendingRepayments.map { r ->
+            val b = borrowers[r.borrowerId]
+            PendingPaymentItem(
+                repayment = r,
+                borrowerName = b?.name ?: "Customer",
+                borrowerMobile = b?.mobileNumber ?: "N/A"
+            )
+        }
+    }
+
+    suspend fun verifyRepayment(repaymentId: String, accept: Boolean): Result<Unit> = runCatching {
+        val newStatus = if (accept) RepaymentStatus.VERIFIED.name else RepaymentStatus.REJECTED.name
+        db.from("repayments").update(
+            buildJsonObject { put("status", newStatus) }
+        ) {
+            filter { eq("id", repaymentId) }
+        }
+    }
+
+    suspend fun getTrackPayments(lenderId: String): Result<List<Repayment>> = runCatching {
+        db.from("repayments").select {
+            filter {
+                eq("lender_id", lenderId)
+                eq("status", RepaymentStatus.VERIFIED.name)
+            }
+            order("payment_date", Order.DESCENDING)
+            order("created_at", Order.DESCENDING)
+        }.decodeList<Repayment>()
+    }
+
+    suspend fun getRepaymentsForLoan(loanId: String): Result<List<Repayment>> = runCatching {
+        db.from("repayments")
+            .select {
+                filter {
+                    eq("loan_id", loanId)
+                    eq("status", RepaymentStatus.VERIFIED.name)
+                }
+                order("created_at", Order.DESCENDING)
+            }.decodeList<Repayment>()
+    }
+
+    // 4. Portfolio Ledger Summary
     suspend fun getLedgerSummary(lenderId: String): Result<LenderLedgerSummary> = runCatching {
         val dues = getDailyDues(lenderId).getOrThrow()
-        val totalDisbursed = dues.sumOf { it.totalPayable }
-        val totalDue = dues.sumOf { maxOf(0.0, it.todayDueBalance) }
-        val totalPaid = dues.sumOf { it.totalPaid }
-        val totalRemaining = dues.sumOf { maxOf(0.0, it.remainingBalance) }
-
         LenderLedgerSummary(
             lenderId = lenderId,
-            totalDisbursed = totalDisbursed,
-            totalDueBalance = totalDue,
-            totalPaid = totalPaid,
-            totalRemainingBalance = totalRemaining
+            totalDisbursed = dues.sumOf { it.totalPayable },
+            totalDueBalance = dues.sumOf { maxOf(0.0, it.todayDueBalance) },
+            totalPaid = dues.sumOf { it.totalPaid },
+            totalRemainingBalance = dues.sumOf { maxOf(0.0, it.remainingBalance) }
         )
     }
 
