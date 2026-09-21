@@ -1,5 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <!-- Core Neutrals -->
+    <color name="white">#FFFFFF</color>
+    <color name="black">#000000</color>
+
     <!-- Brand Primary -->
     <color name="brand_primary">#4F46E5</color>
     <color name="brand_primary_dark">#3730A3</color>
@@ -17,13 +21,14 @@
     <color name="whatsapp_green">#25D366</color>
     <color name="call_blue">#0284C7</color>
 
-    <!-- Surfaces & Neutrals -->
+    <!-- Surfaces & Neutrals (Light Mode) -->
     <color name="surface_light">#F8FAFC</color>
     <color name="card_light">#FFFFFF</color>
     <color name="text_primary_light">#0F172A</color>
     <color name="text_secondary_light">#64748B</color>
     <color name="border_light">#E2E8F0</color>
 
+    <!-- Surfaces & Neutrals (Dark Mode) -->
     <color name="surface_dark">#0A0F1D</color>
     <color name="card_dark">#131C31</color>
     <color name="text_primary_dark">#F8FAFC</color>
