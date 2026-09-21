@@ -28,6 +28,7 @@ import kotlinx.coroutines.launch
 @Composable
 fun BorrowerDashboardScreen(
     borrowerId: String,
+    onPayEmiClick: () -> Unit,
     onApplyLoanClick: () -> Unit,
     onApprovedLoansClick: () -> Unit,
     onViewLedgerClick: () -> Unit,
@@ -44,9 +45,7 @@ fun BorrowerDashboardScreen(
 
     fun loadData() {
         scope.launch {
-            borrowerRepo.getBorrowerProfile(borrowerId).onSuccess {
-                borrowerProfile = it
-            }
+            borrowerRepo.getBorrowerProfile(borrowerId).onSuccess { borrowerProfile = it }
             borrowerRepo.getDashboardSummary(borrowerId)
                 .onSuccess {
                     summary = it
@@ -68,26 +67,15 @@ fun BorrowerDashboardScreen(
             TopAppBar(
                 title = {
                     Column {
-                        Text(
-                            text = borrowerProfile?.name ?: "Customer Portal",
-                            style = MaterialTheme.typography.titleMedium
-                        )
+                        Text(borrowerProfile?.name ?: "Customer Portal", style = MaterialTheme.typography.titleMedium)
                         if (borrowerProfile != null) {
-                            Text(
-                                text = "+91 ${borrowerProfile?.mobileNumber}",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = TextSecondaryLight
-                            )
+                            Text("+91 ${borrowerProfile?.mobileNumber}", style = MaterialTheme.typography.bodySmall, color = TextSecondaryLight)
                         }
                     }
                 },
                 actions = {
                     IconButton(onClick = onLogoutClick) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.Logout,
-                            contentDescription = "Logout",
-                            tint = DangerRed
-                        )
+                        Icon(Icons.AutoMirrored.Filled.Logout, contentDescription = "Logout", tint = DangerRed)
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface)
@@ -97,9 +85,7 @@ fun BorrowerDashboardScreen(
     ) { paddingValues ->
         if (isLoading) {
             Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(paddingValues),
+                modifier = Modifier.fillMaxSize().padding(paddingValues),
                 contentAlignment = Alignment.Center
             ) {
                 CircularProgressIndicator(color = BrandPrimary)
@@ -113,12 +99,11 @@ fun BorrowerDashboardScreen(
                     .padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                // Today's Status Dual-Action Banner
+                // Today's Status Banner
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    // 1. Today's Due Box
                     Card(
                         modifier = Modifier
                             .weight(1f)
@@ -136,15 +121,10 @@ fun BorrowerDashboardScreen(
                                 Icon(Icons.Default.Schedule, contentDescription = null, tint = AlertOrange, modifier = Modifier.size(16.dp))
                             }
                             Spacer(modifier = Modifier.height(6.dp))
-                            Text(
-                                text = "₹${summary?.todayDue ?: 0.0}",
-                                style = MaterialTheme.typography.titleLarge,
-                                color = AlertOrange
-                            )
+                            Text("₹${summary?.todayDue ?: 0.0}", style = MaterialTheme.typography.titleLarge, color = AlertOrange)
                         }
                     }
 
-                    // 2. Today's Payment Box
                     Card(
                         modifier = Modifier
                             .weight(1f)
@@ -162,16 +142,12 @@ fun BorrowerDashboardScreen(
                                 Icon(Icons.Default.CheckCircle, contentDescription = null, tint = MoneyGreen, modifier = Modifier.size(16.dp))
                             }
                             Spacer(modifier = Modifier.height(6.dp))
-                            Text(
-                                text = "₹${summary?.todayPaid ?: 0.0}",
-                                style = MaterialTheme.typography.titleLarge,
-                                color = MoneyGreen
-                            )
+                            Text("₹${summary?.todayPaid ?: 0.0}", style = MaterialTheme.typography.titleLarge, color = MoneyGreen)
                         }
                     }
                 }
 
-                // Overall Loan Overview
+                // Balance Breakdown
                 Card(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -185,39 +161,25 @@ fun BorrowerDashboardScreen(
                     ) {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
+                            horizontalArrangement = Arrangement.SpaceBetween
                         ) {
-                            Text("Total Loan Overview", style = MaterialTheme.typography.titleMedium)
-                            Text(
-                                text = "${summary?.activeLoansCount ?: 0} Active Loans",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = BrandPrimary
-                            )
+                            Text("My Loan Overview", style = MaterialTheme.typography.titleMedium)
+                            Text("${summary?.activeLoansCount ?: 0} Active Loans", style = MaterialTheme.typography.labelSmall, color = BrandPrimary)
                         }
                         HorizontalDivider(color = BorderSubtleLight)
 
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Text("Total Borrowed", style = MaterialTheme.typography.bodyMedium, color = TextSecondaryLight)
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                            Text("Total Borrowed", color = TextSecondaryLight)
                             Text("₹${summary?.totalBorrowed ?: 0.0}", style = MaterialTheme.typography.titleMedium)
                         }
 
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Text("Total Lifetime Paid", style = MaterialTheme.typography.bodyMedium, color = MoneyGreen)
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                            Text("Total Paid", color = MoneyGreen)
                             Text("₹${summary?.totalPaid ?: 0.0}", style = MaterialTheme.typography.titleMedium, color = MoneyGreen)
                         }
 
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Text("Remaining Balance", style = MaterialTheme.typography.bodyMedium, color = DangerRed)
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                            Text("Total Remaining", color = DangerRed)
                             Text("₹${summary?.totalRemaining ?: 0.0}", style = MaterialTheme.typography.titleMedium, color = DangerRed)
                         }
                     }
@@ -225,28 +187,37 @@ fun BorrowerDashboardScreen(
 
                 Text("Quick Actions", style = MaterialTheme.typography.titleMedium)
 
-                // 1. Approved Loans
+                // 1. Pay EMI (NEW)
+                CustomerActionCard(
+                    title = "Pay EMI",
+                    subtitle = "Pay today's installment due via UPI or Cash",
+                    icon = Icons.Default.Payment,
+                    accentColor = MoneyGreen,
+                    onClick = onPayEmiClick
+                )
+
+                // 2. Approved Loans
                 CustomerActionCard(
                     title = "Approved Loans",
-                    subtitle = "Track today's due, paid today, tenure & end date",
+                    subtitle = "View loan details, tenure, start date & end date",
                     icon = Icons.Default.CheckCircle,
-                    accentColor = MoneyGreen,
+                    accentColor = BrandPrimary,
                     onClick = onApprovedLoansClick
                 )
 
-                // 2. Apply for New Loan
+                // 3. Apply for New Loan
                 CustomerActionCard(
                     title = "Apply For Loan",
-                    subtitle = "Submit a new daily repayment loan application",
+                    subtitle = "Submit a new daily repayment loan request",
                     icon = Icons.Default.PostAdd,
-                    accentColor = BrandPrimary,
+                    accentColor = AlertOrange,
                     onClick = onApplyLoanClick
                 )
 
-                // 3. View Ledger / History
+                // 4. View Ledger / History
                 CustomerActionCard(
                     title = "My Ledger & Receipts",
-                    subtitle = "View full date-wise payment history and statements",
+                    subtitle = "Detailed date-by-date statement and receipts",
                     icon = Icons.Default.ReceiptLong,
                     accentColor = CallBlue,
                     onClick = onViewLedgerClick
@@ -273,9 +244,7 @@ private fun CustomerActionCard(
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
     ) {
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
+            modifier = Modifier.fillMaxWidth().padding(16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Surface(
@@ -284,12 +253,7 @@ private fun CustomerActionCard(
                 color = accentColor.copy(alpha = 0.12f)
             ) {
                 Box(contentAlignment = Alignment.Center) {
-                    Icon(
-                        imageVector = icon,
-                        contentDescription = title,
-                        tint = accentColor,
-                        modifier = Modifier.size(24.dp)
-                    )
+                    Icon(imageVector = icon, contentDescription = title, tint = accentColor, modifier = Modifier.size(24.dp))
                 }
             }
 
@@ -300,11 +264,7 @@ private fun CustomerActionCard(
                 Text(text = subtitle, style = MaterialTheme.typography.bodySmall, color = TextSecondaryLight)
             }
 
-            Icon(
-                imageVector = Icons.Default.ChevronRight,
-                contentDescription = null,
-                tint = TextSecondaryLight
-            )
+            Icon(imageVector = Icons.Default.ChevronRight, contentDescription = null, tint = TextSecondaryLight)
         }
     }
 }
