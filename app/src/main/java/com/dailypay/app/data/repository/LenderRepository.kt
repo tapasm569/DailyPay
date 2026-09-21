@@ -8,8 +8,11 @@ import com.dailypay.app.data.model.LoanStatus
 import com.dailypay.app.data.model.PaymentMode
 import com.dailypay.app.data.model.Repayment
 import com.dailypay.app.data.remote.SupabaseClientProvider
+import com.dailypay.app.util.DateUtils
 import io.github.jan.supabase.postgrest.from
 import io.github.jan.supabase.storage.storage
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 
 class LenderRepository {
 
@@ -82,15 +85,15 @@ class LenderRepository {
     suspend fun updateBorrower(borrower: Borrower): Result<Unit> = runCatching {
         val id = borrower.id ?: throw IllegalArgumentException("Borrower ID cannot be null")
         db.from("borrowers").update(
-            mapOf(
-                "name" to borrower.name,
-                "mobile_number" to borrower.mobileNumber,
-                "village_city" to borrower.villageCity,
-                "post_office" to borrower.postOffice,
-                "police_station" to borrower.policeStation,
-                "dist" to borrower.dist,
-                "password_hash" to borrower.passwordHash
-            )
+            buildJsonObject {
+                put("name", borrower.name)
+                put("mobile_number", borrower.mobileNumber)
+                borrower.villageCity?.let { put("village_city", it) }
+                borrower.postOffice?.let { put("post_office", it) }
+                borrower.policeStation?.let { put("police_station", it) }
+                borrower.dist?.let { put("dist", it) }
+                put("password_hash", borrower.passwordHash)
+            }
         ) {
             filter { eq("id", id) }
         }
@@ -145,7 +148,7 @@ class LenderRepository {
     }
 
     /**
-     * Approves and activates a requested loan
+     * Approves and activates a requested loan using strongly typed JSON serialization
      */
     suspend fun approveAndDisburseLoan(
         loanId: String,
@@ -154,12 +157,13 @@ class LenderRepository {
         disbursementRef: String
     ): Result<Unit> = runCatching {
         db.from("loans").update(
-            mapOf(
-                "status" to LoanStatus.ACTIVE.name,
-                "monthly_interest_rate" to interestRate,
-                "disbursement_mode" to disbursementMode.name,
-                "disbursement_ref" to disbursementRef
-            )
+            buildJsonObject {
+                put("status", LoanStatus.ACTIVE.name)
+                put("monthly_interest_rate", interestRate)
+                put("disbursement_mode", disbursementMode.name)
+                put("disbursement_ref", disbursementRef)
+                put("start_date", DateUtils.getTodaySqlFormat())
+            }
         ) {
             filter {
                 eq("id", loanId)
