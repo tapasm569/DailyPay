@@ -1,17 +1,13 @@
 package com.dailypay.app.ui.screens.lender
 
 import android.widget.Toast
-import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -21,9 +17,7 @@ import androidx.compose.ui.unit.dp
 import com.dailypay.app.data.model.DailyDueItem
 import com.dailypay.app.data.model.LenderLedgerSummary
 import com.dailypay.app.data.repository.LenderRepository
-import com.dailypay.app.ui.components.MetricCard
 import com.dailypay.app.ui.theme.*
-import com.dailypay.app.util.PdfExporter
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -37,36 +31,38 @@ fun LenderLedgerScreen(
     val scope = rememberCoroutineScope()
     val lenderRepo = remember { LenderRepository() }
 
-    var ledgerSummary by remember { mutableStateOf<LenderLedgerSummary?>(null) }
+    var summary by remember { mutableStateOf<LenderLedgerSummary?>(null) }
     var duesList by remember { mutableStateOf<List<DailyDueItem>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
 
-    LaunchedEffect(lenderId) {
+    fun loadData() {
         scope.launch {
-            lenderRepo.getLedgerSummary(lenderId).onSuccess { ledgerSummary = it }
-            lenderRepo.getDailyDues(lenderId).onSuccess { duesList = it }
-            isLoading = false
+            lenderRepo.getLedgerSummary(lenderId).onSuccess {
+                summary = it
+            }
+            lenderRepo.getDailyDues(lenderId)
+                .onSuccess {
+                    duesList = it
+                    isLoading = false
+                }
+                .onFailure {
+                    isLoading = false
+                    Toast.makeText(context, "Error: ${it.message}", Toast.LENGTH_SHORT).show()
+                }
         }
+    }
+
+    LaunchedEffect(lenderId) {
+        loadData()
     }
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Business Ledger Book") },
+                title = { Text("Lender Master Ledger") },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
-                    }
-                },
-                actions = {
-                    IconButton(onClick = {
-                        PdfExporter.generateLenderLedgerPdf(
-                            context = context,
-                            businessName = "DailyPay Ledger",
-                            duesList = duesList
-                        )
-                    }) {
-                        Icon(Icons.Default.PictureAsPdf, contentDescription = "Export PDF", tint = BrandPrimary)
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface)
@@ -84,108 +80,111 @@ fun LenderLedgerScreen(
                 CircularProgressIndicator(color = BrandPrimary)
             }
         } else {
-            Column(
+            LazyColumn(
                 modifier = modifier
                     .fillMaxSize()
                     .padding(paddingValues)
-                    .padding(16.dp)
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(14.dp)
             ) {
-                // Summary Cards Grid (2x2)
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    MetricCard(
-                        title = "Disbursed",
-                        value = "₹${ledgerSummary?.totalDisbursed ?: 0.0}",
-                        icon = Icons.Default.AccountBalance,
-                        accentColor = BrandPrimary,
-                        modifier = Modifier.weight(1f)
-                    )
-                    MetricCard(
-                        title = "Due Balance",
-                        value = "₹${ledgerSummary?.totalDueBalance ?: 0.0}",
-                        icon = Icons.Default.PendingActions,
-                        accentColor = AlertOrange,
-                        modifier = Modifier.weight(1f)
-                    )
-                }
-
-                Spacer(modifier = Modifier.height(10.dp))
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    MetricCard(
-                        title = "Total Paid",
-                        value = "₹${ledgerSummary?.totalPaid ?: 0.0}",
-                        icon = Icons.Default.CheckCircle,
-                        accentColor = MoneyGreen,
-                        modifier = Modifier.weight(1f)
-                    )
-                    MetricCard(
-                        title = "Remaining",
-                        value = "₹${ledgerSummary?.totalRemainingBalance ?: 0.0}",
-                        icon = Icons.Default.MonetizationOn,
-                        accentColor = DangerRed,
-                        modifier = Modifier.weight(1f)
-                    )
-                }
-
-                Spacer(modifier = Modifier.height(20.dp))
-
-                // Scrollable Data Table
-                Text(
-                    text = "Borrower Breakdown",
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-
-                Spacer(modifier = Modifier.height(10.dp))
-
-                val horizontalScrollState = rememberScrollState()
-
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .border(1.dp, BorderSubtleLight, RoundedCornerShape(12.dp))
-                        .background(MaterialTheme.colorScheme.surface)
-                        .horizontalScroll(horizontalScrollState)
-                ) {
-                    Column {
-                        // Table Header
-                        Row(
-                            modifier = Modifier
-                                .background(BrandPrimary.copy(alpha = 0.08f))
-                                .padding(12.dp),
-                            verticalAlignment = Alignment.CenterVertically
+                item {
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .border(1.dp, BorderSubtleLight, RoundedCornerShape(16.dp)),
+                        shape = RoundedCornerShape(16.dp),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
-                            Text("SL", modifier = Modifier.width(40.dp), style = MaterialTheme.typography.labelMedium)
-                            Text("Borrower Name", modifier = Modifier.width(140.dp), style = MaterialTheme.typography.labelMedium)
-                            Text("Today Due", modifier = Modifier.width(90.dp), style = MaterialTheme.typography.labelMedium)
-                            Text("Today Paid", modifier = Modifier.width(90.dp), style = MaterialTheme.typography.labelMedium)
-                            Text("Daily Due", modifier = Modifier.width(90.dp), style = MaterialTheme.typography.labelMedium)
-                            Text("Remaining", modifier = Modifier.width(100.dp), style = MaterialTheme.typography.labelMedium)
+                            Text("Lifetime Portfolio Summary", style = MaterialTheme.typography.titleMedium)
+                            HorizontalDivider(color = BorderSubtleLight)
+
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text("Total Disbursed", color = TextSecondaryLight)
+                                Text("₹${summary?.totalDisbursed ?: 0.0}", style = MaterialTheme.typography.titleMedium)
+                            }
+
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text("Total Due Remaining Today", color = AlertOrange)
+                                Text("₹${summary?.totalDueBalance ?: 0.0}", style = MaterialTheme.typography.titleMedium, color = AlertOrange)
+                            }
+
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text("Total Recovered", color = MoneyGreen)
+                                Text("₹${summary?.totalPaid ?: 0.0}", style = MaterialTheme.typography.titleMedium, color = MoneyGreen)
+                            }
+
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text("Total Outstanding", color = DangerRed)
+                                Text("₹${summary?.totalRemainingBalance ?: 0.0}", style = MaterialTheme.typography.titleMedium, color = DangerRed)
+                            }
                         }
+                    }
+                }
 
-                        HorizontalDivider(color = BorderSubtleLight)
+                item {
+                    Text("All Customer Accounts (${duesList.size})", style = MaterialTheme.typography.titleMedium)
+                }
 
-                        // Table Rows
-                        LazyColumn {
-                            itemsIndexed(duesList) { index, item ->
+                if (duesList.isEmpty()) {
+                    item {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 40.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text("No borrower accounts found.", color = TextSecondaryLight)
+                        }
+                    }
+                } else {
+                    itemsIndexed(duesList, key = { index, item -> item.loanId.ifBlank { "ledger_$index" } }) { _, item ->
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(12.dp),
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                            border = CardDefaults.outlinedCardBorder()
+                        ) {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(14.dp),
+                                verticalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
                                 Row(
-                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    Text("${index + 1}", modifier = Modifier.width(40.dp), style = MaterialTheme.typography.bodyMedium)
-                                    Text(item.borrowerName, modifier = Modifier.width(140.dp), style = MaterialTheme.typography.bodyMedium)
-                                    Text("₹${item.todayDueBalance}", modifier = Modifier.width(90.dp), style = MaterialTheme.typography.bodyMedium, color = AlertOrange)
-                                    Text("₹${item.todayPaidAmount}", modifier = Modifier.width(90.dp), style = MaterialTheme.typography.bodyMedium, color = MoneyGreen)
-                                    Text("₹${item.dailyInstallment}", modifier = Modifier.width(90.dp), style = MaterialTheme.typography.bodyMedium)
-                                    Text("₹${item.remainingBalance}", modifier = Modifier.width(100.dp), style = MaterialTheme.typography.bodyMedium)
+                                    Text(item.borrowerName, style = MaterialTheme.typography.titleMedium)
+                                    Text("+91 ${item.borrowerMobile}", style = MaterialTheme.typography.bodySmall, color = TextSecondaryLight)
                                 }
+
                                 HorizontalDivider(color = BorderSubtleLight)
+
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Text("Payable: ₹${item.totalPayable}", style = MaterialTheme.typography.bodySmall)
+                                    Text("Paid: ₹${item.totalPaid}", style = MaterialTheme.typography.bodySmall, color = MoneyGreen)
+                                    Text("Balance: ₹${maxOf(0.0, item.remainingBalance)}", style = MaterialTheme.typography.bodySmall, color = DangerRed)
+                                }
                             }
                         }
                     }
