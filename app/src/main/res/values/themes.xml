@@ -1,10 +1,18 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Base activity launch theme before Jetpack Compose renders -->
+    <!-- Base application theme after splash screen / Jetpack Compose renders -->
     <style name="Theme.DailyPay" parent="android:Theme.Material.Light.NoActionBar">
         <item name="android:statusBarColor">@color/surface_light</item>
         <item name="android:navigationBarColor">@color/surface_light</item>
         <item name="android:windowLightStatusBar">true</item>
         <item name="android:windowBackground">@color/surface_light</item>
+    </style>
+
+    <!-- Cold-start splash theme displaying splash_background.png on launch -->
+    <style name="Theme.DailyPay.Splash" parent="Theme.DailyPay">
+        <item name="android:windowBackground">@drawable/splash_background</item>
+        <item name="android:statusBarColor">@color/brand_primary</item>
+        <item name="android:navigationBarColor">@color/brand_primary</item>
+        <item name="android:windowLightStatusBar">false</item>
     </style>
 </resources>
