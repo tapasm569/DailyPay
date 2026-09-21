@@ -71,7 +71,7 @@ class LenderRepository {
     }
 
     /**
-     * Fetches all registered borrowers for a lender
+     * Fetches all registered borrowers under this lender
      */
     suspend fun getBorrowers(lenderId: String): Result<List<Borrower>> = runCatching {
         db.from("borrowers")
@@ -80,6 +80,35 @@ class LenderRepository {
                     eq("lender_id", lenderId)
                 }
             }.decodeList<Borrower>()
+    }
+
+    /**
+     * Updates an existing borrower's profile details
+     */
+    suspend fun updateBorrower(borrower: Borrower): Result<Unit> = runCatching {
+        val id = borrower.id ?: throw IllegalArgumentException("Borrower ID cannot be null")
+        db.from("borrowers").update(
+            mapOf(
+                "name" to borrower.name,
+                "mobile_number" to borrower.mobileNumber,
+                "village_city" to borrower.villageCity,
+                "post_office" to borrower.postOffice,
+                "police_station" to borrower.policeStation,
+                "dist" to borrower.dist,
+                "password_hash" to borrower.passwordHash
+            )
+        ) {
+            filter { eq("id", id) }
+        }
+    }
+
+    /**
+     * Deletes a borrower profile
+     */
+    suspend fun deleteBorrower(borrowerId: String): Result<Unit> = runCatching {
+        db.from("borrowers").delete {
+            filter { eq("id", borrowerId) }
+        }
     }
 
     /**
