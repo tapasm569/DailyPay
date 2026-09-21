@@ -3,117 +3,43 @@ package com.dailypay.app.ui.screens.lender
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ReceiptLong
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.dailypay.app.ui.theme.*
-
-private data class DashboardMenuItem(
-    val title: String,
-    val subtitle: String,
-    val icon: ImageVector,
-    val iconTint: Color,
-    val onClick: () -> Unit
-)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LenderDashboardScreen(
-    lenderId: String,
+    @Suppress("UNUSED_PARAMETER") lenderId: String,
     onNavigateBack: () -> Unit,
     onAddBorrowerClick: () -> Unit,
-    onNewLoanRequestClick: () -> Unit,
-    onSetInterestClick: () -> Unit,
     onGiveLoanManualClick: () -> Unit,
+    onNewLoanRequestClick: () -> Unit,
     onApprovedLoansClick: () -> Unit,
     onTodaysDueClick: () -> Unit,
     onTodaysPaymentClick: () -> Unit,
+    onVerifyPaymentClick: () -> Unit,
+    onTrackPaymentsClick: () -> Unit,
     onMasterClientClick: () -> Unit,
-    onLedgerBookClick: () -> Unit,
+    onLenderLedgerClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val menuItems = listOf(
-        DashboardMenuItem(
-            title = "Approved Loans",
-            subtitle = "Track active loans & dates",
-            icon = Icons.Default.CheckCircle,
-            iconTint = MoneyGreen,
-            onClick = onApprovedLoansClick
-        ),
-        DashboardMenuItem(
-            title = "Add Borrower",
-            subtitle = "Register new client & KYC",
-            icon = Icons.Default.PersonAdd,
-            iconTint = BrandPrimary,
-            onClick = onAddBorrowerClick
-        ),
-        DashboardMenuItem(
-            title = "Loan Requests",
-            subtitle = "Review & disburse loans",
-            icon = Icons.Default.PendingActions,
-            iconTint = AlertOrange,
-            onClick = onNewLoanRequestClick
-        ),
-        DashboardMenuItem(
-            title = "Give Loan",
-            subtitle = "Disburse manually",
-            icon = Icons.Default.Payments,
-            iconTint = BrandAccent,
-            onClick = onGiveLoanManualClick
-        ),
-        DashboardMenuItem(
-            title = "Today's Due",
-            subtitle = "Collection queue",
-            icon = Icons.Default.Schedule,
-            iconTint = DangerRed,
-            onClick = onTodaysDueClick
-        ),
-        DashboardMenuItem(
-            title = "Today's Payment",
-            subtitle = "Received installment log",
-            icon = Icons.Default.AccountBalanceWallet,
-            iconTint = MoneyGreen,
-            onClick = onTodaysPaymentClick
-        ),
-        DashboardMenuItem(
-            title = "Master Clients",
-            subtitle = "Manage all borrower profiles",
-            icon = Icons.Default.People,
-            iconTint = CallBlue,
-            onClick = onMasterClientClick
-        ),
-        DashboardMenuItem(
-            title = "Set Interest",
-            subtitle = "Configure loan rates",
-            icon = Icons.Default.Percent,
-            iconTint = BrandPrimaryDark,
-            onClick = onSetInterestClick
-        ),
-        DashboardMenuItem(
-            title = "Ledger Book",
-            subtitle = "Financial statements & PDF",
-            icon = Icons.Default.ReceiptLong,
-            iconTint = BrandPrimary,
-            onClick = onLedgerBookClick
-        )
-    )
-
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Lender Operations") },
+                title = { Text("Lender Dashboard") },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
@@ -124,66 +50,144 @@ fun LenderDashboardScreen(
         },
         containerColor = MaterialTheme.colorScheme.background
     ) { paddingValues ->
-        LazyVerticalGrid(
-            columns = GridCells.Fixed(2),
+        Column(
             modifier = modifier
                 .fillMaxSize()
                 .padding(paddingValues)
+                .verticalScroll(rememberScrollState())
                 .padding(16.dp),
-            horizontalArrangement = Arrangement.spacedBy(14.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp)
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            items(menuItems) { item ->
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(145.dp)
-                        .border(1.dp, BorderSubtleLight, RoundedCornerShape(16.dp))
-                        .clickable { item.onClick() },
-                    shape = RoundedCornerShape(16.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
-                ) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(14.dp),
-                        verticalArrangement = Arrangement.Center,
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Surface(
-                            modifier = Modifier.size(44.dp),
-                            shape = RoundedCornerShape(12.dp),
-                            color = item.iconTint.copy(alpha = 0.12f)
-                        ) {
-                            Box(contentAlignment = Alignment.Center) {
-                                Icon(
-                                    imageVector = item.icon,
-                                    contentDescription = item.title,
-                                    tint = item.iconTint,
-                                    modifier = Modifier.size(24.dp)
-                                )
-                            }
-                        }
+            // Priority Verification & Tracking
+            Text("Payments & Collections", style = MaterialTheme.typography.titleMedium)
 
-                        Spacer(modifier = Modifier.height(10.dp))
+            LenderOptionCard(
+                title = "Verify Payment",
+                subtitle = "Approve or reject customer submitted UPI & Cash payments",
+                icon = Icons.Default.FactCheck,
+                accentColor = MoneyGreen,
+                onClick = onVerifyPaymentClick
+            )
 
-                        Text(
-                            text = item.title,
-                            style = MaterialTheme.typography.titleSmall,
-                            textAlign = TextAlign.Center,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
+            LenderOptionCard(
+                title = "Track Payment",
+                subtitle = "Day-wise history of all verified payments & collections",
+                icon = Icons.Default.Timeline,
+                accentColor = BrandPrimary,
+                onClick = onTrackPaymentsClick
+            )
 
-                        Text(
-                            text = item.subtitle,
-                            style = MaterialTheme.typography.labelSmall,
-                            textAlign = TextAlign.Center,
-                            color = TextSecondaryLight,
-                            maxLines = 1
-                        )
-                    }
+            LenderOptionCard(
+                title = "Today's Due",
+                subtitle = "All pending borrowers installment list for today",
+                icon = Icons.Default.Schedule,
+                accentColor = AlertOrange,
+                onClick = onTodaysDueClick
+            )
+
+            LenderOptionCard(
+                title = "Today's Payment",
+                subtitle = "Collections recorded and cleared today",
+                icon = Icons.Default.Payments,
+                accentColor = MoneyGreen,
+                onClick = onTodaysPaymentClick
+            )
+
+            Spacer(modifier = Modifier.height(6.dp))
+            Text("Loan Operations", style = MaterialTheme.typography.titleMedium)
+
+            LenderOptionCard(
+                title = "Add Borrower",
+                subtitle = "Register new borrower with KYC documentation",
+                icon = Icons.Default.PersonAdd,
+                accentColor = BrandPrimary,
+                onClick = onAddBorrowerClick
+            )
+
+            LenderOptionCard(
+                title = "Give Loan (Manual)",
+                subtitle = "Create direct loan without borrower request",
+                icon = Icons.Default.AddCard,
+                accentColor = CallBlue,
+                onClick = onGiveLoanManualClick
+            )
+
+            LenderOptionCard(
+                title = "New Loan Requests",
+                subtitle = "Review and approve borrower applied loans",
+                icon = Icons.Default.PostAdd,
+                accentColor = AlertOrange,
+                onClick = onNewLoanRequestClick
+            )
+
+            LenderOptionCard(
+                title = "Approved Loans",
+                subtitle = "Active loans, tenures, start and end dates",
+                icon = Icons.Default.CheckCircle,
+                accentColor = MoneyGreen,
+                onClick = onApprovedLoansClick
+            )
+
+            Spacer(modifier = Modifier.height(6.dp))
+            Text("Ledger & Records", style = MaterialTheme.typography.titleMedium)
+
+            LenderOptionCard(
+                title = "Master Client",
+                subtitle = "View and edit all registered borrowers profile",
+                icon = Icons.Default.Groups,
+                accentColor = BrandPrimary,
+                onClick = onMasterClientClick
+            )
+
+            LenderOptionCard(
+                title = "Master Ledger",
+                subtitle = "Lifetime disbursements, dues, and recoveries",
+                icon = Icons.AutoMirrored.Filled.ReceiptLong,
+                accentColor = CallBlue,
+                onClick = onLenderLedgerClick
+            )
+        }
+    }
+}
+
+@Composable
+private fun LenderOptionCard(
+    title: String,
+    subtitle: String,
+    icon: ImageVector,
+    accentColor: Color,
+    onClick: () -> Unit
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .border(1.dp, BorderSubtleLight, RoundedCornerShape(14.dp))
+            .clickable { onClick() },
+        shape = RoundedCornerShape(14.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(14.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Surface(
+                modifier = Modifier.size(44.dp),
+                shape = RoundedCornerShape(10.dp),
+                color = accentColor.copy(alpha = 0.12f)
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(imageVector = icon, contentDescription = title, tint = accentColor, modifier = Modifier.size(22.dp))
                 }
             }
+
+            Spacer(modifier = Modifier.width(14.dp))
+
+            Column(modifier = Modifier.weight(1f)) {
+                Text(text = title, style = MaterialTheme.typography.titleMedium)
+                Text(text = subtitle, style = MaterialTheme.typography.bodySmall, color = TextSecondaryLight)
+            }
+
+            Icon(imageVector = Icons.Default.ChevronRight, contentDescription = null, tint = TextSecondaryLight)
         }
     }
 }
