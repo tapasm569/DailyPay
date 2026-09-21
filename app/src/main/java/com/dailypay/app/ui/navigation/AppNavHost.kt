@@ -1,7 +1,6 @@
 package com.dailypay.app.ui.navigation
 
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Modifier
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
@@ -15,27 +14,26 @@ import com.dailypay.app.ui.screens.lender.*
 @Composable
 fun AppNavHost(
     navController: NavHostController,
-    modifier: Modifier = Modifier
+    startDestination: String = Screen.Login.route
 ) {
     NavHost(
         navController = navController,
-        startDestination = Screen.Login.route,
-        modifier = modifier
+        startDestination = startDestination
     ) {
-        // Multi-Role Login Screen
+        // ================= AUTH =================
         composable(Screen.Login.route) {
             LoginScreen(
-                onAdminLoginSuccess = {
+                onNavigateToAdmin = {
                     navController.navigate(Screen.AdminDashboard.route) {
                         popUpTo(Screen.Login.route) { inclusive = true }
                     }
                 },
-                onLenderLoginSuccess = { lenderId: String ->
+                onNavigateToLender = { lenderId ->
                     navController.navigate(Screen.LenderHome.createRoute(lenderId)) {
                         popUpTo(Screen.Login.route) { inclusive = true }
                     }
                 },
-                onBorrowerLoginSuccess = { borrowerId: String ->
+                onNavigateToBorrower = { borrowerId ->
                     navController.navigate(Screen.BorrowerDashboard.createRoute(borrowerId)) {
                         popUpTo(Screen.Login.route) { inclusive = true }
                     }
@@ -43,14 +41,12 @@ fun AppNavHost(
             )
         }
 
-        // ================= ADMIN FLOW =================
+        // ================= ADMIN =================
         composable(Screen.AdminDashboard.route) {
             AdminDashboardScreen(
                 onCreateLenderClick = { navController.navigate(Screen.CreateLender.route) },
-                onManageLenderClick = { navController.navigate(Screen.AdminSubscription.route) },
                 onSubscriptionClick = { navController.navigate(Screen.AdminSubscription.route) },
                 onReminderClick = { navController.navigate(Screen.AdminReminder.route) },
-                onResetPasswordClick = { navController.navigate(Screen.AdminReminder.route) },
                 onLogoutClick = {
                     navController.navigate(Screen.Login.route) {
                         popUpTo(0) { inclusive = true }
@@ -58,21 +54,17 @@ fun AppNavHost(
                 }
             )
         }
-
         composable(Screen.CreateLender.route) {
             CreateLenderScreen(onNavigateBack = { navController.popBackStack() })
         }
-
         composable(Screen.AdminSubscription.route) {
             SubscriptionScreen(onNavigateBack = { navController.popBackStack() })
         }
-
         composable(Screen.AdminReminder.route) {
             ReminderScreen(onNavigateBack = { navController.popBackStack() })
         }
 
-        // ================= LENDER FLOW =================
-        // Lender Home (Tabbed: Pending Dues & Paid Today)
+        // ================= LENDER =================
         composable(
             route = Screen.LenderHome.route,
             arguments = listOf(navArgument("lenderId") { type = NavType.StringType })
@@ -80,9 +72,7 @@ fun AppNavHost(
             val lenderId = backStackEntry.arguments?.getString("lenderId") ?: ""
             LenderHomeScreen(
                 lenderId = lenderId,
-                onNavigateToDashboard = {
-                    navController.navigate(Screen.LenderDashboard.createRoute(lenderId))
-                },
+                onNavigateToDashboard = { navController.navigate(Screen.LenderDashboard.createRoute(lenderId)) },
                 onLogoutClick = {
                     navController.navigate(Screen.Login.route) {
                         popUpTo(0) { inclusive = true }
@@ -91,7 +81,6 @@ fun AppNavHost(
             )
         }
 
-        // Lender Dashboard Grid Menu
         composable(
             route = Screen.LenderDashboard.route,
             arguments = listOf(navArgument("lenderId") { type = NavType.StringType })
@@ -101,81 +90,106 @@ fun AppNavHost(
                 lenderId = lenderId,
                 onNavigateBack = { navController.popBackStack() },
                 onAddBorrowerClick = { navController.navigate(Screen.AddBorrower.createRoute(lenderId)) },
-                onNewLoanRequestClick = { navController.navigate(Screen.NewLoanRequest.createRoute(lenderId)) },
-                onSetInterestClick = { navController.navigate(Screen.SetInterest.createRoute(lenderId)) },
                 onGiveLoanManualClick = { navController.navigate(Screen.GiveLoanManual.createRoute(lenderId)) },
+                onNewLoanRequestClick = { navController.navigate(Screen.NewLoanRequest.createRoute(lenderId)) },
                 onApprovedLoansClick = { navController.navigate(Screen.LenderApprovedLoans.createRoute(lenderId)) },
                 onTodaysDueClick = { navController.navigate(Screen.TodaysDue.createRoute(lenderId)) },
                 onTodaysPaymentClick = { navController.navigate(Screen.TodaysPayment.createRoute(lenderId)) },
+                onVerifyPaymentClick = { navController.navigate(Screen.VerifyPayment.createRoute(lenderId)) },
+                onTrackPaymentsClick = { navController.navigate(Screen.TrackPayments.createRoute(lenderId)) },
                 onMasterClientClick = { navController.navigate(Screen.MasterClient.createRoute(lenderId)) },
-                onLedgerBookClick = { navController.navigate(Screen.LenderLedger.createRoute(lenderId)) }
+                onLenderLedgerClick = { navController.navigate(Screen.LenderLedger.createRoute(lenderId)) }
             )
         }
 
-        // Add Borrower Screen
+        composable(
+            route = Screen.VerifyPayment.route,
+            arguments = listOf(navArgument("lenderId") { type = NavType.StringType })
+        ) { backStackEntry ->
+            val lenderId = backStackEntry.arguments?.getString("lenderId") ?: ""
+            VerifyPaymentScreen(
+                lenderId = lenderId,
+                onNavigateBack = { navController.popBackStack() }
+            )
+        }
+
+        composable(
+            route = Screen.TrackPayments.route,
+            arguments = listOf(navArgument("lenderId") { type = NavType.StringType })
+        ) { backStackEntry ->
+            val lenderId = backStackEntry.arguments?.getString("lenderId") ?: ""
+            TrackPaymentsScreen(
+                lenderId = lenderId,
+                onNavigateBack = { navController.popBackStack() }
+            )
+        }
+
         composable(
             route = Screen.AddBorrower.route,
             arguments = listOf(navArgument("lenderId") { type = NavType.StringType })
         ) { backStackEntry ->
             val lenderId = backStackEntry.arguments?.getString("lenderId") ?: ""
-            AddBorrowerScreen(lenderId = lenderId, onNavigateBack = { navController.popBackStack() })
+            AddBorrowerScreen(
+                lenderId = lenderId,
+                onNavigateBack = { navController.popBackStack() }
+            )
         }
 
-        // Give Loan Manually
         composable(
             route = Screen.GiveLoanManual.route,
             arguments = listOf(navArgument("lenderId") { type = NavType.StringType })
         ) { backStackEntry ->
             val lenderId = backStackEntry.arguments?.getString("lenderId") ?: ""
-            GiveLoanManualScreen(lenderId = lenderId, onNavigateBack = { navController.popBackStack() })
+            GiveLoanManualScreen(
+                lenderId = lenderId,
+                onNavigateBack = { navController.popBackStack() }
+            )
         }
 
-        // New Loan Requests (Approval / Disburse)
         composable(
             route = Screen.NewLoanRequest.route,
             arguments = listOf(navArgument("lenderId") { type = NavType.StringType })
         ) { backStackEntry ->
             val lenderId = backStackEntry.arguments?.getString("lenderId") ?: ""
-            NewLoanRequestScreen(lenderId = lenderId, onNavigateBack = { navController.popBackStack() })
+            NewLoanRequestScreen(
+                lenderId = lenderId,
+                onNavigateBack = { navController.popBackStack() }
+            )
         }
 
-        // Lender Approved Loans Screen
         composable(
             route = Screen.LenderApprovedLoans.route,
             arguments = listOf(navArgument("lenderId") { type = NavType.StringType })
         ) { backStackEntry ->
             val lenderId = backStackEntry.arguments?.getString("lenderId") ?: ""
-            ApprovedLoansScreen(lenderId = lenderId, onNavigateBack = { navController.popBackStack() })
+            ApprovedLoansScreen(
+                lenderId = lenderId,
+                onNavigateBack = { navController.popBackStack() }
+            )
         }
 
-        // Set Interest Rate
-        composable(
-            route = Screen.SetInterest.route,
-            arguments = listOf(navArgument("lenderId") { type = NavType.StringType })
-        ) { backStackEntry ->
-            val lenderId = backStackEntry.arguments?.getString("lenderId") ?: ""
-            SetInterestScreen(lenderId = lenderId, onNavigateBack = { navController.popBackStack() })
-        }
-
-        // Today's Due (Auto-clearing unpaid list)
         composable(
             route = Screen.TodaysDue.route,
             arguments = listOf(navArgument("lenderId") { type = NavType.StringType })
         ) { backStackEntry ->
             val lenderId = backStackEntry.arguments?.getString("lenderId") ?: ""
-            TodaysDueScreen(lenderId = lenderId, onNavigateBack = { navController.popBackStack() })
+            TodaysDueScreen(
+                lenderId = lenderId,
+                onNavigateBack = { navController.popBackStack() }
+            )
         }
 
-        // Today's Payment (Collected payments list)
         composable(
             route = Screen.TodaysPayment.route,
             arguments = listOf(navArgument("lenderId") { type = NavType.StringType })
         ) { backStackEntry ->
             val lenderId = backStackEntry.arguments?.getString("lenderId") ?: ""
-            TodaysPaymentScreen(lenderId = lenderId, onNavigateBack = { navController.popBackStack() })
+            TodaysPaymentScreen(
+                lenderId = lenderId,
+                onNavigateBack = { navController.popBackStack() }
+            )
         }
 
-        // Master Client List
         composable(
             route = Screen.MasterClient.route,
             arguments = listOf(navArgument("lenderId") { type = NavType.StringType })
@@ -183,21 +197,22 @@ fun AppNavHost(
             val lenderId = backStackEntry.arguments?.getString("lenderId") ?: ""
             MasterClientScreen(
                 lenderId = lenderId,
-                onNavigateBack = { navController.popBackStack() },
-                onAddNewBorrowerClick = { navController.navigate(Screen.AddBorrower.createRoute(lenderId)) }
+                onNavigateBack = { navController.popBackStack() }
             )
         }
 
-        // Business Ledger Book
         composable(
             route = Screen.LenderLedger.route,
             arguments = listOf(navArgument("lenderId") { type = NavType.StringType })
         ) { backStackEntry ->
             val lenderId = backStackEntry.arguments?.getString("lenderId") ?: ""
-            LenderLedgerScreen(lenderId = lenderId, onNavigateBack = { navController.popBackStack() })
+            LenderLedgerScreen(
+                lenderId = lenderId,
+                onNavigateBack = { navController.popBackStack() }
+            )
         }
 
-        // ================= BORROWER FLOW =================
+        // ================= BORROWER =================
         composable(
             route = Screen.BorrowerDashboard.route,
             arguments = listOf(navArgument("borrowerId") { type = NavType.StringType })
@@ -205,6 +220,7 @@ fun AppNavHost(
             val borrowerId = backStackEntry.arguments?.getString("borrowerId") ?: ""
             BorrowerDashboardScreen(
                 borrowerId = borrowerId,
+                onPayEmiClick = { navController.navigate(Screen.BorrowerPayEmi.createRoute(borrowerId)) },
                 onApplyLoanClick = { navController.navigate(Screen.BorrowerApplyLoan.createRoute(borrowerId)) },
                 onApprovedLoansClick = { navController.navigate(Screen.CustomerApprovedLoans.createRoute(borrowerId)) },
                 onViewLedgerClick = { navController.navigate(Screen.BorrowerLedger.createRoute(borrowerId)) },
@@ -217,20 +233,36 @@ fun AppNavHost(
         }
 
         composable(
+            route = Screen.BorrowerPayEmi.route,
+            arguments = listOf(navArgument("borrowerId") { type = NavType.StringType })
+        ) { backStackEntry ->
+            val borrowerId = backStackEntry.arguments?.getString("borrowerId") ?: ""
+            BorrowerPayEmiScreen(
+                borrowerId = borrowerId,
+                onNavigateBack = { navController.popBackStack() }
+            )
+        }
+
+        composable(
             route = Screen.BorrowerApplyLoan.route,
             arguments = listOf(navArgument("borrowerId") { type = NavType.StringType })
         ) { backStackEntry ->
             val borrowerId = backStackEntry.arguments?.getString("borrowerId") ?: ""
-            ApplyLoanScreen(borrowerId = borrowerId, onNavigateBack = { navController.popBackStack() })
+            ApplyLoanScreen(
+                borrowerId = borrowerId,
+                onNavigateBack = { navController.popBackStack() }
+            )
         }
 
-        // Customer Approved Loans Screen
         composable(
             route = Screen.CustomerApprovedLoans.route,
             arguments = listOf(navArgument("borrowerId") { type = NavType.StringType })
         ) { backStackEntry ->
             val borrowerId = backStackEntry.arguments?.getString("borrowerId") ?: ""
-            CustomerApprovedLoansScreen(borrowerId = borrowerId, onNavigateBack = { navController.popBackStack() })
+            CustomerApprovedLoansScreen(
+                borrowerId = borrowerId,
+                onNavigateBack = { navController.popBackStack() }
+            )
         }
 
         composable(
@@ -238,7 +270,10 @@ fun AppNavHost(
             arguments = listOf(navArgument("borrowerId") { type = NavType.StringType })
         ) { backStackEntry ->
             val borrowerId = backStackEntry.arguments?.getString("borrowerId") ?: ""
-            BorrowerLedgerScreen(borrowerId = borrowerId, onNavigateBack = { navController.popBackStack() })
+            BorrowerLedgerScreen(
+                borrowerId = borrowerId,
+                onNavigateBack = { navController.popBackStack() }
+            )
         }
     }
 }
