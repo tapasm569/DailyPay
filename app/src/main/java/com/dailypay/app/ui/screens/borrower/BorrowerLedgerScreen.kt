@@ -1,6 +1,6 @@
 package com.dailypay.app.ui.screens.borrower
 
-import androidx.compose.foundation.background
+import android.widget.Toast
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -8,19 +8,18 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.PictureAsPdf
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import com.dailypay.app.data.model.DailyDueItem
+import com.dailypay.app.data.model.BorrowerDashboardSummary
 import com.dailypay.app.data.model.Repayment
 import com.dailypay.app.data.repository.BorrowerRepository
 import com.dailypay.app.ui.theme.*
-import com.dailypay.app.util.DateUtils
-import com.dailypay.app.util.PdfExporter
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -34,44 +33,38 @@ fun BorrowerLedgerScreen(
     val scope = rememberCoroutineScope()
     val borrowerRepo = remember { BorrowerRepository() }
 
-    var dueDetails by remember { mutableStateOf<DailyDueItem?>(null) }
+    var summary by remember { mutableStateOf<BorrowerDashboardSummary?>(null) }
     var repayments by remember { mutableStateOf<List<Repayment>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
 
-    LaunchedEffect(borrowerId) {
+    fun loadData() {
         scope.launch {
-            borrowerRepo.getBorrowerDueDetails(borrowerId).onSuccess { due ->
-                dueDetails = due
-                due?.loanId?.let { loanId ->
-                    borrowerRepo.getRepaymentHistory(loanId).onSuccess { list ->
-                        repayments = list
-                    }
-                }
+            borrowerRepo.getDashboardSummary(borrowerId).onSuccess {
+                summary = it
             }
-            isLoading = false
+            borrowerRepo.getRepaymentHistory(borrowerId)
+                .onSuccess {
+                    repayments = it
+                    isLoading = false
+                }
+                .onFailure {
+                    isLoading = false
+                    Toast.makeText(context, "Error: ${it.message}", Toast.LENGTH_SHORT).show()
+                }
         }
+    }
+
+    LaunchedEffect(borrowerId) {
+        loadData()
     }
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("My Passbook / Ledger") },
+                title = { Text("My Passbook & Ledger") },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
-                    }
-                },
-                actions = {
-                    IconButton(onClick = {
-                        dueDetails?.let { due ->
-                            PdfExporter.generateLenderLedgerPdf(
-                                context = context,
-                                businessName = "Borrower Passbook - ${due.borrowerName}",
-                                duesList = listOf(due)
-                            )
-                        }
-                    }) {
-                        Icon(Icons.Default.PictureAsPdf, contentDescription = "Download PDF", tint = BrandPrimary)
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface)
@@ -80,61 +73,135 @@ fun BorrowerLedgerScreen(
         containerColor = MaterialTheme.colorScheme.background
     ) { paddingValues ->
         if (isLoading) {
-            Box(modifier = Modifier.fillMaxSize().padding(paddingValues), contentAlignment = Alignment.Center) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(paddingValues),
+                contentAlignment = Alignment.Center
+            ) {
                 CircularProgressIndicator(color = BrandPrimary)
             }
         } else {
-            Column(
+            LazyColumn(
                 modifier = modifier
                     .fillMaxSize()
                     .padding(paddingValues)
                     .padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(14.dp)
             ) {
-                // Summary Pod
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .border(1.dp, BorderSubtleLight, RoundedCornerShape(16.dp)),
-                    shape = RoundedCornerShape(16.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
-                ) {
+                // Today's Payment & Today's Due Highlight
+                item {
                     Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(16.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        Column {
-                            Text("Total Payable", style = MaterialTheme.typography.labelMedium, color = TextSecondaryLight)
-                            Text("₹${dueDetails?.totalPayable ?: 0.0}", style = MaterialTheme.typography.titleMedium)
+                        Card(
+                            modifier = Modifier
+                                .weight(1f)
+                                .border(1.dp, AlertOrange.copy(alpha = 0.35f), RoundedCornerShape(16.dp)),
+                            shape = RoundedCornerShape(16.dp),
+                            colors = CardDefaults.cardColors(containerColor = AlertOrangeSubtle)
+                        ) {
+                            Column(modifier = Modifier.padding(14.dp)) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text("Today's Due", style = MaterialTheme.typography.labelSmall, color = AlertOrange)
+                                    Icon(Icons.Default.Schedule, contentDescription = null, tint = AlertOrange, modifier = Modifier.size(16.dp))
+                                }
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text("₹${summary?.todayDue ?: 0.0}", style = MaterialTheme.typography.titleLarge, color = AlertOrange)
+                            }
                         }
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text("Total Paid", style = MaterialTheme.typography.labelMedium, color = MoneyGreen)
-                            Text("₹${dueDetails?.totalPaid ?: 0.0}", style = MaterialTheme.typography.titleMedium, color = MoneyGreen)
-                        }
-                        Column(horizontalAlignment = Alignment.End) {
-                            Text("Remaining", style = MaterialTheme.typography.labelMedium, color = DangerRed)
-                            Text("₹${dueDetails?.remainingBalance ?: 0.0}", style = MaterialTheme.typography.titleMedium, color = DangerRed)
+
+                        Card(
+                            modifier = Modifier
+                                .weight(1f)
+                                .border(1.dp, MoneyGreen.copy(alpha = 0.35f), RoundedCornerShape(16.dp)),
+                            shape = RoundedCornerShape(16.dp),
+                            colors = CardDefaults.cardColors(containerColor = MoneyGreenSubtle)
+                        ) {
+                            Column(modifier = Modifier.padding(14.dp)) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text("Paid Today", style = MaterialTheme.typography.labelSmall, color = MoneyGreen)
+                                    Icon(Icons.Default.CheckCircle, contentDescription = null, tint = MoneyGreen, modifier = Modifier.size(16.dp))
+                                }
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text("₹${summary?.todayPaid ?: 0.0}", style = MaterialTheme.typography.titleLarge, color = MoneyGreen)
+                            }
                         }
                     }
                 }
 
-                Text("Payment Transactions", style = MaterialTheme.typography.titleMedium)
-
-                if (repayments.isEmpty()) {
-                    Box(modifier = Modifier.fillMaxWidth().padding(40.dp), contentAlignment = Alignment.Center) {
-                        Text("No repayments recorded yet.", color = TextSecondaryLight)
-                    }
-                } else {
-                    LazyColumn(
+                // Balance Totals Card
+                item {
+                    Card(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .border(1.dp, BorderSubtleLight, RoundedCornerShape(14.dp))
-                            .background(MaterialTheme.colorScheme.surface),
-                        verticalArrangement = Arrangement.spacedBy(1.dp)
+                            .border(1.dp, BorderSubtleLight, RoundedCornerShape(16.dp)),
+                        shape = RoundedCornerShape(16.dp),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
                     ) {
-                        itemsIndexed(repayments) { index, item ->
+                        Column(
+                            modifier = Modifier.padding(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text("Total Loan Amount", style = MaterialTheme.typography.bodyMedium, color = TextSecondaryLight)
+                                Text("₹${summary?.totalBorrowed ?: 0.0}", style = MaterialTheme.typography.titleMedium)
+                            }
+
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text("Total Amount Repaid", style = MaterialTheme.typography.bodyMedium, color = MoneyGreen)
+                                Text("₹${summary?.totalPaid ?: 0.0}", style = MaterialTheme.typography.titleMedium, color = MoneyGreen)
+                            }
+
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text("Remaining Outstanding", style = MaterialTheme.typography.bodyMedium, color = DangerRed)
+                                Text("₹${summary?.totalRemaining ?: 0.0}", style = MaterialTheme.typography.titleMedium, color = DangerRed)
+                            }
+                        }
+                    }
+                }
+
+                item {
+                    Text("Payment Transactions (${repayments.size})", style = MaterialTheme.typography.titleMedium)
+                }
+
+                if (repayments.isEmpty()) {
+                    item {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 40.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text("No repayments made yet.", color = TextSecondaryLight)
+                        }
+                    }
+                } else {
+                    itemsIndexed(repayments, key = { index, item -> item.id ?: "${item.paymentDate}_${item.amountPaid}_$index" }) { _, item ->
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(12.dp),
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                            border = CardDefaults.outlinedCardBorder()
+                        ) {
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -143,20 +210,17 @@ fun BorrowerLedgerScreen(
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Column {
-                                    Text("Installment #${index + 1}", style = MaterialTheme.typography.titleMedium)
-                                    Text(
-                                        DateUtils.formatToIndianDate(item.paymentDate),
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        color = TextSecondaryLight
-                                    )
+                                    Text("₹${item.amountPaid}", style = MaterialTheme.typography.titleLarge, color = MoneyGreen)
+                                    Text(item.paymentDate ?: "-", style = MaterialTheme.typography.bodySmall, color = TextSecondaryLight)
+                                    if (!item.notes.isNullOrBlank()) {
+                                        Text(item.notes, style = MaterialTheme.typography.labelSmall, color = TextSecondaryLight)
+                                    }
                                 }
-                                Text(
-                                    "+ ₹${item.amountPaid}",
-                                    style = MaterialTheme.typography.titleMedium,
-                                    color = MoneyGreen
+                                SuggestionChip(
+                                    onClick = {},
+                                    label = { Text(item.paymentMode.name) }
                                 )
                             }
-                            HorizontalDivider(color = BorderSubtleLight)
                         }
                     }
                 }
