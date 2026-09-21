@@ -3,7 +3,6 @@ package com.dailypay.app.data.repository
 import com.dailypay.app.data.model.ApprovedLoanDetail
 import com.dailypay.app.data.model.Borrower
 import com.dailypay.app.data.model.BorrowerDashboardSummary
-import com.dailypay.app.data.model.DailyDueItem
 import com.dailypay.app.data.model.Loan
 import com.dailypay.app.data.model.LoanStatus
 import com.dailypay.app.data.model.Repayment
@@ -14,6 +13,7 @@ import io.github.jan.supabase.postgrest.query.Order
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
+import kotlin.math.round
 
 class BorrowerRepository {
 
@@ -27,22 +27,29 @@ class BorrowerRepository {
     }
 
     suspend fun applyLoan(loan: Loan): Result<Unit> = runCatching {
-        db.from("loans").insert(loan)
+        val tenure = if (loan.tenureDays > 0) loan.tenureDays else 30
+        val prepared = loan.copy(
+            status = LoanStatus.PENDING,
+            totalPayable = loan.principalAmount,
+            dailyInstallment = round((loan.principalAmount / tenure) * 100.0) / 100.0
+        )
+        db.from("loans").insert(prepared)
     }
 
     suspend fun requestLoan(loan: Loan): Result<Unit> = applyLoan(loan)
-
-    suspend fun getBorrowerDueDetails(borrowerId: String): Result<DailyDueItem?> = runCatching {
-        db.from("v_lender_daily_dues")
-            .select {
-                filter { eq("borrower_id", borrowerId) }
-            }.decodeList<DailyDueItem>().firstOrNull()
-    }
 
     suspend fun getRepaymentHistory(borrowerId: String): Result<List<Repayment>> = runCatching {
         db.from("repayments")
             .select {
                 filter { eq("borrower_id", borrowerId) }
+                order("created_at", Order.DESCENDING)
+            }.decodeList<Repayment>()
+    }
+
+    suspend fun getRepaymentsForLoan(loanId: String): Result<List<Repayment>> = runCatching {
+        db.from("repayments")
+            .select {
+                filter { eq("loan_id", loanId) }
                 order("created_at", Order.DESCENDING)
             }.decodeList<Repayment>()
     }
@@ -57,24 +64,28 @@ class BorrowerRepository {
         }.decodeList<Loan>()
 
         val borrower = getBorrowerProfile(borrowerId).getOrNull()
-        val allDues = db.from("v_lender_daily_dues").select {
-            filter { eq("borrower_id", borrowerId) }
-        }.decodeList<DailyDueItem>().associateBy { it.loanId }
-
+        val allRepayments = getRepaymentHistory(borrowerId).getOrDefault(emptyList())
         val todayStr = DateUtils.getTodaySqlFormat()
-        val todayRepayments = db.from("repayments").select {
-            filter {
-                eq("borrower_id", borrowerId)
-                eq("payment_date", todayStr)
-            }
-        }.decodeList<Repayment>().groupBy { it.loanId }
 
         loans.map { loan ->
-            val dueItem = allDues[loan.id]
+            val loanRepayments = allRepayments.filter { it.loanId == loan.id }
+            val totalPaid = loanRepayments.sumOf { it.amountPaid }
+            val remainingBalance = maxOf(0.0, loan.totalPayable - totalPaid)
+
+            val todayPaid = loanRepayments
+                .filter { it.paymentDate == todayStr }
+                .sumOf { it.amountPaid }
+
+            val todayDue = if (remainingBalance <= 0.0) {
+                0.0
+            } else if (todayPaid >= loan.dailyInstallment) {
+                0.0
+            } else {
+                maxOf(0.0, loan.dailyInstallment - todayPaid)
+            }
+
             val sDate = loan.startDate ?: "Not Set"
             val eDate = loan.endDate ?: calculateEndDate(loan.startDate, loan.tenureDays)
-            val todayPaidForLoan = todayRepayments[loan.id]?.sumOf { it.amountPaid } ?: dueItem?.todayPaidAmount ?: 0.0
-            val calculatedTodayDue = dueItem?.todayDueBalance ?: maxOf(0.0, loan.dailyInstallment - todayPaidForLoan)
 
             ApprovedLoanDetail(
                 loanId = loan.id ?: "",
@@ -87,39 +98,33 @@ class BorrowerRepository {
                 tenureDays = loan.tenureDays,
                 startDate = sDate,
                 endDate = eDate,
-                totalPaid = dueItem?.totalPaid ?: 0.0,
-                remainingBalance = dueItem?.remainingBalance ?: loan.totalPayable,
-                todayDue = maxOf(0.0, calculatedTodayDue),
-                todayPaid = todayPaidForLoan,
+                totalPaid = totalPaid,
+                remainingBalance = remainingBalance,
+                todayDue = todayDue,
+                todayPaid = todayPaid,
                 status = loan.status.name
             )
         }
     }
 
-    suspend fun getRepaymentsForLoan(loanId: String): Result<List<Repayment>> = runCatching {
-        db.from("repayments")
-            .select {
-                filter { eq("loan_id", loanId) }
-                order("created_at", Order.DESCENDING)
-            }.decodeList<Repayment>()
-    }
-
     suspend fun getDashboardSummary(borrowerId: String): Result<BorrowerDashboardSummary> = runCatching {
         val approvedLoans = getCustomerApprovedLoans(borrowerId).getOrThrow()
+        val activeLoans = approvedLoans.filter { it.remainingBalance > 0.0 }
+
         val totalBorrowed = approvedLoans.sumOf { it.totalPayable }
         val totalPaid = approvedLoans.sumOf { it.totalPaid }
-        val totalRemaining = approvedLoans.sumOf { maxOf(0.0, it.remainingBalance) }
-        val totalTodayDue = approvedLoans.sumOf { it.todayDue }
-        val totalTodayPaid = approvedLoans.sumOf { it.todayPaid }
+        val totalRemaining = approvedLoans.sumOf { it.remainingBalance }
+        val todayDue = activeLoans.sumOf { it.todayDue }
+        val todayPaid = approvedLoans.sumOf { it.todayPaid }
 
         BorrowerDashboardSummary(
             borrowerId = borrowerId,
             totalBorrowed = totalBorrowed,
             totalPaid = totalPaid,
             totalRemaining = totalRemaining,
-            todayDue = totalTodayDue,
-            todayPaid = totalTodayPaid,
-            activeLoansCount = approvedLoans.size
+            todayDue = todayDue,
+            todayPaid = todayPaid,
+            activeLoansCount = activeLoans.size
         )
     }
 
