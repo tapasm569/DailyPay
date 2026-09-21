@@ -1,36 +1,36 @@
 package com.dailypay.app.ui.screens.borrower
 
-import androidx.compose.foundation.background
+import android.widget.Toast
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import com.dailypay.app.data.model.DailyDueItem
-import com.dailypay.app.data.model.Loan
+import androidx.lifecycle.compose.LifecycleResumeEffect
+import com.dailypay.app.data.model.Borrower
+import com.dailypay.app.data.model.BorrowerDashboardSummary
 import com.dailypay.app.data.repository.BorrowerRepository
-import com.dailypay.app.ui.components.MetricCard
 import com.dailypay.app.ui.theme.*
-import com.dailypay.app.util.DateUtils
-import com.dailypay.app.util.UpiIntentLauncher
 import kotlinx.coroutines.launch
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun BorrowerDashboardScreen(
     borrowerId: String,
     onApplyLoanClick: () -> Unit,
+    onApprovedLoansClick: () -> Unit,
     onViewLedgerClick: () -> Unit,
     onLogoutClick: () -> Unit,
     modifier: Modifier = Modifier
@@ -39,57 +39,72 @@ fun BorrowerDashboardScreen(
     val scope = rememberCoroutineScope()
     val borrowerRepo = remember { BorrowerRepository() }
 
-    var activeLoan by remember { mutableStateOf<Loan?>(null) }
-    var dueDetails by remember { mutableStateOf<DailyDueItem?>(null) }
+    var borrowerProfile by remember { mutableStateOf<Borrower?>(null) }
+    var summary by remember { mutableStateOf<BorrowerDashboardSummary?>(null) }
     var isLoading by remember { mutableStateOf(true) }
 
-    LaunchedEffect(borrowerId) {
+    fun loadData() {
         scope.launch {
-            borrowerRepo.getActiveLoan(borrowerId).onSuccess { activeLoan = it }
-            borrowerRepo.getBorrowerDueDetails(borrowerId).onSuccess { dueDetails = it }
-            isLoading = false
+            borrowerRepo.getBorrowerProfile(borrowerId).onSuccess {
+                borrowerProfile = it
+            }
+            borrowerRepo.getDashboardSummary(borrowerId)
+                .onSuccess {
+                    summary = it
+                    isLoading = false
+                }
+                .onFailure {
+                    isLoading = false
+                    Toast.makeText(context, "Error: ${it.message}", Toast.LENGTH_SHORT).show()
+                }
         }
+    }
+
+    // Auto-refresh when customer navigates back to dashboard
+    LifecycleResumeEffect(borrowerId) {
+        loadData()
+        onPauseOrDispose { }
     }
 
     Scaffold(
         topBar = {
-            Surface(color = MaterialTheme.colorScheme.surface, shadowElevation = 2.dp) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .statusBarsPadding()
-                        .padding(horizontal = 20.dp, vertical = 14.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
+            TopAppBar(
+                title = {
                     Column {
                         Text(
-                            text = "DailyPay Customer",
-                            style = MaterialTheme.typography.titleMedium,
-                            color = MaterialTheme.colorScheme.onSurface
+                            text = borrowerProfile?.name ?: "Customer Portal",
+                            style = MaterialTheme.typography.titleMedium
                         )
-                        Text(
-                            text = DateUtils.getTodayIndianFormat(),
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = TextSecondaryLight
+                        if (borrowerProfile != null) {
+                            Text(
+                                text = "+91 ${borrowerProfile?.mobileNumber}",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = TextSecondaryLight
+                            )
+                        }
+                    }
+                },
+                actions = {
+                    IconButton(onClick = onLogoutClick) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.Logout,
+                            contentDescription = "Logout",
+                            tint = DangerRed
                         )
                     }
-
-                    IconButton(
-                        onClick = onLogoutClick,
-                        modifier = Modifier
-                            .clip(CircleShape)
-                            .background(DangerRedSubtle)
-                    ) {
-                        Icon(Icons.Default.Logout, contentDescription = "Logout", tint = DangerRed)
-                    }
-                }
-            }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface)
+            )
         },
         containerColor = MaterialTheme.colorScheme.background
     ) { paddingValues ->
         if (isLoading) {
-            Box(modifier = Modifier.fillMaxSize().padding(paddingValues), contentAlignment = Alignment.Center) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(paddingValues),
+                contentAlignment = Alignment.Center
+            ) {
                 CircularProgressIndicator(color = BrandPrimary)
             }
         } else {
@@ -101,122 +116,154 @@ fun BorrowerDashboardScreen(
                     .padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                // Today's Dues Hero Banner
-                Box(
+                // Today's Due Highlight Card
+                Card(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clip(RoundedCornerShape(24.dp))
-                        .background(
-                            Brush.linearGradient(
-                                listOf(Color(0xFF1E1B4B), Color(0xFF312E81))
-                            )
-                        )
-                        .padding(20.dp)
+                        .border(1.dp, AlertOrange.copy(alpha = 0.3f), RoundedCornerShape(16.dp)),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = AlertOrangeSubtle)
                 ) {
-                    Column(modifier = Modifier.fillMaxWidth()) {
+                    Column(modifier = Modifier.padding(18.dp)) {
+                        Text("Today's Installment Due", style = MaterialTheme.typography.labelMedium, color = AlertOrange)
+                        Spacer(modifier = Modifier.height(4.dp))
                         Text(
-                            text = "Today's Installment Due",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = Color(0xFFC7D2FE)
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text(
-                            text = "₹${dueDetails?.todayDueBalance ?: 0.0}",
-                            style = MaterialTheme.typography.displayLarge,
+                            text = "₹${summary?.todayDue ?: 0.0}",
+                            style = MaterialTheme.typography.headlineMedium,
                             color = AlertOrange
                         )
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Text(
+                            text = "Active Loans: ${summary?.activeLoansCount ?: 0}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = TextSecondaryLight
+                        )
+                    }
+                }
 
-                        Spacer(modifier = Modifier.height(16.dp))
+                // Balance Breakdown
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .border(1.dp, BorderSubtleLight, RoundedCornerShape(16.dp)),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Text("My Loan Overview", style = MaterialTheme.typography.titleMedium)
+                        HorizontalDivider(color = BorderSubtleLight)
 
-                        Button(
-                            onClick = {
-                                val due = dueDetails?.todayDueBalance ?: 0.0
-                                if (due > 0) {
-                                    UpiIntentLauncher.initiateUpiPayment(
-                                        context = context,
-                                        payeeUpiId = "lender@upi", // Lender's UPI registered in database
-                                        payeeName = "Lender Account",
-                                        amount = due,
-                                        transactionNote = "DailyPay Installment"
-                                    )
-                                }
-                            },
+                        Row(
                             modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(12.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = MoneyGreen)
+                            horizontalArrangement = Arrangement.SpaceBetween
                         ) {
-                            Icon(Icons.Default.Payment, contentDescription = null, tint = Color.White)
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text("Pay Today's Due (UPI)", style = MaterialTheme.typography.titleMedium, color = Color.White)
+                            Text("Total Borrowed", style = MaterialTheme.typography.bodyMedium, color = TextSecondaryLight)
+                            Text("₹${summary?.totalBorrowed ?: 0.0}", style = MaterialTheme.typography.titleMedium)
+                        }
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text("Total Paid", style = MaterialTheme.typography.bodyMedium, color = MoneyGreen)
+                            Text("₹${summary?.totalPaid ?: 0.0}", style = MaterialTheme.typography.titleMedium, color = MoneyGreen)
+                        }
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text("Total Remaining", style = MaterialTheme.typography.bodyMedium, color = DangerRed)
+                            Text("₹${summary?.totalRemaining ?: 0.0}", style = MaterialTheme.typography.titleMedium, color = DangerRed)
                         }
                     }
                 }
 
-                // Balance Summary Grid
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    MetricCard(
-                        title = "Paid Today",
-                        value = "₹${dueDetails?.todayPaidAmount ?: 0.0}",
-                        icon = Icons.Default.CheckCircle,
-                        accentColor = MoneyGreen,
-                        modifier = Modifier.weight(1f)
+                Text("Quick Actions", style = MaterialTheme.typography.titleMedium)
+
+                // 1. Approved Loans
+                CustomerActionCard(
+                    title = "Approved Loans",
+                    subtitle = "View loan details, tenure, start date & end date",
+                    icon = Icons.Default.CheckCircle,
+                    accentColor = MoneyGreen,
+                    onClick = onApprovedLoansClick
+                )
+
+                // 2. Apply for New Loan
+                CustomerActionCard(
+                    title = "Apply For Loan",
+                    subtitle = "Submit a new daily repayment loan request",
+                    icon = Icons.Default.PostAdd,
+                    accentColor = BrandPrimary,
+                    onClick = onApplyLoanClick
+                )
+
+                // 3. View Ledger / History
+                CustomerActionCard(
+                    title = "My Ledger & Passbook",
+                    subtitle = "Detailed date-by-date statement and receipts",
+                    icon = Icons.Default.ReceiptLong,
+                    accentColor = CallBlue,
+                    onClick = onViewLedgerClick
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun CustomerActionCard(
+    title: String,
+    subtitle: String,
+    icon: ImageVector,
+    accentColor: Color,
+    onClick: () -> Unit
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .border(1.dp, BorderSubtleLight, RoundedCornerShape(16.dp))
+            .clickable { onClick() },
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Surface(
+                modifier = Modifier.size(46.dp),
+                shape = RoundedCornerShape(12.dp),
+                color = accentColor.copy(alpha = 0.12f)
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        imageVector = icon,
+                        contentDescription = title,
+                        tint = accentColor,
+                        modifier = Modifier.size(24.dp)
                     )
-                    MetricCard(
-                        title = "Remaining",
-                        value = "₹${dueDetails?.remainingBalance ?: 0.0}",
-                        icon = Icons.Default.AccountBalanceWallet,
-                        accentColor = DangerRed,
-                        modifier = Modifier.weight(1f)
-                    )
-                }
-
-                // Quick Navigation Cards
-                Card(
-                    onClick = onApplyLoanClick,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .border(1.dp, BorderSubtleLight, RoundedCornerShape(16.dp)),
-                    shape = RoundedCornerShape(16.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(18.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column {
-                            Text("Apply for a Loan", style = MaterialTheme.typography.titleMedium)
-                            Text("Select preset ₹5k - ₹50k or enter amount", style = MaterialTheme.typography.bodyMedium, color = TextSecondaryLight)
-                        }
-                        Icon(Icons.Default.AddCircle, contentDescription = null, tint = BrandPrimary)
-                    }
-                }
-
-                Card(
-                    onClick = onViewLedgerClick,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .border(1.dp, BorderSubtleLight, RoundedCornerShape(16.dp)),
-                    shape = RoundedCornerShape(16.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(18.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column {
-                            Text("Personal Passbook / Ledger", style = MaterialTheme.typography.titleMedium)
-                            Text("View history & download PDF statement", style = MaterialTheme.typography.bodyMedium, color = TextSecondaryLight)
-                        }
-                        Icon(Icons.Default.MenuBook, contentDescription = null, tint = CallBlue)
-                    }
                 }
             }
+
+            Spacer(modifier = Modifier.width(14.dp))
+
+            Column(modifier = Modifier.weight(1f)) {
+                Text(text = title, style = MaterialTheme.typography.titleMedium)
+                Text(text = subtitle, style = MaterialTheme.typography.bodySmall, color = TextSecondaryLight)
+            }
+
+            Icon(
+                imageVector = Icons.Default.ChevronRight,
+                contentDescription = null,
+                tint = TextSecondaryLight
+            )
         }
     }
 }
