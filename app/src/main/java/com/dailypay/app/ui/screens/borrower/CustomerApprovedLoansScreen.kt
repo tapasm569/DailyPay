@@ -4,7 +4,7 @@ import android.widget.Toast
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -104,7 +104,7 @@ fun CustomerApprovedLoansScreen(
                     .padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(14.dp)
             ) {
-                items(approvedLoans, key = { it.loanId }) { loan ->
+                itemsIndexed(approvedLoans, key = { index, loan -> loan.loanId.ifBlank { "loan_$index" } }) { _, loan ->
                     Card(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -145,6 +145,32 @@ fun CustomerApprovedLoansScreen(
                             HorizontalDivider(color = BorderSubtleLight)
                             Spacer(modifier = Modifier.height(10.dp))
 
+                            // TODAY'S DUE & TODAY'S PAYMENT
+                            Surface(
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(12.dp),
+                                color = BrandPrimary.copy(alpha = 0.05f)
+                            ) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(12.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Column {
+                                        Text("Today's Due", style = MaterialTheme.typography.labelSmall, color = AlertOrange)
+                                        Text("₹${loan.todayDue}", style = MaterialTheme.typography.titleMedium, color = AlertOrange)
+                                    }
+
+                                    Column(horizontalAlignment = Alignment.End) {
+                                        Text("Paid Today", style = MaterialTheme.typography.labelSmall, color = MoneyGreen)
+                                        Text("₹${loan.todayPaid}", style = MaterialTheme.typography.titleMedium, color = MoneyGreen)
+                                    }
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.height(10.dp))
+
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.SpaceBetween
@@ -167,13 +193,13 @@ fun CustomerApprovedLoansScreen(
                                 horizontalArrangement = Arrangement.SpaceBetween
                             ) {
                                 Column {
-                                    Text("Total Paid", style = MaterialTheme.typography.labelSmall, color = MoneyGreen)
-                                    Text("₹${loan.totalPaid}", style = MaterialTheme.typography.titleMedium, color = MoneyGreen)
+                                    Text("Total Lifetime Paid", style = MaterialTheme.typography.labelSmall, color = MoneyGreen)
+                                    Text("₹${loan.totalPaid}", style = MaterialTheme.typography.bodyMedium, color = MoneyGreen)
                                 }
 
                                 Column(horizontalAlignment = Alignment.End) {
                                     Text("Remaining Balance", style = MaterialTheme.typography.labelSmall, color = DangerRed)
-                                    Text("₹${maxOf(0.0, loan.remainingBalance)}", style = MaterialTheme.typography.titleMedium, color = DangerRed)
+                                    Text("₹${maxOf(0.0, loan.remainingBalance)}", style = MaterialTheme.typography.bodyMedium, color = DangerRed)
                                 }
                             }
 
@@ -281,7 +307,7 @@ fun CustomerApprovedLoansScreen(
                                 modifier = Modifier.fillMaxWidth(),
                                 verticalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
-                                items(repaymentHistory, key = { it.id ?: "${it.paymentDate}_${it.amountPaid}" }) { item ->
+                                itemsIndexed(repaymentHistory, key = { index, item -> item.id ?: "${item.paymentDate}_${item.amountPaid}_$index" }) { _, item ->
                                     Card(
                                         modifier = Modifier.fillMaxWidth(),
                                         shape = RoundedCornerShape(10.dp),
