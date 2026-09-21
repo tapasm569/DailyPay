@@ -4,7 +4,7 @@ import android.widget.Toast
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -109,7 +109,7 @@ fun ApprovedLoansScreen(
                     .padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(14.dp)
             ) {
-                items(approvedLoans, key = { it.loanId }) { loan ->
+                itemsIndexed(approvedLoans, key = { index, loan -> loan.loanId.ifBlank { "loan_$index" } }) { _, loan ->
                     Card(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -146,7 +146,7 @@ fun ApprovedLoansScreen(
                                             CommunicationUtils.openWhatsAppChat(
                                                 context = context,
                                                 rawMobileNumber = loan.borrowerMobile,
-                                                message = "Hello ${loan.borrowerName}, regarding your approved loan of ₹${loan.principalAmount}."
+                                                message = "Hello ${loan.borrowerName}, regarding your loan with today's due of ₹${loan.todayDue}."
                                             )
                                         },
                                         modifier = Modifier
@@ -181,6 +181,32 @@ fun ApprovedLoansScreen(
 
                             Spacer(modifier = Modifier.height(10.dp))
                             HorizontalDivider(color = BorderSubtleLight)
+                            Spacer(modifier = Modifier.height(10.dp))
+
+                            // TODAY'S DUE & TODAY'S PAID CARD
+                            Surface(
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(12.dp),
+                                color = BrandPrimary.copy(alpha = 0.05f)
+                            ) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(12.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Column {
+                                        Text("Today's Due", style = MaterialTheme.typography.labelSmall, color = AlertOrange)
+                                        Text("₹${loan.todayDue}", style = MaterialTheme.typography.titleMedium, color = AlertOrange)
+                                    }
+
+                                    Column(horizontalAlignment = Alignment.End) {
+                                        Text("Paid Today", style = MaterialTheme.typography.labelSmall, color = MoneyGreen)
+                                        Text("₹${loan.todayPaid}", style = MaterialTheme.typography.titleMedium, color = MoneyGreen)
+                                    }
+                                }
+                            }
+
                             Spacer(modifier = Modifier.height(10.dp))
 
                             Row(
@@ -347,7 +373,7 @@ fun ApprovedLoansScreen(
                                 modifier = Modifier.fillMaxWidth(),
                                 verticalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
-                                items(repaymentHistory, key = { it.id ?: "${it.paymentDate}_${it.amountPaid}" }) { item ->
+                                itemsIndexed(repaymentHistory, key = { index, item -> item.id ?: "${item.paymentDate}_${item.amountPaid}_$index" }) { _, item ->
                                     Card(
                                         modifier = Modifier.fillMaxWidth(),
                                         shape = RoundedCornerShape(10.dp),
