@@ -7,6 +7,7 @@ import android.net.Uri
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -17,6 +18,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
@@ -47,37 +49,57 @@ fun AddBorrowerScreen(
     var dist by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
 
-    // KYC file byte buffers & selection labels
+    // Upload byte buffers & file info labels
     var aadhaarBytes by remember { mutableStateOf<ByteArray?>(null) }
-    var aadhaarFileName by remember { mutableStateOf<String?>(null) }
+    var aadhaarInfo by remember { mutableStateOf<String?>(null) }
 
     var panBytes by remember { mutableStateOf<ByteArray?>(null) }
-    var panFileName by remember { mutableStateOf<String?>(null) }
+    var panInfo by remember { mutableStateOf<String?>(null) }
 
     var avatarBytes by remember { mutableStateOf<ByteArray?>(null) }
-    var avatarFileName by remember { mutableStateOf<String?>(null) }
+    var avatarInfo by remember { mutableStateOf<String?>(null) }
 
     var isSubmitting by remember { mutableStateOf(false) }
 
-    // Activity result launchers with automatic compression
+    // 1. Aadhaar Card Launcher
     val aadhaarLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
-        uri?.let {
-            aadhaarBytes = compressImageUri(context, it)
-            aadhaarFileName = if (aadhaarBytes != null) "Aadhaar Card Attached" else "Failed to load image"
+        if (uri != null) {
+            val result = processAndCompressImage(context, uri)
+            if (result != null) {
+                aadhaarBytes = result.first
+                aadhaarInfo = "Aadhaar Attached (${result.second})"
+                Toast.makeText(context, "Aadhaar card loaded successfully!", Toast.LENGTH_SHORT).show()
+            } else {
+                Toast.makeText(context, "Failed to read Aadhaar image. Try another photo.", Toast.LENGTH_LONG).show()
+            }
         }
     }
 
+    // 2. PAN Card Launcher
     val panLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
-        uri?.let {
-            panBytes = compressImageUri(context, it)
-            panFileName = if (panBytes != null) "PAN Card Attached" else "Failed to load image"
+        if (uri != null) {
+            val result = processAndCompressImage(context, uri)
+            if (result != null) {
+                panBytes = result.first
+                panInfo = "PAN Attached (${result.second})"
+                Toast.makeText(context, "PAN card loaded successfully!", Toast.LENGTH_SHORT).show()
+            } else {
+                Toast.makeText(context, "Failed to read PAN image. Try another photo.", Toast.LENGTH_LONG).show()
+            }
         }
     }
 
+    // 3. Profile Avatar Launcher
     val avatarLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
-        uri?.let {
-            avatarBytes = compressImageUri(context, it)
-            avatarFileName = if (avatarBytes != null) "Profile Photo Attached" else "Failed to load image"
+        if (uri != null) {
+            val result = processAndCompressImage(context, uri)
+            if (result != null) {
+                avatarBytes = result.first
+                avatarInfo = "Photo Attached (${result.second})"
+                Toast.makeText(context, "Profile photo loaded successfully!", Toast.LENGTH_SHORT).show()
+            } else {
+                Toast.makeText(context, "Failed to read profile photo. Try another photo.", Toast.LENGTH_LONG).show()
+            }
         }
     }
 
@@ -163,39 +185,59 @@ fun AddBorrowerScreen(
                 shape = RoundedCornerShape(12.dp)
             )
 
-            Spacer(modifier = Modifier.height(4.dp))
+            Spacer(modifier = Modifier.height(6.dp))
             Text(text = "KYC Documents & Photo", style = MaterialTheme.typography.titleMedium)
 
-            // Document Pickers
-            OutlinedButton(
-                onClick = { aadhaarLauncher.launch("image/*") },
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp)
-            ) {
-                Icon(Icons.Default.UploadFile, contentDescription = null)
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(aadhaarFileName ?: "Upload Aadhaar Card")
-            }
+            // --- 1. Aadhaar Card Attachment Box ---
+            DocumentAttachmentCard(
+                label = aadhaarInfo ?: "Upload Aadhaar Card",
+                isAttached = aadhaarBytes != null,
+                onSelectClick = {
+                    try {
+                        aadhaarLauncher.launch("image/*")
+                    } catch (e: Exception) {
+                        Toast.makeText(context, "Cannot open gallery: ${e.message}", Toast.LENGTH_SHORT).show()
+                    }
+                },
+                onClearClick = {
+                    aadhaarBytes = null
+                    aadhaarInfo = null
+                }
+            )
 
-            OutlinedButton(
-                onClick = { panLauncher.launch("image/*") },
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp)
-            ) {
-                Icon(Icons.Default.UploadFile, contentDescription = null)
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(panFileName ?: "Upload PAN Card")
-            }
+            // --- 2. PAN Card Attachment Box ---
+            DocumentAttachmentCard(
+                label = panInfo ?: "Upload PAN Card",
+                isAttached = panBytes != null,
+                onSelectClick = {
+                    try {
+                        panLauncher.launch("image/*")
+                    } catch (e: Exception) {
+                        Toast.makeText(context, "Cannot open gallery: ${e.message}", Toast.LENGTH_SHORT).show()
+                    }
+                },
+                onClearClick = {
+                    panBytes = null
+                    panInfo = null
+                }
+            )
 
-            OutlinedButton(
-                onClick = { avatarLauncher.launch("image/*") },
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp)
-            ) {
-                Icon(Icons.Default.AccountBox, contentDescription = null)
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(avatarFileName ?: "Upload Profile Picture")
-            }
+            // --- 3. Profile Photo Attachment Box ---
+            DocumentAttachmentCard(
+                label = avatarInfo ?: "Upload Profile Picture",
+                isAttached = avatarBytes != null,
+                onSelectClick = {
+                    try {
+                        avatarLauncher.launch("image/*")
+                    } catch (e: Exception) {
+                        Toast.makeText(context, "Cannot open gallery: ${e.message}", Toast.LENGTH_SHORT).show()
+                    }
+                },
+                onClearClick = {
+                    avatarBytes = null
+                    avatarInfo = null
+                }
+            )
 
             Spacer(modifier = Modifier.height(10.dp))
 
@@ -248,32 +290,125 @@ fun AddBorrowerScreen(
     }
 }
 
+@Composable
+private fun DocumentAttachmentCard(
+    label: String,
+    isAttached: Boolean,
+    onSelectClick: () -> Unit,
+    onClearClick: () -> Unit
+) {
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .border(
+                width = 1.dp,
+                color = if (isAttached) MoneyGreen else BorderSubtleLight,
+                shape = RoundedCornerShape(12.dp)
+            ),
+        shape = RoundedCornerShape(12.dp),
+        color = if (isAttached) MoneyGreenSubtle else MaterialTheme.colorScheme.surface,
+        onClick = onSelectClick
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.weight(1f)
+            ) {
+                Icon(
+                    imageVector = if (isAttached) Icons.Default.CheckCircle else Icons.Default.UploadFile,
+                    contentDescription = null,
+                    tint = if (isAttached) MoneyGreen else BrandPrimary,
+                    modifier = Modifier.size(22.dp)
+                )
+                Spacer(modifier = Modifier.width(12.dp))
+                Text(
+                    text = label,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = if (isAttached) MoneyGreen else MaterialTheme.colorScheme.onSurface
+                )
+            }
+
+            if (isAttached) {
+                IconButton(onClick = onClearClick, modifier = Modifier.size(28.dp)) {
+                    Icon(
+                        imageVector = Icons.Default.Close,
+                        contentDescription = "Remove attachment",
+                        tint = DangerRed,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+            } else {
+                Text(
+                    text = "Choose",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = BrandPrimary
+                )
+            }
+        }
+    }
+}
+
 /**
- * Resizes and compresses image data to prevent network timeouts and payload limits.
+ * Safely reads raw bytes from any Android ContentResolver URI before decoding.
+ * Uses inSampleSize to protect against OutOfMemory on 50MP/108MP camera photos,
+ * then resizes and compresses to ~150-300 KB JPEG.
  */
-private fun compressImageUri(context: Context, uri: Uri): ByteArray? {
+private fun processAndCompressImage(context: Context, uri: Uri): Pair<ByteArray, String>? {
     return try {
         val inputStream = context.contentResolver.openInputStream(uri) ?: return null
-        val originalBitmap = BitmapFactory.decodeStream(inputStream)
-        inputStream.close()
+        val rawBytes = inputStream.use { it.readBytes() }
+        if (rawBytes.isEmpty()) return null
 
+        // 1. Inspect dimensions without loading into memory
+        val options = BitmapFactory.Options().apply {
+            inJustDecodeBounds = true
+        }
+        BitmapFactory.decodeByteArray(rawBytes, 0, rawBytes.size, options)
+
+        val originalWidth = options.outWidth
+        val originalHeight = options.outHeight
+        if (originalWidth <= 0 || originalHeight <= 0) return null
+
+        // 2. Compute sample size to avoid OutOfMemoryError on large camera shots
         val maxDimension = 1280
-        val ratio = originalBitmap.width.toFloat() / originalBitmap.height.toFloat()
-        val width: Int
-        val height: Int
-        if (originalBitmap.width > originalBitmap.height) {
-            width = minOf(originalBitmap.width, maxDimension)
-            height = (width / ratio).toInt()
-        } else {
-            height = minOf(originalBitmap.height, maxDimension)
-            width = (height * ratio).toInt()
+        var sampleSize = 1
+        while (originalWidth / (sampleSize * 2) >= maxDimension && originalHeight / (sampleSize * 2) >= maxDimension) {
+            sampleSize *= 2
         }
 
-        val resizedBitmap = Bitmap.createScaledBitmap(originalBitmap, width, height, true)
+        // 3. Decode scaled sample
+        val decodeOptions = BitmapFactory.Options().apply {
+            inSampleSize = sampleSize
+        }
+        val sampledBitmap = BitmapFactory.decodeByteArray(rawBytes, 0, rawBytes.size, decodeOptions) ?: return null
+
+        // 4. Exact aspect ratio scaling
+        val ratio = sampledBitmap.width.toFloat() / sampledBitmap.height.toFloat()
+        val finalWidth: Int
+        val finalHeight: Int
+        if (sampledBitmap.width > sampledBitmap.height) {
+            finalWidth = minOf(sampledBitmap.width, maxDimension)
+            finalHeight = maxOf(1, (finalWidth / ratio).toInt())
+        } else {
+            finalHeight = minOf(sampledBitmap.height, maxDimension)
+            finalWidth = maxOf(1, (finalHeight * ratio).toInt())
+        }
+
+        val resizedBitmap = Bitmap.createScaledBitmap(sampledBitmap, finalWidth, finalHeight, true)
         val outputStream = ByteArrayOutputStream()
         resizedBitmap.compress(Bitmap.CompressFormat.JPEG, 80, outputStream)
-        outputStream.toByteArray()
+        val compressedBytes = outputStream.toByteArray()
+
+        val sizeKb = compressedBytes.size / 1024
+        Pair(compressedBytes, "${sizeKb} KB")
     } catch (e: Exception) {
+        e.printStackTrace()
         null
     }
 }
