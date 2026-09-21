@@ -36,27 +36,21 @@ class LenderRepository {
         // 1. Upload Aadhaar Card
         if (aadhaarBytes != null && aadhaarBytes.isNotEmpty()) {
             val path = "aadhaar_${mobile}_$timestamp.jpg"
-            storage.from("kyc-documents").upload(path, aadhaarBytes) {
-                upsert = true
-            }
+            storage.from("kyc-documents").upload(path = path, data = aadhaarBytes, upsert = true)
             aadhaarUrl = storage.from("kyc-documents").publicUrl(path)
         }
 
         // 2. Upload PAN Card
         if (panBytes != null && panBytes.isNotEmpty()) {
             val path = "pan_${mobile}_$timestamp.jpg"
-            storage.from("kyc-documents").upload(path, panBytes) {
-                upsert = true
-            }
+            storage.from("kyc-documents").upload(path = path, data = panBytes, upsert = true)
             panUrl = storage.from("kyc-documents").publicUrl(path)
         }
 
         // 3. Upload Profile Photo
         if (avatarBytes != null && avatarBytes.isNotEmpty()) {
             val path = "avatar_${mobile}_$timestamp.jpg"
-            storage.from("profile-avatars").upload(path, avatarBytes) {
-                upsert = true
-            }
+            storage.from("profile-avatars").upload(path = path, data = avatarBytes, upsert = true)
             avatarUrl = storage.from("profile-avatars").publicUrl(path)
         }
 
@@ -184,6 +178,7 @@ class LenderRepository {
         val totalRemaining = dues.sumOf { it.remainingBalance }
 
         LenderLedgerSummary(
+            lenderId = lenderId,
             totalDisbursed = totalDisbursed,
             totalDueBalance = totalDue,
             totalPaid = totalPaid,
