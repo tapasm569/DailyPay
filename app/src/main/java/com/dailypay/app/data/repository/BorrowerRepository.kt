@@ -8,6 +8,7 @@ import com.dailypay.app.data.model.Loan
 import com.dailypay.app.data.model.LoanStatus
 import com.dailypay.app.data.model.Repayment
 import com.dailypay.app.data.remote.SupabaseClientProvider
+import com.dailypay.app.util.DateUtils
 import io.github.jan.supabase.postgrest.from
 import io.github.jan.supabase.postgrest.query.Order
 import java.text.SimpleDateFormat
@@ -42,7 +43,7 @@ class BorrowerRepository {
         db.from("repayments")
             .select {
                 filter { eq("borrower_id", borrowerId) }
-                order("payment_date", Order.DESCENDING)
+                order("created_at", Order.DESCENDING)
             }.decodeList<Repayment>()
     }
 
@@ -50,7 +51,7 @@ class BorrowerRepository {
         val loans = db.from("loans").select {
             filter {
                 eq("borrower_id", borrowerId)
-                eq("status", LoanStatus.ACTIVE.name)
+                isIn("status", listOf(LoanStatus.ACTIVE.name, LoanStatus.APPROVED.name))
             }
             order("created_at", Order.DESCENDING)
         }.decodeList<Loan>()
@@ -60,10 +61,20 @@ class BorrowerRepository {
             filter { eq("borrower_id", borrowerId) }
         }.decodeList<DailyDueItem>().associateBy { it.loanId }
 
+        val todayStr = DateUtils.getTodaySqlFormat()
+        val todayRepayments = db.from("repayments").select {
+            filter {
+                eq("borrower_id", borrowerId)
+                eq("payment_date", todayStr)
+            }
+        }.decodeList<Repayment>().groupBy { it.loanId }
+
         loans.map { loan ->
             val dueItem = allDues[loan.id]
             val sDate = loan.startDate ?: "Not Set"
             val eDate = loan.endDate ?: calculateEndDate(loan.startDate, loan.tenureDays)
+            val todayPaidForLoan = todayRepayments[loan.id]?.sumOf { it.amountPaid } ?: dueItem?.todayPaidAmount ?: 0.0
+            val calculatedTodayDue = dueItem?.todayDueBalance ?: maxOf(0.0, loan.dailyInstallment - todayPaidForLoan)
 
             ApprovedLoanDetail(
                 loanId = loan.id ?: "",
@@ -78,6 +89,8 @@ class BorrowerRepository {
                 endDate = eDate,
                 totalPaid = dueItem?.totalPaid ?: 0.0,
                 remainingBalance = dueItem?.remainingBalance ?: loan.totalPayable,
+                todayDue = maxOf(0.0, calculatedTodayDue),
+                todayPaid = todayPaidForLoan,
                 status = loan.status.name
             )
         }
@@ -87,7 +100,7 @@ class BorrowerRepository {
         db.from("repayments")
             .select {
                 filter { eq("loan_id", loanId) }
-                order("payment_date", Order.DESCENDING)
+                order("created_at", Order.DESCENDING)
             }.decodeList<Repayment>()
     }
 
@@ -96,14 +109,16 @@ class BorrowerRepository {
         val totalBorrowed = approvedLoans.sumOf { it.totalPayable }
         val totalPaid = approvedLoans.sumOf { it.totalPaid }
         val totalRemaining = approvedLoans.sumOf { maxOf(0.0, it.remainingBalance) }
-        val todayDue = approvedLoans.sumOf { it.dailyInstallment }
+        val totalTodayDue = approvedLoans.sumOf { it.todayDue }
+        val totalTodayPaid = approvedLoans.sumOf { it.todayPaid }
 
         BorrowerDashboardSummary(
             borrowerId = borrowerId,
             totalBorrowed = totalBorrowed,
             totalPaid = totalPaid,
             totalRemaining = totalRemaining,
-            todayDue = todayDue,
+            todayDue = totalTodayDue,
+            todayPaid = totalTodayPaid,
             activeLoansCount = approvedLoans.size
         )
     }
