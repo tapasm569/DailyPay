@@ -25,6 +25,13 @@ enum class PaymentMode {
 }
 
 @Serializable
+enum class RepaymentStatus {
+    PENDING,
+    VERIFIED,
+    REJECTED
+}
+
+@Serializable
 enum class SubscriptionStatus {
     ACTIVE,
     EXPIRED,
