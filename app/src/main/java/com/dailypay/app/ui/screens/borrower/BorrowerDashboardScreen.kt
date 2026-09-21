@@ -113,30 +113,65 @@ fun BorrowerDashboardScreen(
                     .padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .border(1.dp, AlertOrange.copy(alpha = 0.3f), RoundedCornerShape(16.dp)),
-                    shape = RoundedCornerShape(16.dp),
-                    colors = CardDefaults.cardColors(containerColor = AlertOrangeSubtle)
+                // Today's Status Dual-Action Banner
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    Column(modifier = Modifier.padding(18.dp)) {
-                        Text("Today's Installment Due", style = MaterialTheme.typography.labelMedium, color = AlertOrange)
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            text = "₹${summary?.todayDue ?: 0.0}",
-                            style = MaterialTheme.typography.headlineMedium,
-                            color = AlertOrange
-                        )
-                        Spacer(modifier = Modifier.height(6.dp))
-                        Text(
-                            text = "Active Loans: ${summary?.activeLoansCount ?: 0}",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = TextSecondaryLight
-                        )
+                    // 1. Today's Due Box
+                    Card(
+                        modifier = Modifier
+                            .weight(1f)
+                            .border(1.dp, AlertOrange.copy(alpha = 0.35f), RoundedCornerShape(16.dp)),
+                        shape = RoundedCornerShape(16.dp),
+                        colors = CardDefaults.cardColors(containerColor = AlertOrangeSubtle)
+                    ) {
+                        Column(modifier = Modifier.padding(14.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text("Today's Due", style = MaterialTheme.typography.labelMedium, color = AlertOrange)
+                                Icon(Icons.Default.Schedule, contentDescription = null, tint = AlertOrange, modifier = Modifier.size(16.dp))
+                            }
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Text(
+                                text = "₹${summary?.todayDue ?: 0.0}",
+                                style = MaterialTheme.typography.titleLarge,
+                                color = AlertOrange
+                            )
+                        }
+                    }
+
+                    // 2. Today's Payment Box
+                    Card(
+                        modifier = Modifier
+                            .weight(1f)
+                            .border(1.dp, MoneyGreen.copy(alpha = 0.35f), RoundedCornerShape(16.dp)),
+                        shape = RoundedCornerShape(16.dp),
+                        colors = CardDefaults.cardColors(containerColor = MoneyGreenSubtle)
+                    ) {
+                        Column(modifier = Modifier.padding(14.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text("Paid Today", style = MaterialTheme.typography.labelMedium, color = MoneyGreen)
+                                Icon(Icons.Default.CheckCircle, contentDescription = null, tint = MoneyGreen, modifier = Modifier.size(16.dp))
+                            }
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Text(
+                                text = "₹${summary?.todayPaid ?: 0.0}",
+                                style = MaterialTheme.typography.titleLarge,
+                                color = MoneyGreen
+                            )
+                        }
                     }
                 }
 
+                // Overall Loan Overview
                 Card(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -148,7 +183,18 @@ fun BorrowerDashboardScreen(
                         modifier = Modifier.padding(16.dp),
                         verticalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
-                        Text("My Loan Overview", style = MaterialTheme.typography.titleMedium)
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text("Total Loan Overview", style = MaterialTheme.typography.titleMedium)
+                            Text(
+                                text = "${summary?.activeLoansCount ?: 0} Active Loans",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = BrandPrimary
+                            )
+                        }
                         HorizontalDivider(color = BorderSubtleLight)
 
                         Row(
@@ -163,7 +209,7 @@ fun BorrowerDashboardScreen(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
-                            Text("Total Paid", style = MaterialTheme.typography.bodyMedium, color = MoneyGreen)
+                            Text("Total Lifetime Paid", style = MaterialTheme.typography.bodyMedium, color = MoneyGreen)
                             Text("₹${summary?.totalPaid ?: 0.0}", style = MaterialTheme.typography.titleMedium, color = MoneyGreen)
                         }
 
@@ -171,7 +217,7 @@ fun BorrowerDashboardScreen(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
-                            Text("Total Remaining", style = MaterialTheme.typography.bodyMedium, color = DangerRed)
+                            Text("Remaining Balance", style = MaterialTheme.typography.bodyMedium, color = DangerRed)
                             Text("₹${summary?.totalRemaining ?: 0.0}", style = MaterialTheme.typography.titleMedium, color = DangerRed)
                         }
                     }
@@ -179,25 +225,28 @@ fun BorrowerDashboardScreen(
 
                 Text("Quick Actions", style = MaterialTheme.typography.titleMedium)
 
+                // 1. Approved Loans
                 CustomerActionCard(
                     title = "Approved Loans",
-                    subtitle = "View loan details, tenure, start date & end date",
+                    subtitle = "Track today's due, paid today, tenure & end date",
                     icon = Icons.Default.CheckCircle,
                     accentColor = MoneyGreen,
                     onClick = onApprovedLoansClick
                 )
 
+                // 2. Apply for New Loan
                 CustomerActionCard(
                     title = "Apply For Loan",
-                    subtitle = "Submit a new daily repayment loan request",
+                    subtitle = "Submit a new daily repayment loan application",
                     icon = Icons.Default.PostAdd,
                     accentColor = BrandPrimary,
                     onClick = onApplyLoanClick
                 )
 
+                // 3. View Ledger / History
                 CustomerActionCard(
-                    title = "My Ledger & Passbook",
-                    subtitle = "Detailed date-by-date statement and receipts",
+                    title = "My Ledger & Receipts",
+                    subtitle = "View full date-wise payment history and statements",
                     icon = Icons.Default.ReceiptLong,
                     accentColor = CallBlue,
                     onClick = onViewLedgerClick
