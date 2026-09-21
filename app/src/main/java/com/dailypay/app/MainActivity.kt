@@ -13,7 +13,10 @@ import com.dailypay.app.ui.theme.DailyPayTheme
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
+        // Swap from the cold-start splash theme to the standard theme before rendering Compose
+        setTheme(R.style.Theme_DailyPay)
         super.onCreate(savedInstanceState)
+
         setContent {
             DailyPayTheme {
                 Surface(
