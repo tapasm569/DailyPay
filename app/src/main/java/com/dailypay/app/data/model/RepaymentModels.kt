@@ -27,6 +27,18 @@ data class Repayment(
 
     val notes: String? = null,
 
+    val status: RepaymentStatus = RepaymentStatus.VERIFIED,
+
+    @SerialName("utr_reference")
+    val utrReference: String? = null,
+
     @SerialName("created_at")
     val createdAt: String? = null
+)
+
+@Serializable
+data class PendingPaymentItem(
+    val repayment: Repayment,
+    val borrowerName: String,
+    val borrowerMobile: String
 )
