@@ -67,9 +67,7 @@ class LenderRepository {
     suspend fun getBorrowers(lenderId: String): Result<List<Borrower>> = runCatching {
         db.from("borrowers")
             .select {
-                filter {
-                    eq("lender_id", lenderId)
-                }
+                filter { eq("lender_id", lenderId) }
             }.decodeList<Borrower>()
     }
 
@@ -99,9 +97,7 @@ class LenderRepository {
     suspend fun getDailyDues(lenderId: String): Result<List<DailyDueItem>> = runCatching {
         db.from("v_lender_daily_dues")
             .select {
-                filter {
-                    eq("lender_id", lenderId)
-                }
+                filter { eq("lender_id", lenderId) }
             }.decodeList<DailyDueItem>()
     }
 
@@ -112,10 +108,8 @@ class LenderRepository {
     suspend fun getRepaymentsForLoan(loanId: String): Result<List<Repayment>> = runCatching {
         db.from("repayments")
             .select {
-                filter {
-                    eq("loan_id", loanId)
-                }
-                order("payment_date", Order.DESCENDING)
+                filter { eq("loan_id", loanId) }
+                order("created_at", Order.DESCENDING)
             }.decodeList<Repayment>()
     }
 
@@ -148,9 +142,7 @@ class LenderRepository {
                 put("start_date", DateUtils.getTodaySqlFormat())
             }
         ) {
-            filter {
-                eq("id", loanId)
-            }
+            filter { eq("id", loanId) }
         }
     }
 
@@ -158,7 +150,7 @@ class LenderRepository {
         val loans = db.from("loans").select {
             filter {
                 eq("lender_id", lenderId)
-                eq("status", LoanStatus.ACTIVE.name)
+                isIn("status", listOf(LoanStatus.ACTIVE.name, LoanStatus.APPROVED.name))
             }
             order("created_at", Order.DESCENDING)
         }.decodeList<Loan>()
@@ -171,6 +163,8 @@ class LenderRepository {
             val dueItem = duesMap[loan.id]
             val sDate = loan.startDate ?: "Not Set"
             val eDate = loan.endDate ?: calculateEndDate(loan.startDate, loan.tenureDays)
+            val todayPaid = dueItem?.todayPaidAmount ?: 0.0
+            val todayDue = dueItem?.todayDueBalance ?: maxOf(0.0, loan.dailyInstallment - todayPaid)
 
             ApprovedLoanDetail(
                 loanId = loan.id ?: "",
@@ -184,7 +178,9 @@ class LenderRepository {
                 startDate = sDate,
                 endDate = eDate,
                 totalPaid = dueItem?.totalPaid ?: 0.0,
-                remainingBalance = dueItem?.remainingBalance ?: (loan.totalPayable),
+                remainingBalance = dueItem?.remainingBalance ?: loan.totalPayable,
+                todayDue = maxOf(0.0, todayDue),
+                todayPaid = todayPaid,
                 status = loan.status.name
             )
         }
