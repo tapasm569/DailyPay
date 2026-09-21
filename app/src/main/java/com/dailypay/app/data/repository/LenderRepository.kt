@@ -1,6 +1,12 @@
 package com.dailypay.app.data.repository
 
-import com.dailypay.app.data.model.*
+import com.dailypay.app.data.model.Borrower
+import com.dailypay.app.data.model.DailyDueItem
+import com.dailypay.app.data.model.LenderLedgerSummary
+import com.dailypay.app.data.model.Loan
+import com.dailypay.app.data.model.LoanStatus
+import com.dailypay.app.data.model.PaymentMode
+import com.dailypay.app.data.model.Repayment
 import com.dailypay.app.data.remote.SupabaseClientProvider
 import io.github.jan.supabase.postgrest.from
 import io.github.jan.supabase.storage.storage
@@ -11,7 +17,8 @@ class LenderRepository {
     private val storage = SupabaseClientProvider.storage
 
     /**
-     * Uploads KYC files to Supabase Storage bucket and creates Borrower record
+     * Registers a new borrower, uploads KYC docs & photo to Supabase Storage,
+     * and persists the resulting URLs in the borrowers table.
      */
     suspend fun addBorrower(
         borrower: Borrower,
@@ -26,38 +33,45 @@ class LenderRepository {
         var panUrl: String? = null
         var avatarUrl: String? = null
 
-        // 1. Upload Aadhaar Card (if present)
-        aadhaarBytes?.let {
+        // 1. Upload Aadhaar Card
+        if (aadhaarBytes != null && aadhaarBytes.isNotEmpty()) {
             val path = "aadhaar_${mobile}_$timestamp.jpg"
-            storage["kyc-documents"].upload(path, it, upsert = true)
-            aadhaarUrl = storage["kyc-documents"].publicUrl(path)
+            storage.from("kyc-documents").upload(path, aadhaarBytes) {
+                upsert = true
+            }
+            aadhaarUrl = storage.from("kyc-documents").publicUrl(path)
         }
 
-        // 2. Upload PAN Card (if present)
-        panBytes?.let {
+        // 2. Upload PAN Card
+        if (panBytes != null && panBytes.isNotEmpty()) {
             val path = "pan_${mobile}_$timestamp.jpg"
-            storage["kyc-documents"].upload(path, it, upsert = true)
-            panUrl = storage["kyc-documents"].publicUrl(path)
+            storage.from("kyc-documents").upload(path, panBytes) {
+                upsert = true
+            }
+            panUrl = storage.from("kyc-documents").publicUrl(path)
         }
 
-        // 3. Upload Profile Avatar (if present)
-        avatarBytes?.let {
+        // 3. Upload Profile Photo
+        if (avatarBytes != null && avatarBytes.isNotEmpty()) {
             val path = "avatar_${mobile}_$timestamp.jpg"
-            storage["profile-avatars"].upload(path, it, upsert = true)
-            avatarUrl = storage["profile-avatars"].publicUrl(path)
+            storage.from("profile-avatars").upload(path, avatarBytes) {
+                upsert = true
+            }
+            avatarUrl = storage.from("profile-avatars").publicUrl(path)
         }
 
-        // 4. Save to Database
-        val completeBorrower = borrower.copy(
+        // 4. Save Borrower with public image URLs
+        val updatedBorrower = borrower.copy(
             aadhaarCardUrl = aadhaarUrl,
             panCardUrl = panUrl,
             profilePicUrl = avatarUrl
         )
-        db.from("borrowers").insert(completeBorrower)
+
+        db.from("borrowers").insert(updatedBorrower)
     }
 
     /**
-     * Gets all borrowers registered under this lender
+     * Fetches all registered borrowers for a lender
      */
     suspend fun getBorrowers(lenderId: String): Result<List<Borrower>> = runCatching {
         db.from("borrowers")
@@ -69,26 +83,52 @@ class LenderRepository {
     }
 
     /**
-     * Gets pending loan requests awaiting approval
+     * Fetches daily dues from the database view
+     */
+    suspend fun getDailyDues(lenderId: String): Result<List<DailyDueItem>> = runCatching {
+        db.from("v_lender_daily_dues")
+            .select {
+                filter {
+                    eq("lender_id", lenderId)
+                }
+            }.decodeList<DailyDueItem>()
+    }
+
+    /**
+     * Records a repayment transaction
+     */
+    suspend fun recordRepayment(repayment: Repayment): Result<Unit> = runCatching {
+        db.from("repayments").insert(repayment)
+    }
+
+    /**
+     * Disburses a loan manually
+     */
+    suspend fun giveLoanManually(loan: Loan): Result<Unit> = runCatching {
+        db.from("loans").insert(loan)
+    }
+
+    /**
+     * Fetches pending loan applications awaiting lender approval
      */
     suspend fun getPendingLoanRequests(lenderId: String): Result<List<Loan>> = runCatching {
         db.from("loans")
             .select {
                 filter {
                     eq("lender_id", lenderId)
-                    eq("status", "PENDING")
+                    eq("status", LoanStatus.PENDING.name)
                 }
             }.decodeList<Loan>()
     }
 
     /**
-     * Approves and disburses a loan request
+     * Approves and activates a requested loan
      */
     suspend fun approveAndDisburseLoan(
         loanId: String,
         interestRate: Double,
         disbursementMode: PaymentMode,
-        disbursementRef: String?
+        disbursementRef: String
     ): Result<Unit> = runCatching {
         db.from("loans").update(
             mapOf(
@@ -105,40 +145,20 @@ class LenderRepository {
     }
 
     /**
-     * Manually creates and activates a loan
+     * Calculates summary metrics for the ledger screen
      */
-    suspend fun giveLoanManually(loan: Loan): Result<Unit> = runCatching {
-        db.from("loans").insert(loan.copy(status = LoanStatus.ACTIVE))
-    }
+    suspend fun getLedgerSummary(lenderId: String): Result<LenderLedgerSummary> = runCatching {
+        val dues = getDailyDues(lenderId).getOrThrow()
+        val totalDisbursed = dues.sumOf { it.totalPayable }
+        val totalDue = dues.sumOf { it.todayDueBalance }
+        val totalPaid = dues.sumOf { it.totalPaid }
+        val totalRemaining = dues.sumOf { it.remainingBalance }
 
-    /**
-     * Fetches daily dues, rollover arrears, and today's collections
-     */
-    suspend fun getDailyDues(lenderId: String): Result<List<DailyDueItem>> = runCatching {
-        db.from("v_lender_daily_dues")
-            .select {
-                filter {
-                    eq("lender_id", lenderId)
-                }
-            }.decodeList<DailyDueItem>()
-    }
-
-    /**
-     * Records a repayment installment (Database trigger auto-closes loan if paid in full)
-     */
-    suspend fun recordRepayment(repayment: Repayment): Result<Unit> = runCatching {
-        db.from("repayments").insert(repayment)
-    }
-
-    /**
-     * Gets aggregate ledger card totals
-     */
-    suspend fun getLedgerSummary(lenderId: String): Result<LenderLedgerSummary?> = runCatching {
-        db.from("v_lender_ledger_summary")
-            .select {
-                filter {
-                    eq("lender_id", lenderId)
-                }
-            }.decodeSingleOrNull<LenderLedgerSummary>()
+        LenderLedgerSummary(
+            totalDisbursed = totalDisbursed,
+            totalDueBalance = totalDue,
+            totalPaid = totalPaid,
+            totalRemainingBalance = totalRemaining
+        )
     }
 }
