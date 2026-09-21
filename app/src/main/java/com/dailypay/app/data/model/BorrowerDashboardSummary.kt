@@ -9,5 +9,6 @@ data class BorrowerDashboardSummary(
     val totalPaid: Double = 0.0,
     val totalRemaining: Double = 0.0,
     val todayDue: Double = 0.0,
+    val todayPaid: Double = 0.0,
     val activeLoansCount: Int = 0
 )
