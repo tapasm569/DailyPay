@@ -49,9 +49,9 @@ fun TodaysDueScreen(
         scope.launch {
             lenderRepo.getDailyDues(lenderId)
                 .onSuccess { allDues ->
-                    // Show only borrowers with unpaid dues for today
+                    // Show only borrowers with remaining dues (including rolled-over arrears)
                     duesList = allDues.filter { item ->
-                        item.todayPaidAmount < item.todayDueBalance && item.todayDueBalance > 0 && item.remainingBalance > 0
+                        item.todayDueBalance > 0.0 && item.remainingBalance > 0.0
                     }
                     isLoading = false
                 }
@@ -78,7 +78,12 @@ fun TodaysDueScreen(
         containerColor = MaterialTheme.colorScheme.background
     ) { paddingValues ->
         if (isLoading) {
-            Box(modifier = Modifier.fillMaxSize().padding(paddingValues), contentAlignment = Alignment.Center) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(paddingValues),
+                contentAlignment = Alignment.Center
+            ) {
                 CircularProgressIndicator(color = BrandPrimary)
             }
         } else if (duesList.isEmpty()) {
@@ -113,7 +118,7 @@ fun TodaysDueScreen(
                             color = MoneyGreen
                         )
                         Text(
-                            text = "No pending dues remaining for today.",
+                            text = "All borrowers have paid their dues for today.",
                             style = MaterialTheme.typography.bodyMedium,
                             color = TextSecondaryLight
                         )
@@ -133,24 +138,26 @@ fun TodaysDueScreen(
                         item = item,
                         onCollectPaymentClick = {
                             selectedDueItem = it
-                            val remainingDueToday = maxOf(0.0, it.todayDueBalance - it.todayPaidAmount)
-                            collectAmount = if (remainingDueToday > 0.0) remainingDueToday.toString() else it.dailyInstallment.toString()
+                            collectAmount = if (it.todayDueBalance > 0.0) {
+                                it.todayDueBalance.toString()
+                            } else {
+                                it.dailyInstallment.toString()
+                            }
                         }
                     )
                 }
             }
         }
 
+        // Collect Payment Dialog
         selectedDueItem?.let { dueItem ->
-            val pendingAmountToday = maxOf(0.0, dueItem.todayDueBalance - dueItem.todayPaidAmount)
-
             AlertDialog(
                 onDismissRequest = { if (!isSubmittingPayment) selectedDueItem = null },
                 title = { Text("Collect Due - ${dueItem.borrowerName}") },
                 text = {
                     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                         Text(
-                            text = "Remaining Due Today: ₹$pendingAmountToday | Total Left: ₹${dueItem.remainingBalance}",
+                            text = "Total Due Today: ₹${dueItem.todayDueBalance} | Total Loan Left: ₹${dueItem.remainingBalance}",
                             style = MaterialTheme.typography.bodyMedium,
                             color = TextSecondaryLight
                         )
@@ -214,7 +221,7 @@ fun TodaysDueScreen(
                                         isSubmittingPayment = false
                                         selectedDueItem = null
                                         Toast.makeText(context, "Payment recorded! Cleared from list.", Toast.LENGTH_SHORT).show()
-                                        loadData()
+                                        loadData() // Refreshes and removes borrower immediately once fully cleared
                                     }
                                     .onFailure {
                                         isSubmittingPayment = false
