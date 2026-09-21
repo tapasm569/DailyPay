@@ -18,6 +18,7 @@ import kotlinx.serialization.json.put
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
+import kotlin.math.round
 
 class LenderRepository {
 
@@ -114,7 +115,22 @@ class LenderRepository {
     }
 
     suspend fun giveLoanManually(loan: Loan): Result<Unit> = runCatching {
-        db.from("loans").insert(loan)
+        val tenure = if (loan.tenureDays > 0) loan.tenureDays else 30
+        val totalInterest = loan.principalAmount * (loan.monthlyInterestRate / 100.0) * (tenure / 30.0)
+        val calculatedTotalPayable = if (loan.totalPayable > 0.0) loan.totalPayable else loan.principalAmount + totalInterest
+        val calculatedInstallment = if (loan.dailyInstallment > 0.0) loan.dailyInstallment else round((calculatedTotalPayable / tenure) * 100.0) / 100.0
+        val startDate = loan.startDate ?: DateUtils.getTodaySqlFormat()
+        val endDate = loan.endDate ?: calculateEndDate(startDate, tenure)
+
+        val preparedLoan = loan.copy(
+            totalPayable = calculatedTotalPayable,
+            dailyInstallment = calculatedInstallment,
+            startDate = startDate,
+            endDate = endDate,
+            status = LoanStatus.ACTIVE
+        )
+
+        db.from("loans").insert(preparedLoan)
     }
 
     suspend fun getPendingLoanRequests(lenderId: String): Result<List<Loan>> = runCatching {
@@ -124,6 +140,7 @@ class LenderRepository {
                     eq("lender_id", lenderId)
                     eq("status", LoanStatus.PENDING.name)
                 }
+                order("created_at", Order.DESCENDING)
             }.decodeList<Loan>()
     }
 
@@ -133,13 +150,28 @@ class LenderRepository {
         disbursementMode: PaymentMode,
         disbursementRef: String
     ): Result<Unit> = runCatching {
+        val existingLoan = db.from("loans").select {
+            filter { eq("id", loanId) }
+        }.decodeSingle<Loan>()
+
+        val tenure = if (existingLoan.tenureDays > 0) existingLoan.tenureDays else 30
+        val totalInterest = existingLoan.principalAmount * (interestRate / 100.0) * (tenure / 30.0)
+        val totalPayable = round((existingLoan.principalAmount + totalInterest) * 100.0) / 100.0
+        val dailyInstallment = round((totalPayable / tenure) * 100.0) / 100.0
+
+        val startDate = DateUtils.getTodaySqlFormat()
+        val endDate = calculateEndDate(startDate, tenure)
+
         db.from("loans").update(
             buildJsonObject {
                 put("status", LoanStatus.ACTIVE.name)
                 put("monthly_interest_rate", interestRate)
+                put("total_payable", totalPayable)
+                put("daily_installment", dailyInstallment)
+                put("start_date", startDate)
+                put("end_date", endDate)
                 put("disbursement_mode", disbursementMode.name)
                 put("disbursement_ref", disbursementRef)
-                put("start_date", DateUtils.getTodaySqlFormat())
             }
         ) {
             filter { eq("id", loanId) }
