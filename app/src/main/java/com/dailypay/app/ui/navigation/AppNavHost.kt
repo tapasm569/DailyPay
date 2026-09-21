@@ -23,17 +23,17 @@ fun AppNavHost(
         // ================= AUTH =================
         composable(Screen.Login.route) {
             LoginScreen(
-                onNavigateToAdmin = {
+                onAdminLoginSuccess = {
                     navController.navigate(Screen.AdminDashboard.route) {
                         popUpTo(Screen.Login.route) { inclusive = true }
                     }
                 },
-                onNavigateToLender = { lenderId ->
+                onLenderLoginSuccess = { lenderId: String ->
                     navController.navigate(Screen.LenderHome.createRoute(lenderId)) {
                         popUpTo(Screen.Login.route) { inclusive = true }
                     }
                 },
-                onNavigateToBorrower = { borrowerId ->
+                onBorrowerLoginSuccess = { borrowerId: String ->
                     navController.navigate(Screen.BorrowerDashboard.createRoute(borrowerId)) {
                         popUpTo(Screen.Login.route) { inclusive = true }
                     }
@@ -45,8 +45,10 @@ fun AppNavHost(
         composable(Screen.AdminDashboard.route) {
             AdminDashboardScreen(
                 onCreateLenderClick = { navController.navigate(Screen.CreateLender.route) },
+                onManageLenderClick = { navController.navigate(Screen.CreateLender.route) },
                 onSubscriptionClick = { navController.navigate(Screen.AdminSubscription.route) },
                 onReminderClick = { navController.navigate(Screen.AdminReminder.route) },
+                onResetPasswordClick = { /* Handled via admin view or reminder */ },
                 onLogoutClick = {
                     navController.navigate(Screen.Login.route) {
                         popUpTo(0) { inclusive = true }
@@ -54,12 +56,15 @@ fun AppNavHost(
                 }
             )
         }
+
         composable(Screen.CreateLender.route) {
             CreateLenderScreen(onNavigateBack = { navController.popBackStack() })
         }
+
         composable(Screen.AdminSubscription.route) {
             SubscriptionScreen(onNavigateBack = { navController.popBackStack() })
         }
+
         composable(Screen.AdminReminder.route) {
             ReminderScreen(onNavigateBack = { navController.popBackStack() })
         }
@@ -197,7 +202,8 @@ fun AppNavHost(
             val lenderId = backStackEntry.arguments?.getString("lenderId") ?: ""
             MasterClientScreen(
                 lenderId = lenderId,
-                onNavigateBack = { navController.popBackStack() }
+                onNavigateBack = { navController.popBackStack() },
+                onAddNewBorrowerClick = { navController.navigate(Screen.AddBorrower.createRoute(lenderId)) }
             )
         }
 
