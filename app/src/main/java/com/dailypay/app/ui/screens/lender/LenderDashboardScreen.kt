@@ -8,10 +8,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.ReceiptLong
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -64,7 +63,7 @@ fun LenderDashboardScreen(
             LenderOptionCard(
                 title = "Verify Payment",
                 subtitle = "Approve or reject customer submitted UPI & Cash payments",
-                icon = Icons.Default.FactCheck,
+                icon = Icons.Default.CheckCircle,
                 accentColor = MoneyGreen,
                 onClick = onVerifyPaymentClick
             )
@@ -72,7 +71,7 @@ fun LenderDashboardScreen(
             LenderOptionCard(
                 title = "Track Payment",
                 subtitle = "Day-wise history of all verified payments & collections",
-                icon = Icons.Default.Timeline,
+                icon = Icons.Default.DateRange,
                 accentColor = BrandPrimary,
                 onClick = onTrackPaymentsClick
             )
@@ -88,7 +87,7 @@ fun LenderDashboardScreen(
             LenderOptionCard(
                 title = "Today's Payment",
                 subtitle = "Collections recorded and cleared today",
-                icon = Icons.Default.Payments,
+                icon = Icons.Default.Payment,
                 accentColor = MoneyGreen,
                 onClick = onTodaysPaymentClick
             )
@@ -107,7 +106,7 @@ fun LenderDashboardScreen(
             LenderOptionCard(
                 title = "Give Loan (Manual)",
                 subtitle = "Create direct loan without borrower request",
-                icon = Icons.Default.AddCard,
+                icon = Icons.Default.Add,
                 accentColor = CallBlue,
                 onClick = onGiveLoanManualClick
             )
@@ -123,7 +122,7 @@ fun LenderDashboardScreen(
             LenderOptionCard(
                 title = "Approved Loans",
                 subtitle = "Active loans, tenures, start and end dates",
-                icon = Icons.Default.CheckCircle,
+                icon = Icons.Default.Done,
                 accentColor = MoneyGreen,
                 onClick = onApprovedLoansClick
             )
@@ -134,7 +133,7 @@ fun LenderDashboardScreen(
             LenderOptionCard(
                 title = "Master Client",
                 subtitle = "View and edit all registered borrowers profile",
-                icon = Icons.Default.Groups,
+                icon = Icons.Default.Person,
                 accentColor = BrandPrimary,
                 onClick = onMasterClientClick
             )
@@ -142,7 +141,7 @@ fun LenderDashboardScreen(
             LenderOptionCard(
                 title = "Master Ledger",
                 subtitle = "Lifetime disbursements, dues, and recoveries",
-                icon = Icons.AutoMirrored.Filled.ReceiptLong,
+                icon = Icons.Default.ReceiptLong,
                 accentColor = CallBlue,
                 onClick = onLenderLedgerClick
             )
@@ -167,7 +166,9 @@ private fun LenderOptionCard(
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
     ) {
         Row(
-            modifier = Modifier.fillMaxWidth().padding(14.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(14.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Surface(
@@ -176,7 +177,12 @@ private fun LenderOptionCard(
                 color = accentColor.copy(alpha = 0.12f)
             ) {
                 Box(contentAlignment = Alignment.Center) {
-                    Icon(imageVector = icon, contentDescription = title, tint = accentColor, modifier = Modifier.size(22.dp))
+                    Icon(
+                        imageVector = icon,
+                        contentDescription = title,
+                        tint = accentColor,
+                        modifier = Modifier.size(22.dp)
+                    )
                 }
             }
 
@@ -187,7 +193,12 @@ private fun LenderOptionCard(
                 Text(text = subtitle, style = MaterialTheme.typography.bodySmall, color = TextSecondaryLight)
             }
 
-            Icon(imageVector = Icons.Default.ChevronRight, contentDescription = null, tint = TextSecondaryLight)
+            Icon(
+                imageVector = Icons.Default.ArrowForward,
+                contentDescription = null,
+                tint = TextSecondaryLight,
+                modifier = Modifier.size(18.dp)
+            )
         }
     }
 }
