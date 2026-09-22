@@ -6,14 +6,16 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
+import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -21,22 +23,21 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.dailypay.app.R
-import com.dailypay.app.data.model.Borrower
 import com.dailypay.app.data.model.DailyDueItem
+import com.dailypay.app.data.model.Lender
 import com.dailypay.app.data.model.PaymentMode
 import com.dailypay.app.data.model.Repayment
 import com.dailypay.app.data.repository.LenderRepository
-import com.dailypay.app.ui.components.DailyPayTopBar
-import com.dailypay.app.ui.components.DueBorrowerCard
 import com.dailypay.app.ui.theme.*
 import com.dailypay.app.util.CommunicationUtils
 import com.dailypay.app.util.DateUtils
-import com.dailypay.app.util.UpiIntentLauncher
 import kotlinx.coroutines.launch
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LenderHomeScreen(
     lenderId: String,
@@ -48,39 +49,32 @@ fun LenderHomeScreen(
     val scope = rememberCoroutineScope()
     val lenderRepo = remember { LenderRepository() }
 
-    var allDuesList by remember { mutableStateOf<List<DailyDueItem>>(emptyList()) }
-    var allBorrowersList by remember { mutableStateOf<List<Borrower>>(emptyList()) }
-    var selectedTab by remember { mutableIntStateOf(0) }
+    var lenderProfile by remember { mutableStateOf<Lender?>(null) }
+    var duesList by remember { mutableStateOf<List<DailyDueItem>>(emptyList()) }
     var searchQuery by remember { mutableStateOf("") }
-    var isSearchActive by remember { mutableStateOf(false) }
     var isLoading by remember { mutableStateOf(true) }
 
-    var selectedDueItem by remember { mutableStateOf<DailyDueItem?>(null) }
-    var collectAmount by remember { mutableStateOf("") }
+    // Repayment dialog states
+    var selectedItemForPayment by remember { mutableStateOf<DailyDueItem?>(null) }
+    var paymentAmountText by remember { mutableStateOf("") }
     var selectedPaymentMode by remember { mutableStateOf(PaymentMode.CASH) }
     var isSubmittingPayment by remember { mutableStateOf(false) }
 
-    var selectedBorrowerForDetails by remember { mutableStateOf<Borrower?>(null) }
-    var borrowerToEdit by remember { mutableStateOf<Borrower?>(null) }
-    var borrowerToDelete by remember { mutableStateOf<Borrower?>(null) }
-    var isProcessingAction by remember { mutableStateOf(false) }
-
-    var inspectingRepaymentLoanId by remember { mutableStateOf<String?>(null) }
-    var inspectingRepaymentBorrowerName by remember { mutableStateOf("") }
-    var repaymentHistoryList by remember { mutableStateOf<List<Repayment>>(emptyList()) }
-    var isLoadingRepayments by remember { mutableStateOf(false) }
+    // 2-tab Pager: Page 0 = Pending, Page 1 = Paid Today
+    val pagerState = rememberPagerState(initialPage = 0, pageCount = { 2 })
 
     fun loadData() {
         scope.launch {
-            lenderRepo.getBorrowers(lenderId).onSuccess {
-                allBorrowersList = it
-            }
+            lenderRepo.getLenderProfile(lenderId).onSuccess { lenderProfile = it }
             lenderRepo.getDailyDues(lenderId)
                 .onSuccess {
-                    allDuesList = it
+                    duesList = it
                     isLoading = false
                 }
-                .onFailure { isLoading = false }
+                .onFailure {
+                    isLoading = false
+                    Toast.makeText(context, "Error: ${it.message}", Toast.LENGTH_SHORT).show()
+                }
         }
     }
 
@@ -88,141 +82,41 @@ fun LenderHomeScreen(
         loadData()
     }
 
-    val totalPendingDue = allDuesList.sumOf { maxOf(0.0, it.todayDueBalance) }
-    val totalReceivedToday = allDuesList.sumOf { it.todayPaidAmount }
-
-    val pendingBorrowers = allDuesList.filter { item ->
-        item.todayDueBalance > 0.0 && item.remainingBalance > 0.0
-    }
-    val paidBorrowers = allDuesList.filter { item ->
-        item.todayPaidAmount > 0.0
+    val filteredList = duesList.filter { item ->
+        item.borrowerName.contains(searchQuery, ignoreCase = true) ||
+                item.borrowerMobile.contains(searchQuery)
     }
 
-    val isSearching = isSearchActive && searchQuery.isNotBlank()
-    val searchResults = if (isSearching) {
-        allBorrowersList.filter { b ->
-            b.name.contains(searchQuery.trim(), ignoreCase = true) ||
-            b.mobileNumber.contains(searchQuery.trim())
-        }
-    } else {
-        emptyList()
-    }
+    val pendingDues = filteredList.filter { it.todayDueBalance > 0.0 }
+    val paidDues = filteredList.filter { it.todayPaidAmount > 0.0 }
 
     Scaffold(
         topBar = {
-            Column {
-                DailyPayTopBar(
-                    businessName = "DailyPay Lender",
-                    pendingDue = totalPendingDue,
-                    receivedPayment = totalReceivedToday,
-                    onSearchClick = {
-                        isSearchActive = !isSearchActive
-                        if (!isSearchActive) searchQuery = ""
-                    },
-                    onAccountClick = onNavigateToDashboard,
-                    onEditProfileClick = {
-                        Toast.makeText(context, "Edit profile from Dashboard", Toast.LENGTH_SHORT).show()
-                    },
-                    onResetPasswordClick = {
-                        Toast.makeText(context, "Password reset request submitted", Toast.LENGTH_SHORT).show()
-                    },
-                    onLogoutClick = onLogoutClick
-                )
-
-                if (isSearchActive) {
-                    OutlinedTextField(
-                        value = searchQuery,
-                        onValueChange = { searchQuery = it },
-                        placeholder = { Text("Search by borrower name or mobile...") },
-                        leadingIcon = {
-                            Icon(Icons.Default.Search, contentDescription = null, tint = BrandPrimary)
-                        },
-                        trailingIcon = {
-                            IconButton(onClick = {
-                                searchQuery = ""
-                                isSearchActive = false
-                            }) {
-                                Icon(Icons.Default.Close, contentDescription = "Close Search")
-                            }
-                        },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 8.dp),
-                        shape = RoundedCornerShape(12.dp),
-                        singleLine = true
-                    )
-                }
-
-                if (!isSearching) {
-                    Surface(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 6.dp),
-                        color = MaterialTheme.colorScheme.background
-                    ) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .border(1.dp, BorderSubtleLight, RoundedCornerShape(14.dp))
-                                .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(14.dp))
-                                .padding(4.dp),
-                            horizontalArrangement = Arrangement.spacedBy(6.dp)
-                        ) {
-                            Surface(
-                                modifier = Modifier.weight(1f),
-                                shape = RoundedCornerShape(10.dp),
-                                color = if (selectedTab == 0) AlertOrange else Color.Transparent,
-                                onClick = { selectedTab = 0 }
-                            ) {
-                                Row(
-                                    modifier = Modifier.padding(vertical = 10.dp),
-                                    horizontalArrangement = Arrangement.Center,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.PendingActions,
-                                        contentDescription = null,
-                                        tint = if (selectedTab == 0) Color.White else TextSecondaryLight,
-                                        modifier = Modifier.size(18.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(6.dp))
-                                    Text(
-                                        text = "Pending (${pendingBorrowers.size})",
-                                        style = MaterialTheme.typography.labelMedium,
-                                        color = if (selectedTab == 0) Color.White else TextSecondaryLight
-                                    )
-                                }
-                            }
-
-                            Surface(
-                                modifier = Modifier.weight(1f),
-                                shape = RoundedCornerShape(10.dp),
-                                color = if (selectedTab == 1) MoneyGreen else Color.Transparent,
-                                onClick = { selectedTab = 1 }
-                            ) {
-                                Row(
-                                    modifier = Modifier.padding(vertical = 10.dp),
-                                    horizontalArrangement = Arrangement.Center,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Payments,
-                                        contentDescription = null,
-                                        tint = if (selectedTab == 1) Color.White else TextSecondaryLight,
-                                        modifier = Modifier.size(18.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(6.dp))
-                                    Text(
-                                        text = "Paid Today (${paidBorrowers.size})",
-                                        style = MaterialTheme.typography.labelMedium,
-                                        color = if (selectedTab == 1) Color.White else TextSecondaryLight
-                                    )
-                                }
-                            }
-                        }
+            TopAppBar(
+                title = {
+                    Column {
+                        Text(
+                            text = lenderProfile?.businessName?.ifBlank { lenderProfile?.name } ?: "DailyPay Lender",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            text = "Proprietor: ${lenderProfile?.ownerName?.ifBlank { lenderProfile?.name } ?: "Lender"}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = TextSecondaryLight
+                        )
                     }
-                }
-            }
+                },
+                actions = {
+                    IconButton(onClick = onNavigateToDashboard) {
+                        Icon(Icons.Default.Dashboard, contentDescription = "Dashboard", tint = BrandPrimary)
+                    }
+                    IconButton(onClick = onLogoutClick) {
+                        Icon(Icons.AutoMirrored.Filled.Logout, contentDescription = "Logout", tint = DangerRed)
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface)
+            )
         },
         containerColor = MaterialTheme.colorScheme.background
     ) { paddingValues ->
@@ -236,416 +130,175 @@ fun LenderHomeScreen(
                 CircularProgressIndicator(color = BrandPrimary)
             }
         } else {
-            LazyColumn(
+            Column(
                 modifier = modifier
                     .fillMaxSize()
                     .padding(paddingValues)
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                if (isSearching) {
-                    item {
-                        Text(
-                            text = "Search Results (${searchResults.size})",
-                            style = MaterialTheme.typography.titleMedium,
-                            color = MaterialTheme.colorScheme.onBackground
-                        )
-                    }
+                // Client Search Bar
+                OutlinedTextField(
+                    value = searchQuery,
+                    onValueChange = { searchQuery = it },
+                    placeholder = { Text("Search client name or mobile...") },
+                    leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+                    trailingIcon = {
+                        if (searchQuery.isNotEmpty()) {
+                            IconButton(onClick = { searchQuery = "" }) {
+                                Icon(Icons.Default.Close, contentDescription = "Clear")
+                            }
+                        }
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                    shape = RoundedCornerShape(12.dp),
+                    singleLine = true
+                )
 
-                    if (searchResults.isEmpty()) {
-                        item {
+                // WhatsApp-like synchronized TabRow
+                TabRow(
+                    selectedTabIndex = pagerState.currentPage,
+                    containerColor = MaterialTheme.colorScheme.surface,
+                    contentColor = BrandPrimary,
+                    indicator = { tabPositions ->
+                        if (pagerState.currentPage < tabPositions.size) {
                             Box(
                                 modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(vertical = 40.dp),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text(
-                                    text = "No borrower found matching \"$searchQuery\"",
-                                    style = MaterialTheme.typography.bodyLarge,
-                                    color = TextSecondaryLight
-                                )
-                            }
-                        }
-                    } else {
-                        items(searchResults, key = { it.id ?: it.mobileNumber }) { borrower ->
-                            val dueItem = allDuesList.firstOrNull { it.borrowerId == borrower.id && it.remainingBalance > 0.0 }
-                                ?: allDuesList.firstOrNull { it.borrowerId == borrower.id }
-
-                            val approvedLoan = dueItem?.totalPayable ?: 0.0
-                            val todayDue = maxOf(0.0, dueItem?.todayDueBalance ?: 0.0)
-                            val paidBalance = dueItem?.totalPaid ?: 0.0
-                            val remainingBalance = maxOf(0.0, dueItem?.remainingBalance ?: 0.0)
-
-                            Card(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .border(1.dp, BorderSubtleLight, RoundedCornerShape(16.dp)),
-                                shape = RoundedCornerShape(16.dp),
-                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
-                            ) {
-                                Column(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(16.dp)
-                                ) {
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.SpaceBetween,
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Column(modifier = Modifier.weight(1f)) {
-                                            Text(
-                                                text = borrower.name,
-                                                style = MaterialTheme.typography.titleMedium,
-                                                color = MaterialTheme.colorScheme.onSurface
-                                            )
-                                            Text(
-                                                text = "+91 ${borrower.mobileNumber}",
-                                                style = MaterialTheme.typography.bodySmall,
-                                                color = TextSecondaryLight
-                                            )
-                                        }
-
-                                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                            IconButton(
-                                                onClick = {
-                                                    CommunicationUtils.openWhatsAppChat(
-                                                        context = context,
-                                                        rawMobileNumber = borrower.mobileNumber,
-                                                        message = "Hello ${borrower.name}, contacting you regarding your DailyPay loan."
-                                                    )
-                                                },
-                                                modifier = Modifier
-                                                    .size(36.dp)
-                                                    .clip(CircleShape)
-                                                    .border(1.dp, WhatsAppGreen.copy(alpha = 0.3f), CircleShape)
-                                            ) {
-                                                Icon(
-                                                    painter = painterResource(id = R.drawable.ic_whatsapp),
-                                                    contentDescription = "WhatsApp",
-                                                    tint = WhatsAppGreen,
-                                                    modifier = Modifier.size(18.dp)
-                                                )
-                                            }
-
-                                            IconButton(
-                                                onClick = { CommunicationUtils.openPhoneDialer(context, borrower.mobileNumber) },
-                                                modifier = Modifier
-                                                    .size(36.dp)
-                                                    .clip(CircleShape)
-                                                    .border(1.dp, CallBlue.copy(alpha = 0.3f), CircleShape)
-                                            ) {
-                                                Icon(
-                                                    painter = painterResource(id = R.drawable.ic_call),
-                                                    contentDescription = "Call",
-                                                    tint = CallBlue,
-                                                    modifier = Modifier.size(18.dp)
-                                                )
-                                            }
-                                        }
-                                    }
-
-                                    Spacer(modifier = Modifier.height(10.dp))
-                                    HorizontalDivider(color = BorderSubtleLight)
-                                    Spacer(modifier = Modifier.height(10.dp))
-
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.SpaceBetween
-                                    ) {
-                                        Column {
-                                            Text("Approved Loan", style = MaterialTheme.typography.labelSmall, color = TextSecondaryLight)
-                                            Text("₹$approvedLoan", style = MaterialTheme.typography.titleMedium)
-                                        }
-                                        Column(horizontalAlignment = Alignment.End) {
-                                            Text("Today's Due", style = MaterialTheme.typography.labelSmall, color = AlertOrange)
-                                            Text("₹$todayDue", style = MaterialTheme.typography.titleMedium, color = AlertOrange)
-                                        }
-                                    }
-
-                                    Spacer(modifier = Modifier.height(8.dp))
-
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.SpaceBetween
-                                    ) {
-                                        Column {
-                                            Text("Paid Balance", style = MaterialTheme.typography.labelSmall, color = MoneyGreen)
-                                            Text("₹$paidBalance", style = MaterialTheme.typography.titleMedium, color = MoneyGreen)
-                                        }
-                                        Column(horizontalAlignment = Alignment.End) {
-                                            Text("Remaining Balance", style = MaterialTheme.typography.labelSmall, color = DangerRed)
-                                            Text("₹$remainingBalance", style = MaterialTheme.typography.titleMedium, color = DangerRed)
-                                        }
-                                    }
-
-                                    Spacer(modifier = Modifier.height(14.dp))
-
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                    ) {
-                                        Button(
-                                            onClick = {
-                                                if (dueItem != null) {
-                                                    selectedDueItem = dueItem
-                                                    collectAmount = if (dueItem.todayDueBalance > 0.0) dueItem.todayDueBalance.toString() else dueItem.dailyInstallment.toString()
-                                                } else {
-                                                    Toast.makeText(context, "No active loan found for this borrower.", Toast.LENGTH_SHORT).show()
-                                                }
-                                            },
-                                            modifier = Modifier.weight(1f),
-                                            shape = RoundedCornerShape(12.dp),
-                                            colors = ButtonDefaults.buttonColors(containerColor = BrandPrimary)
-                                        ) {
-                                            Icon(Icons.Default.Payment, contentDescription = null, modifier = Modifier.size(16.dp))
-                                            Spacer(modifier = Modifier.width(4.dp))
-                                            Text("Collect")
-                                        }
-
-                                        OutlinedButton(
-                                            onClick = {
-                                                if (dueItem != null) {
-                                                    inspectingRepaymentLoanId = dueItem.loanId
-                                                    inspectingRepaymentBorrowerName = borrower.name
-                                                    isLoadingRepayments = true
-                                                    scope.launch {
-                                                        lenderRepo.getRepaymentsForLoan(dueItem.loanId)
-                                                            .onSuccess {
-                                                                repaymentHistoryList = it
-                                                                isLoadingRepayments = false
-                                                            }
-                                                            .onFailure {
-                                                                isLoadingRepayments = false
-                                                                Toast.makeText(context, "Could not load receipts: ${it.message}", Toast.LENGTH_SHORT).show()
-                                                            }
-                                                    }
-                                                } else {
-                                                    Toast.makeText(context, "No active loan found.", Toast.LENGTH_SHORT).show()
-                                                }
-                                            },
-                                            modifier = Modifier.weight(1f),
-                                            shape = RoundedCornerShape(12.dp)
-                                        ) {
-                                            Icon(Icons.Default.ReceiptLong, contentDescription = null, modifier = Modifier.size(16.dp))
-                                            Spacer(modifier = Modifier.width(4.dp))
-                                            Text("Receipts")
-                                        }
-
-                                        OutlinedButton(
-                                            onClick = { selectedBorrowerForDetails = borrower },
-                                            modifier = Modifier.weight(1f),
-                                            shape = RoundedCornerShape(12.dp)
-                                        ) {
-                                            Icon(Icons.Default.AccountBox, contentDescription = null, modifier = Modifier.size(16.dp))
-                                            Spacer(modifier = Modifier.width(4.dp))
-                                            Text("Profile")
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                } else if (selectedTab == 0) {
-                    if (pendingBorrowers.isEmpty()) {
-                        item {
-                            Card(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(vertical = 30.dp),
-                                shape = RoundedCornerShape(16.dp),
-                                colors = CardDefaults.cardColors(containerColor = MoneyGreenSubtle)
-                            ) {
-                                Column(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(24.dp),
-                                    horizontalAlignment = Alignment.CenterHorizontally
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.CheckCircle,
-                                        contentDescription = null,
-                                        tint = MoneyGreen,
-                                        modifier = Modifier.size(46.dp)
-                                    )
-                                    Spacer(modifier = Modifier.height(10.dp))
-                                    Text(
-                                        text = "All Dues Collected!",
-                                        style = MaterialTheme.typography.titleMedium,
-                                        color = MoneyGreen
-                                    )
-                                    Text(
-                                        text = "No pending payments remaining for today.",
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        color = TextSecondaryLight
-                                    )
-                                }
-                            }
-                        }
-                    } else {
-                        items(pendingBorrowers, key = { it.loanId }) { item ->
-                            DueBorrowerCard(
-                                item = item,
-                                onCollectPaymentClick = {
-                                    selectedDueItem = it
-                                    collectAmount = if (it.todayDueBalance > 0.0) it.todayDueBalance.toString() else it.dailyInstallment.toString()
-                                }
+                                    .tabIndicatorOffset(tabPositions[pagerState.currentPage])
+                                    .height(3.5.dp)
+                                    .background(BrandPrimary, RoundedCornerShape(topStart = 3.dp, topEnd = 3.dp))
                             )
                         }
-                    }
-                } else {
-                    if (paidBorrowers.isEmpty()) {
-                        item {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(vertical = 40.dp),
-                                contentAlignment = Alignment.Center
+                    },
+                    divider = { HorizontalDivider(color = BorderSubtleLight) }
+                ) {
+                    // Tab 0: Pending
+                    Tab(
+                        selected = pagerState.currentPage == 0,
+                        onClick = {
+                            scope.launch { pagerState.animateScrollToPage(0) }
+                        },
+                        text = {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
                             ) {
                                 Text(
-                                    text = "No payments received yet today.",
-                                    style = MaterialTheme.typography.bodyLarge,
-                                    color = TextSecondaryLight
+                                    text = "Pending",
+                                    fontWeight = if (pagerState.currentPage == 0) FontWeight.Bold else FontWeight.Medium,
+                                    color = if (pagerState.currentPage == 0) BrandPrimary else TextSecondaryLight
                                 )
-                            }
-                        }
-                    } else {
-                        items(paidBorrowers, key = { it.loanId }) { item ->
-                            Card(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .border(1.dp, MoneyGreen.copy(alpha = 0.25f), RoundedCornerShape(16.dp)),
-                                shape = RoundedCornerShape(16.dp),
-                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
-                            ) {
-                                Column(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(16.dp)
+                                Surface(
+                                    shape = CircleShape,
+                                    color = if (pagerState.currentPage == 0) AlertOrange else AlertOrange.copy(alpha = 0.2f)
                                 ) {
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.SpaceBetween,
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Column(modifier = Modifier.weight(1f)) {
-                                            Text(
-                                                text = item.borrowerName,
-                                                style = MaterialTheme.typography.titleMedium,
-                                                color = MaterialTheme.colorScheme.onSurface
-                                            )
-                                            Text(
-                                                text = "+91 ${item.borrowerMobile}",
-                                                style = MaterialTheme.typography.bodySmall,
-                                                color = TextSecondaryLight
-                                            )
-                                        }
-
-                                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                            IconButton(
-                                                onClick = {
-                                                    CommunicationUtils.openWhatsAppChat(
-                                                        context = context,
-                                                        rawMobileNumber = item.borrowerMobile,
-                                                        message = "Thank you ${item.borrowerName}! We received your payment of ₹${item.todayPaidAmount} for today. Remaining balance: ₹${item.remainingBalance}."
-                                                    )
-                                                },
-                                                modifier = Modifier
-                                                    .size(36.dp)
-                                                    .clip(CircleShape)
-                                                    .border(1.dp, WhatsAppGreen.copy(alpha = 0.3f), CircleShape)
-                                            ) {
-                                                Icon(
-                                                    painter = painterResource(id = R.drawable.ic_whatsapp),
-                                                    contentDescription = "WhatsApp",
-                                                    tint = WhatsAppGreen,
-                                                    modifier = Modifier.size(18.dp)
-                                                )
-                                            }
-
-                                            IconButton(
-                                                onClick = { CommunicationUtils.openPhoneDialer(context, item.borrowerMobile) },
-                                                modifier = Modifier
-                                                    .size(36.dp)
-                                                    .clip(CircleShape)
-                                                    .border(1.dp, CallBlue.copy(alpha = 0.3f), CircleShape)
-                                            ) {
-                                                Icon(
-                                                    painter = painterResource(id = R.drawable.ic_call),
-                                                    contentDescription = "Call",
-                                                    tint = CallBlue,
-                                                    modifier = Modifier.size(18.dp)
-                                                )
-                                            }
-                                        }
-                                    }
-
-                                    Spacer(modifier = Modifier.height(10.dp))
-                                    HorizontalDivider(color = BorderSubtleLight)
-                                    Spacer(modifier = Modifier.height(10.dp))
-
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.SpaceBetween,
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Column {
-                                            Text("Paid Today", style = MaterialTheme.typography.labelMedium, color = MoneyGreen)
-                                            Text(
-                                                text = "₹${item.todayPaidAmount}",
-                                                style = MaterialTheme.typography.titleLarge,
-                                                color = MoneyGreen
-                                            )
-                                        }
-                                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                            Text("Daily Installment", style = MaterialTheme.typography.labelMedium, color = TextSecondaryLight)
-                                            Text("₹${item.dailyInstallment}", style = MaterialTheme.typography.titleMedium)
-                                        }
-                                        Column(horizontalAlignment = Alignment.End) {
-                                            Text("Remaining Balance", style = MaterialTheme.typography.labelMedium, color = TextSecondaryLight)
-                                            Text("₹${maxOf(0.0, item.remainingBalance)}", style = MaterialTheme.typography.titleMedium)
-                                        }
-                                    }
+                                    Text(
+                                        text = "${pendingDues.size}",
+                                        modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp),
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = if (pagerState.currentPage == 0) Color.White else AlertOrange,
+                                        fontWeight = FontWeight.Bold
+                                    )
                                 }
                             }
                         }
+                    )
+
+                    // Tab 1: Paid Today
+                    Tab(
+                        selected = pagerState.currentPage == 1,
+                        onClick = {
+                            scope.launch { pagerState.animateScrollToPage(1) }
+                        },
+                        text = {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                Text(
+                                    text = "Paid Today",
+                                    fontWeight = if (pagerState.currentPage == 1) FontWeight.Bold else FontWeight.Medium,
+                                    color = if (pagerState.currentPage == 1) BrandPrimary else TextSecondaryLight
+                                )
+                                Surface(
+                                    shape = CircleShape,
+                                    color = if (pagerState.currentPage == 1) MoneyGreen else MoneyGreen.copy(alpha = 0.2f)
+                                ) {
+                                    Text(
+                                        text = "${paidDues.size}",
+                                        modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp),
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = if (pagerState.currentPage == 1) Color.White else MoneyGreen,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                            }
+                        }
+                    )
+                }
+
+                // Horizontal Swipeable Pager
+                HorizontalPager(
+                    state = pagerState,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f)
+                ) { pageIndex ->
+                    when (pageIndex) {
+                        0 -> PendingListTab(
+                            pendingList = pendingDues,
+                            onCollectClick = { item ->
+                                selectedItemForPayment = item
+                                paymentAmountText = item.todayDueBalance.toString()
+                                selectedPaymentMode = PaymentMode.CASH
+                            }
+                        )
+                        1 -> PaidTodayListTab(
+                            paidList = paidDues
+                        )
                     }
                 }
             }
         }
 
-        selectedDueItem?.let { dueItem ->
+        // Collection Payment Dialog
+        selectedItemForPayment?.let { item ->
             AlertDialog(
-                onDismissRequest = { if (!isSubmittingPayment) selectedDueItem = null },
-                title = { Text("Collect Due - ${dueItem.borrowerName}") },
+                onDismissRequest = { if (!isSubmittingPayment) selectedItemForPayment = null },
+                title = { Text("Collect EMI Payment") },
                 text = {
-                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Text("Borrower: ${item.borrowerName}")
                         Text(
-                            text = "Remaining Due Today: ₹${maxOf(0.0, dueItem.todayDueBalance)} | Total Loan Left: ₹${maxOf(0.0, dueItem.remainingBalance)}",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = TextSecondaryLight
+                            text = "Today's Due: ₹${maxOf(0.0, item.todayDueBalance)}",
+                            fontWeight = FontWeight.Bold,
+                            color = AlertOrange
                         )
 
                         OutlinedTextField(
-                            value = collectAmount,
-                            onValueChange = { collectAmount = it.filter { ch -> ch.isDigit() || ch == '.' } },
-                            label = { Text("Amount Received (₹)") },
+                            value = paymentAmountText,
+                            onValueChange = { paymentAmountText = it },
+                            label = { Text("Amount Collected (₹) *") },
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(12.dp)
+                            modifier = Modifier.fillMaxWidth()
                         )
 
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text("Payment Method:", style = MaterialTheme.typography.labelMedium)
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
                             FilterChip(
                                 selected = selectedPaymentMode == PaymentMode.CASH,
                                 onClick = { selectedPaymentMode = PaymentMode.CASH },
-                                label = { Text("Cash") }
+                                label = { Text("Cash") },
+                                modifier = Modifier.weight(1f)
                             )
                             FilterChip(
                                 selected = selectedPaymentMode == PaymentMode.UPI,
                                 onClick = { selectedPaymentMode = PaymentMode.UPI },
-                                label = { Text("UPI Intent") }
+                                label = { Text("UPI") },
+                                modifier = Modifier.weight(1f)
                             )
                         }
                     }
@@ -653,44 +306,32 @@ fun LenderHomeScreen(
                 confirmButton = {
                     Button(
                         onClick = {
-                            val parsedAmount = collectAmount.toDoubleOrNull() ?: 0.0
-                            if (parsedAmount <= 0.0) {
-                                Toast.makeText(context, "Enter a valid amount", Toast.LENGTH_SHORT).show()
+                            val amount = paymentAmountText.toDoubleOrNull() ?: 0.0
+                            if (amount <= 0.0) {
+                                Toast.makeText(context, "Enter a valid payment amount.", Toast.LENGTH_SHORT).show()
                                 return@Button
-                            }
-
-                            if (selectedPaymentMode == PaymentMode.UPI) {
-                                UpiIntentLauncher.initiateUpiPayment(
-                                    context = context,
-                                    payeeUpiId = "${dueItem.borrowerMobile}@upi",
-                                    payeeName = dueItem.borrowerName,
-                                    amount = parsedAmount,
-                                    transactionNote = "Repayment-${dueItem.borrowerName}"
-                                )
                             }
 
                             isSubmittingPayment = true
                             scope.launch {
                                 val repayment = Repayment(
-                                    loanId = dueItem.loanId,
-                                    borrowerId = dueItem.borrowerId,
+                                    loanId = item.loanId,
+                                    borrowerId = item.borrowerId,
                                     lenderId = lenderId,
+                                    amountPaid = amount,
                                     paymentDate = DateUtils.getTodaySqlFormat(),
-                                    amountPaid = parsedAmount,
-                                    paymentMode = selectedPaymentMode,
-                                    notes = "Daily collection"
+                                    paymentMode = selectedPaymentMode
                                 )
-
                                 lenderRepo.recordRepayment(repayment)
                                     .onSuccess {
                                         isSubmittingPayment = false
-                                        selectedDueItem = null
+                                        selectedItemForPayment = null
                                         Toast.makeText(context, "Payment recorded successfully!", Toast.LENGTH_SHORT).show()
                                         loadData()
                                     }
                                     .onFailure {
                                         isSubmittingPayment = false
-                                        Toast.makeText(context, "Error: ${it.message}", Toast.LENGTH_SHORT).show()
+                                        Toast.makeText(context, "Failed: ${it.message}", Toast.LENGTH_SHORT).show()
                                     }
                             }
                         },
@@ -701,415 +342,350 @@ fun LenderHomeScreen(
                     }
                 },
                 dismissButton = {
-                    TextButton(onClick = { selectedDueItem = null }, enabled = !isSubmittingPayment) {
+                    TextButton(
+                        onClick = { selectedItemForPayment = null },
+                        enabled = !isSubmittingPayment
+                    ) {
                         Text("Cancel")
                     }
                 }
             )
         }
+    }
+}
 
-        inspectingRepaymentLoanId?.let {
-            AlertDialog(
-                onDismissRequest = { inspectingRepaymentLoanId = null },
-                title = {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text("Payment Receipts", style = MaterialTheme.typography.titleLarge)
-                        IconButton(onClick = { inspectingRepaymentLoanId = null }) {
-                            Icon(Icons.Default.Close, contentDescription = "Close")
-                        }
-                    }
-                },
-                text = {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .heightIn(max = 380.dp),
-                        verticalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        Text(
-                            text = "Borrower: $inspectingRepaymentBorrowerName",
-                            style = MaterialTheme.typography.titleSmall,
-                            color = BrandPrimary
-                        )
+// ----------------- PAGE 0: PENDING DUES -----------------
+@Composable
+private fun PendingListTab(
+    pendingList: List<DailyDueItem>,
+    onCollectClick: (DailyDueItem) -> Unit
+) {
+    val context = LocalContext.current
 
-                        if (isLoadingRepayments) {
-                            Box(modifier = Modifier.fillMaxWidth().height(100.dp), contentAlignment = Alignment.Center) {
-                                CircularProgressIndicator(modifier = Modifier.size(28.dp), color = BrandPrimary)
-                            }
-                        } else if (repaymentHistoryList.isEmpty()) {
-                            Box(modifier = Modifier.fillMaxWidth().height(100.dp), contentAlignment = Alignment.Center) {
-                                Text("No repayments recorded for this loan yet.", color = TextSecondaryLight)
-                            }
-                        } else {
-                            LazyColumn(
-                                modifier = Modifier.fillMaxWidth(),
-                                verticalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                items(repaymentHistoryList, key = { it.id ?: "${it.paymentDate}_${it.amountPaid}" }) { r ->
-                                    Card(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        shape = RoundedCornerShape(10.dp),
-                                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                                        border = CardDefaults.outlinedCardBorder()
-                                    ) {
-                                        Row(
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .padding(12.dp),
-                                            horizontalArrangement = Arrangement.SpaceBetween,
-                                            verticalAlignment = Alignment.CenterVertically
-                                        ) {
-                                            Column {
-                                                Text("₹${r.amountPaid}", style = MaterialTheme.typography.titleMedium, color = MoneyGreen)
-                                                Text(r.paymentDate ?: "-", style = MaterialTheme.typography.bodySmall, color = TextSecondaryLight)
-                                            }
-                                            SuggestionChip(onClick = {}, label = { Text(r.paymentMode.name) })
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                },
-                confirmButton = {
-                    Button(
-                        onClick = { inspectingRepaymentLoanId = null },
-                        colors = ButtonDefaults.buttonColors(containerColor = BrandPrimary)
-                    ) {
-                        Text("Close")
-                    }
-                }
-            )
+    if (pendingList.isEmpty()) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(32.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Icon(
+                    imageVector = Icons.Default.CheckCircle,
+                    contentDescription = null,
+                    tint = MoneyGreen,
+                    modifier = Modifier.size(54.dp)
+                )
+                Spacer(modifier = Modifier.height(10.dp))
+                Text(
+                    text = "No pending dues for today!",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Text(
+                    text = "All scheduled collections are cleared.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = TextSecondaryLight
+                )
+            }
         }
-
-        selectedBorrowerForDetails?.let { borrower ->
-            AlertDialog(
-                onDismissRequest = { selectedBorrowerForDetails = null },
-                title = {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text("Borrower Profile", style = MaterialTheme.typography.titleLarge)
-                        IconButton(onClick = { selectedBorrowerForDetails = null }) {
-                            Icon(Icons.Default.Close, contentDescription = "Close")
-                        }
-                    }
-                },
-                text = {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .verticalScroll(rememberScrollState()),
-                        verticalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        Surface(
+    } else {
+        LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            items(pendingList, key = { it.loanId }) { item ->
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .border(1.dp, BorderSubtleLight, RoundedCornerShape(16.dp)),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                ) {
+                    Column(modifier = Modifier.padding(14.dp)) {
+                        Row(
                             modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(12.dp),
-                            color = BrandPrimary.copy(alpha = 0.08f)
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Column(modifier = Modifier.padding(14.dp)) {
-                                Text(
-                                    text = borrower.name,
-                                    style = MaterialTheme.typography.titleLarge,
-                                    color = BrandPrimary
-                                )
-                                Text(
-                                    text = "Mobile: +91 ${borrower.mobileNumber}",
-                                    style = MaterialTheme.typography.bodyMedium
-                                )
-                            }
-                        }
-
-                        Card(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .border(1.dp, BorderSubtleLight, RoundedCornerShape(12.dp)),
-                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
-                        ) {
-                            Column(
-                                modifier = Modifier.padding(12.dp),
-                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                            Surface(
+                                modifier = Modifier.size(46.dp),
+                                shape = CircleShape,
+                                color = AlertOrange.copy(alpha = 0.12f)
                             ) {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween
-                                ) {
-                                    Text("Village / City", style = MaterialTheme.typography.bodyMedium, color = TextSecondaryLight)
-                                    Text(borrower.villageCity ?: "-", style = MaterialTheme.typography.bodyMedium)
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(
+                                        imageVector = Icons.Default.Schedule,
+                                        contentDescription = null,
+                                        tint = AlertOrange,
+                                        modifier = Modifier.size(24.dp)
+                                    )
                                 }
-                                HorizontalDivider(color = BorderSubtleLight)
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween
+                            }
+
+                            Spacer(modifier = Modifier.width(12.dp))
+
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = item.borrowerName,
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Text(
+                                    text = "+91 ${item.borrowerMobile}",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = TextSecondaryLight
+                                )
+                            }
+
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                IconButton(
+                                    onClick = {
+                                        CommunicationUtils.openWhatsAppChat(
+                                            context = context,
+                                            rawMobileNumber = item.borrowerMobile,
+                                            message = "Hello ${item.borrowerName}, your daily installment of ₹${item.todayDueBalance} is due today."
+                                        )
+                                    },
+                                    modifier = Modifier
+                                        .size(36.dp)
+                                        .clip(CircleShape)
+                                        .border(1.dp, WhatsAppGreen.copy(alpha = 0.3f), CircleShape)
                                 ) {
-                                    Text("Post Office", style = MaterialTheme.typography.bodyMedium, color = TextSecondaryLight)
-                                    Text(borrower.postOffice ?: "-", style = MaterialTheme.typography.bodyMedium)
+                                    Icon(
+                                        painter = painterResource(id = R.drawable.ic_whatsapp),
+                                        contentDescription = "WhatsApp",
+                                        tint = WhatsAppGreen,
+                                        modifier = Modifier.size(18.dp)
+                                    )
                                 }
-                                HorizontalDivider(color = BorderSubtleLight)
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween
+
+                                IconButton(
+                                    onClick = { CommunicationUtils.openPhoneDialer(context, item.borrowerMobile) },
+                                    modifier = Modifier
+                                        .size(36.dp)
+                                        .clip(CircleShape)
+                                        .border(1.dp, CallBlue.copy(alpha = 0.3f), CircleShape)
                                 ) {
-                                    Text("Police Station", style = MaterialTheme.typography.bodyMedium, color = TextSecondaryLight)
-                                    Text(borrower.policeStation ?: "-", style = MaterialTheme.typography.bodyMedium)
-                                }
-                                HorizontalDivider(color = BorderSubtleLight)
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween
-                                ) {
-                                    Text("District", style = MaterialTheme.typography.bodyMedium, color = TextSecondaryLight)
-                                    Text(borrower.dist ?: "-", style = MaterialTheme.typography.bodyMedium)
-                                }
-                                HorizontalDivider(color = BorderSubtleLight)
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween
-                                ) {
-                                    Text("Password", style = MaterialTheme.typography.bodyMedium, color = TextSecondaryLight)
-                                    Text(borrower.passwordHash, style = MaterialTheme.typography.bodyMedium)
+                                    Icon(
+                                        painter = painterResource(id = R.drawable.ic_call),
+                                        contentDescription = "Call",
+                                        tint = CallBlue,
+                                        modifier = Modifier.size(18.dp)
+                                    )
                                 }
                             }
                         }
 
-                        Text("KYC Documents Attached:", style = MaterialTheme.typography.labelMedium)
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            SuggestionChip(
-                                onClick = {},
-                                label = { Text(if (!borrower.aadhaarCardUrl.isNullOrBlank()) "Aadhaar ✓" else "No Aadhaar") }
-                            )
-                            SuggestionChip(
-                                onClick = {},
-                                label = { Text(if (!borrower.panCardUrl.isNullOrBlank()) "PAN ✓" else "No PAN") }
-                            )
-                        }
-
-                        Spacer(modifier = Modifier.height(6.dp))
+                        Spacer(modifier = Modifier.height(10.dp))
+                        HorizontalDivider(color = BorderSubtleLight.copy(alpha = 0.6f))
+                        Spacer(modifier = Modifier.height(10.dp))
 
                         Row(
                             modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Button(
-                                onClick = {
-                                    borrowerToEdit = borrower
-                                    selectedBorrowerForDetails = null
-                                },
-                                modifier = Modifier.weight(1f),
-                                shape = RoundedCornerShape(12.dp),
-                                colors = ButtonDefaults.buttonColors(containerColor = BrandPrimary)
-                            ) {
-                                Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(18.dp))
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text("Update")
-                            }
-
-                            Button(
-                                onClick = {
-                                    borrowerToDelete = borrower
-                                    selectedBorrowerForDetails = null
-                                },
-                                modifier = Modifier.weight(1f),
-                                shape = RoundedCornerShape(12.dp),
-                                colors = ButtonDefaults.buttonColors(containerColor = DangerRed)
-                            ) {
-                                Icon(Icons.Default.Delete, contentDescription = null, modifier = Modifier.size(18.dp))
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text("Delete")
-                            }
-                        }
-                    }
-                },
-                confirmButton = {}
-            )
-        }
-
-        borrowerToEdit?.let { borrower ->
-            var editName by remember { mutableStateOf(borrower.name) }
-            var editMobile by remember { mutableStateOf(borrower.mobileNumber) }
-            var editVillage by remember { mutableStateOf(borrower.villageCity ?: "") }
-            var editPostOffice by remember { mutableStateOf(borrower.postOffice ?: "") }
-            var editPoliceStation by remember { mutableStateOf(borrower.policeStation ?: "") }
-            var editDist by remember { mutableStateOf(borrower.dist ?: "") }
-            var editPassword by remember { mutableStateOf(borrower.passwordHash) }
-
-            AlertDialog(
-                onDismissRequest = { if (!isProcessingAction) borrowerToEdit = null },
-                title = { Text("Update Borrower Profile") },
-                text = {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .verticalScroll(rememberScrollState()),
-                        verticalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        OutlinedTextField(
-                            value = editName,
-                            onValueChange = { editName = it },
-                            label = { Text("Full Name *") },
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(12.dp)
-                        )
-
-                        OutlinedTextField(
-                            value = editMobile,
-                            onValueChange = { if (it.length <= 10) editMobile = it.filter { ch -> ch.isDigit() } },
-                            label = { Text("Mobile Number *") },
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(12.dp)
-                        )
-
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            OutlinedTextField(
-                                value = editVillage,
-                                onValueChange = { editVillage = it },
-                                label = { Text("Village/City") },
-                                modifier = Modifier.weight(1f),
-                                shape = RoundedCornerShape(12.dp)
-                            )
-                            OutlinedTextField(
-                                value = editPostOffice,
-                                onValueChange = { editPostOffice = it },
-                                label = { Text("Post Office") },
-                                modifier = Modifier.weight(1f),
-                                shape = RoundedCornerShape(12.dp)
-                            )
-                        }
-
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            OutlinedTextField(
-                                value = editPoliceStation,
-                                onValueChange = { editPoliceStation = it },
-                                label = { Text("Police Station") },
-                                modifier = Modifier.weight(1f),
-                                shape = RoundedCornerShape(12.dp)
-                            )
-                            OutlinedTextField(
-                                value = editDist,
-                                onValueChange = { editDist = it },
-                                label = { Text("District") },
-                                modifier = Modifier.weight(1f),
-                                shape = RoundedCornerShape(12.dp)
-                            )
-                        }
-
-                        OutlinedTextField(
-                            value = editPassword,
-                            onValueChange = { editPassword = it },
-                            label = { Text("Password *") },
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(12.dp)
-                        )
-                    }
-                },
-                confirmButton = {
-                    Button(
-                        onClick = {
-                            if (editName.isBlank() || editMobile.length != 10 || editPassword.isBlank()) {
-                                Toast.makeText(context, "Please fill in all required fields.", Toast.LENGTH_SHORT).show()
-                                return@Button
-                            }
-
-                            isProcessingAction = true
-                            scope.launch {
-                                val updated = borrower.copy(
-                                    name = editName.trim(),
-                                    mobileNumber = editMobile.trim(),
-                                    villageCity = editVillage.trim(),
-                                    postOffice = editPostOffice.trim(),
-                                    policeStation = editPoliceStation.trim(),
-                                    dist = editDist.trim(),
-                                    passwordHash = editPassword.trim()
+                            Column {
+                                Text("Today Due", style = MaterialTheme.typography.labelSmall, color = AlertOrange)
+                                Text(
+                                    text = "₹${maxOf(0.0, item.todayDueBalance)}",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = AlertOrange
                                 )
-
-                                lenderRepo.updateBorrower(updated)
-                                    .onSuccess {
-                                        isProcessingAction = false
-                                        borrowerToEdit = null
-                                        Toast.makeText(context, "Borrower profile updated successfully!", Toast.LENGTH_SHORT).show()
-                                        loadData()
-                                    }
-                                    .onFailure {
-                                        isProcessingAction = false
-                                        Toast.makeText(context, "Update failed: ${it.message}", Toast.LENGTH_SHORT).show()
-                                    }
                             }
-                        },
-                        enabled = !isProcessingAction,
-                        colors = ButtonDefaults.buttonColors(containerColor = BrandPrimary)
-                    ) {
-                        Text(if (isProcessingAction) "Saving..." else "Save Changes")
-                    }
-                },
-                dismissButton = {
-                    TextButton(
-                        onClick = { borrowerToEdit = null },
-                        enabled = !isProcessingAction
-                    ) {
-                        Text("Cancel")
+
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text("Balance Left", style = MaterialTheme.typography.labelSmall, color = TextSecondaryLight)
+                                Text(
+                                    text = "₹${maxOf(0.0, item.remainingBalance)}",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                            }
+
+                            Button(
+                                onClick = { onCollectClick(item) },
+                                shape = RoundedCornerShape(10.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = BrandPrimary),
+                                contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp)
+                            ) {
+                                Icon(Icons.Default.Payment, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Collect")
+                            }
+                        }
                     }
                 }
-            )
+            }
         }
+    }
+}
 
-        borrowerToDelete?.let { borrower ->
-            AlertDialog(
-                onDismissRequest = { if (!isProcessingAction) borrowerToDelete = null },
-                title = { Text("Delete Borrower?") },
-                text = {
-                    Text(
-                        text = "Are you sure you want to permanently delete \"${borrower.name}\" (+91 ${borrower.mobileNumber})? Active loan accounts must be settled or removed before deleting.",
-                        style = MaterialTheme.typography.bodyMedium
-                    )
-                },
-                confirmButton = {
-                    Button(
-                        onClick = {
-                            val borrowerId = borrower.id
-                            if (borrowerId.isNullOrBlank()) return@Button
+// ----------------- PAGE 1: PAID TODAY -----------------
+@Composable
+private fun PaidTodayListTab(
+    paidList: List<DailyDueItem>
+) {
+    val context = LocalContext.current
 
-                            isProcessingAction = true
-                            scope.launch {
-                                lenderRepo.deleteBorrower(borrowerId)
-                                    .onSuccess {
-                                        isProcessingAction = false
-                                        borrowerToDelete = null
-                                        Toast.makeText(context, "Borrower deleted successfully.", Toast.LENGTH_SHORT).show()
-                                        loadData()
-                                    }
-                                    .onFailure { error ->
-                                        isProcessingAction = false
-                                        val errorMsg = if (error.message?.contains("violates foreign key constraint", ignoreCase = true) == true) {
-                                            "Cannot delete borrower with active loans or transactions. Settle those loans first."
-                                        } else {
-                                            error.message ?: "Deletion failed"
-                                        }
-                                        Toast.makeText(context, errorMsg, Toast.LENGTH_LONG).show()
-                                    }
+    if (paidList.isEmpty()) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(32.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Icon(
+                    imageVector = Icons.Default.Payment,
+                    contentDescription = null,
+                    tint = TextSecondaryLight,
+                    modifier = Modifier.size(54.dp)
+                )
+                Spacer(modifier = Modifier.height(10.dp))
+                Text(
+                    text = "No payments cleared today yet.",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Text(
+                    text = "Approved payments will show here.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = TextSecondaryLight
+                )
+            }
+        }
+    } else {
+        LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            items(paidList, key = { it.loanId }) { item ->
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .border(1.dp, BorderSubtleLight, RoundedCornerShape(16.dp)),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                ) {
+                    Column(modifier = Modifier.padding(14.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Surface(
+                                modifier = Modifier.size(46.dp),
+                                shape = CircleShape,
+                                color = MoneyGreen.copy(alpha = 0.12f)
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(
+                                        imageVector = Icons.Default.CheckCircle,
+                                        contentDescription = null,
+                                        tint = MoneyGreen,
+                                        modifier = Modifier.size(24.dp)
+                                    )
+                                }
                             }
-                        },
-                        enabled = !isProcessingAction,
-                        colors = ButtonDefaults.buttonColors(containerColor = DangerRed)
-                    ) {
-                        Text(if (isProcessingAction) "Deleting..." else "Confirm Delete")
-                    }
-                },
-                dismissButton = {
-                    TextButton(
-                        onClick = { borrowerToDelete = null },
-                        enabled = !isProcessingAction
-                    ) {
-                        Text("Cancel")
+
+                            Spacer(modifier = Modifier.width(12.dp))
+
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = item.borrowerName,
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Text(
+                                    text = "+91 ${item.borrowerMobile}",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = TextSecondaryLight
+                                )
+                            }
+
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                IconButton(
+                                    onClick = {
+                                        CommunicationUtils.openWhatsAppChat(
+                                            context = context,
+                                            rawMobileNumber = item.borrowerMobile,
+                                            message = "Thank you ${item.borrowerName}, your payment of ₹${item.todayPaidAmount} has been received and verified."
+                                        )
+                                    },
+                                    modifier = Modifier
+                                        .size(36.dp)
+                                        .clip(CircleShape)
+                                        .border(1.dp, WhatsAppGreen.copy(alpha = 0.3f), CircleShape)
+                                ) {
+                                    Icon(
+                                        painter = painterResource(id = R.drawable.ic_whatsapp),
+                                        contentDescription = "WhatsApp",
+                                        tint = WhatsAppGreen,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
+
+                                IconButton(
+                                    onClick = { CommunicationUtils.openPhoneDialer(context, item.borrowerMobile) },
+                                    modifier = Modifier
+                                        .size(36.dp)
+                                        .clip(CircleShape)
+                                        .border(1.dp, CallBlue.copy(alpha = 0.3f), CircleShape)
+                                ) {
+                                    Icon(
+                                        painter = painterResource(id = R.drawable.ic_call),
+                                        contentDescription = "Call",
+                                        tint = CallBlue,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(10.dp))
+                        HorizontalDivider(color = BorderSubtleLight.copy(alpha = 0.6f))
+                        Spacer(modifier = Modifier.height(10.dp))
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column {
+                                Text("Paid Today", style = MaterialTheme.typography.labelSmall, color = MoneyGreen)
+                                Text(
+                                    text = "₹${item.todayPaidAmount}",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MoneyGreen
+                                )
+                            }
+
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text("Total Recovered", style = MaterialTheme.typography.labelSmall, color = TextSecondaryLight)
+                                Text(
+                                    text = "₹${item.totalPaid}",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                            }
+
+                            Column(horizontalAlignment = Alignment.End) {
+                                Text("Remaining Bal", style = MaterialTheme.typography.labelSmall, color = TextSecondaryLight)
+                                Text(
+                                    text = "₹${maxOf(0.0, item.remainingBalance)}",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = if (item.remainingBalance > 0.0) DangerRed else MoneyGreen
+                                )
+                            }
+                        }
                     }
                 }
-            )
+            }
         }
     }
 }
