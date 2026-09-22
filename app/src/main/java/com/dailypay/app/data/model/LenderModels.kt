@@ -85,10 +85,3 @@ data class LenderLedgerSummary(
     @SerialName("total_remaining_balance")
     val totalRemainingBalance: Double = 0.0
 )
-
-@Serializable
-data class PendingPaymentItem(
-    val repayment: Repayment,
-    val borrowerName: String = "",
-    val borrowerMobile: String = ""
-)
