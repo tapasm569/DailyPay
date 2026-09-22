@@ -37,6 +37,11 @@ data class Lender(
     @SerialName("upi_id")
     val upiId: String? = null,
 
+    val status: String = "ACTIVE",
+
+    @SerialName("subscription_status")
+    val subscriptionStatus: String = "ACTIVE",
+
     @SerialName("created_at")
     val createdAt: String? = null
 )
@@ -79,4 +84,11 @@ data class LenderLedgerSummary(
 
     @SerialName("total_remaining_balance")
     val totalRemainingBalance: Double = 0.0
+)
+
+@Serializable
+data class PendingPaymentItem(
+    val repayment: Repayment,
+    val borrowerName: String = "",
+    val borrowerMobile: String = ""
 )
