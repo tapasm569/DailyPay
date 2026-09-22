@@ -18,7 +18,7 @@ class LenderRepository {
     private val db = SupabaseClientProvider.db
     private val storage = SupabaseClientProvider.storage
 
-    // 1. Lender Profile
+    // ================= 1. LENDER PROFILE & ACCOUNT =================
     suspend fun getLenderProfile(lenderId: String): Result<Lender> = runCatching {
         db.from("lenders")
             .select {
@@ -26,7 +26,39 @@ class LenderRepository {
             }.decodeSingle<Lender>()
     }
 
-    // 2. Borrower Management
+    suspend fun updateLenderAddress(
+        lenderId: String,
+        villageTown: String?,
+        postOffice: String?,
+        dist: String?,
+        address: String?
+    ): Result<Unit> = runCatching {
+        db.from("lenders").update(
+            buildJsonObject {
+                villageTown?.let { put("village_town", it.trim()) }
+                postOffice?.let { put("post_office", it.trim()) }
+                dist?.let { put("dist", it.trim()) }
+                address?.let { put("address", it.trim()) }
+            }
+        ) {
+            filter { eq("id", lenderId) }
+        }
+    }
+
+    suspend fun updateLenderPassword(
+        lenderId: String,
+        newPasswordPlain: String
+    ): Result<Unit> = runCatching {
+        db.from("lenders").update(
+            buildJsonObject {
+                put("password_hash", newPasswordPlain.trim())
+            }
+        ) {
+            filter { eq("id", lenderId) }
+        }
+    }
+
+    // ================= 2. BORROWER MANAGEMENT & KYC =================
     suspend fun addBorrower(
         borrower: Borrower,
         aadhaarBytes: ByteArray?,
@@ -77,13 +109,15 @@ class LenderRepository {
         val id = borrower.id ?: throw IllegalArgumentException("Borrower ID cannot be null")
         db.from("borrowers").update(
             buildJsonObject {
-                put("name", borrower.name)
-                put("mobile_number", borrower.mobileNumber)
-                borrower.villageCity?.let { put("village_city", it) }
-                borrower.postOffice?.let { put("post_office", it) }
-                borrower.policeStation?.let { put("police_station", it) }
-                borrower.dist?.let { put("dist", it) }
+                put("name", borrower.name.trim())
+                put("mobile_number", borrower.mobileNumber.trim())
+                borrower.villageCity?.let { put("village_city", it.trim()) }
+                borrower.postOffice?.let { put("post_office", it.trim()) }
+                borrower.policeStation?.let { put("police_station", it.trim()) }
+                borrower.dist?.let { put("dist", it.trim()) }
                 borrower.profilePicUrl?.let { put("profile_pic_url", it) }
+                borrower.aadhaarCardUrl?.let { put("aadhaar_card_url", it) }
+                borrower.panCardUrl?.let { put("pan_card_url", it) }
                 if (borrower.passwordHash.isNotBlank()) {
                     put("password_hash", borrower.passwordHash)
                 }
@@ -93,11 +127,41 @@ class LenderRepository {
         }
     }
 
+    suspend fun updateBorrowerKycDoc(
+        borrowerId: String,
+        mobileNumber: String,
+        docType: String, // "aadhaar", "pan", or "avatar"
+        imageBytes: ByteArray
+    ): Result<String> = runCatching {
+        val timestamp = System.currentTimeMillis()
+        val bucket = if (docType == "avatar") "profile-avatars" else "kyc-documents"
+        val path = "${docType}_${mobileNumber}_$timestamp.jpg"
+
+        storage.from(bucket).upload(path = path, data = imageBytes, upsert = true)
+        val publicUrl = storage.from(bucket).publicUrl(path)
+
+        val columnKey = when (docType) {
+            "aadhaar" -> "aadhaar_card_url"
+            "pan" -> "pan_card_url"
+            else -> "profile_pic_url"
+        }
+
+        db.from("borrowers").update(
+            buildJsonObject {
+                put(columnKey, publicUrl)
+            }
+        ) {
+            filter { eq("id", borrowerId) }
+        }
+
+        publicUrl
+    }
+
     suspend fun deleteBorrower(borrowerId: String): Result<Unit> = runCatching {
         db.from("borrowers").delete { filter { eq("id", borrowerId) } }
     }
 
-    // 3. Loan Management & Creation
+    // ================= 3. LOAN MANAGEMENT & ACTIONS =================
     suspend fun giveLoanManually(loan: Loan): Result<Unit> = runCatching {
         val tenure = if (loan.tenureDays > 0) loan.tenureDays else 30
         val totalInterest = loan.principalAmount * (loan.monthlyInterestRate / 100.0) * (tenure / 30.0)
@@ -154,7 +218,17 @@ class LenderRepository {
                 put("start_date", startDate)
                 put("end_date", endDate)
                 put("disbursement_mode", disbursementMode.name)
-                put("disbursement_ref", disbursementRef)
+                put("disbursement_ref", disbursementRef.trim())
+            }
+        ) {
+            filter { eq("id", loanId) }
+        }
+    }
+
+    suspend fun rejectLoan(loanId: String): Result<Unit> = runCatching {
+        db.from("loans").update(
+            buildJsonObject {
+                put("status", LoanStatus.REJECTED.name)
             }
         ) {
             filter { eq("id", loanId) }
@@ -201,7 +275,7 @@ class LenderRepository {
         }
     }
 
-    // 4. Payments, Collections & Verification
+    // ================= 4. PAYMENTS & COLLECTIONS =================
     suspend fun getDailyDues(lenderId: String): Result<List<DailyDueItem>> = runCatching {
         db.from("v_lender_daily_dues")
             .select { filter { eq("lender_id", lenderId) } }
@@ -264,14 +338,14 @@ class LenderRepository {
             }.decodeList<Repayment>()
     }
 
-    // 5. Portfolio Ledger Summary
+    // ================= 5. PORTFOLIO LEDGER SUMMARY =================
     suspend fun getLedgerSummary(lenderId: String): Result<LenderLedgerSummary> = runCatching {
         val dues = getDailyDues(lenderId).getOrThrow()
         LenderLedgerSummary(
             lenderId = lenderId,
             totalDisbursed = dues.sumOf { it.totalPayable },
             totalDueBalance = dues.sumOf { maxOf(0.0, it.todayDueBalance) },
-            totalPaid = dues.sumOf { it.totalPaid },
+            totalPaid = dues.sumOf { it.todayPaidAmount },
             totalRemainingBalance = dues.sumOf { maxOf(0.0, it.remainingBalance) }
         )
     }
