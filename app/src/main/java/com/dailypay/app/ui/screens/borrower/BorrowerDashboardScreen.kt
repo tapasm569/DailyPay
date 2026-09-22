@@ -1,10 +1,13 @@
 package com.dailypay.app.ui.screens.borrower
 
 import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -14,10 +17,13 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import coil.compose.AsyncImage
 import com.dailypay.app.data.model.Borrower
 import com.dailypay.app.data.model.BorrowerDashboardSummary
 import com.dailypay.app.data.repository.BorrowerRepository
@@ -42,6 +48,7 @@ fun BorrowerDashboardScreen(
     var borrowerProfile by remember { mutableStateOf<Borrower?>(null) }
     var summary by remember { mutableStateOf<BorrowerDashboardSummary?>(null) }
     var isLoading by remember { mutableStateOf(true) }
+    var isUploadingAvatar by remember { mutableStateOf(false) }
 
     fun loadData() {
         scope.launch {
@@ -62,17 +69,43 @@ fun BorrowerDashboardScreen(
         loadData()
     }
 
+    val imagePickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri ->
+        uri?.let { selectedUri ->
+            scope.launch {
+                try {
+                    isUploadingAvatar = true
+                    val bytes = context.contentResolver.openInputStream(selectedUri)?.use { stream ->
+                        stream.readBytes()
+                    }
+                    if (bytes != null && bytes.isNotEmpty()) {
+                        val mobile = borrowerProfile?.mobileNumber ?: "user"
+                        borrowerRepo.updateProfilePicture(borrowerId, mobile, bytes)
+                            .onSuccess { newUrl ->
+                                borrowerProfile = borrowerProfile?.copy(profilePicUrl = newUrl)
+                                isUploadingAvatar = false
+                                Toast.makeText(context, "Profile picture updated successfully!", Toast.LENGTH_SHORT).show()
+                            }
+                            .onFailure { err ->
+                                isUploadingAvatar = false
+                                Toast.makeText(context, "Upload failed: ${err.message}", Toast.LENGTH_SHORT).show()
+                            }
+                    } else {
+                        isUploadingAvatar = false
+                    }
+                } catch (e: Exception) {
+                    isUploadingAvatar = false
+                    Toast.makeText(context, "Error reading image: ${e.message}", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
-                title = {
-                    Column {
-                        Text(borrowerProfile?.name ?: "Customer Portal", style = MaterialTheme.typography.titleMedium)
-                        if (borrowerProfile != null) {
-                            Text("+91 ${borrowerProfile?.mobileNumber}", style = MaterialTheme.typography.bodySmall, color = TextSecondaryLight)
-                        }
-                    }
-                },
+                title = { Text("Customer Portal") },
                 actions = {
                     IconButton(onClick = onLogoutClick) {
                         Icon(Icons.AutoMirrored.Filled.Logout, contentDescription = "Logout", tint = DangerRed)
@@ -85,7 +118,9 @@ fun BorrowerDashboardScreen(
     ) { paddingValues ->
         if (isLoading) {
             Box(
-                modifier = Modifier.fillMaxSize().padding(paddingValues),
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(paddingValues),
                 contentAlignment = Alignment.Center
             ) {
                 CircularProgressIndicator(color = BrandPrimary)
@@ -99,6 +134,104 @@ fun BorrowerDashboardScreen(
                     .padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
+                // Profile Avatar Header
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .border(1.dp, BorderSubtleLight, RoundedCornerShape(16.dp)),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(contentAlignment = Alignment.BottomEnd) {
+                            if (!borrowerProfile?.profilePicUrl.isNullOrBlank()) {
+                                AsyncImage(
+                                    model = borrowerProfile?.profilePicUrl,
+                                    contentDescription = "Profile Picture",
+                                    modifier = Modifier
+                                        .size(68.dp)
+                                        .clip(CircleShape)
+                                        .border(2.dp, BrandPrimary, CircleShape),
+                                    contentScale = ContentScale.Crop
+                                )
+                            } else {
+                                Surface(
+                                    modifier = Modifier.size(68.dp),
+                                    shape = CircleShape,
+                                    color = BrandPrimary.copy(alpha = 0.12f)
+                                ) {
+                                    Box(contentAlignment = Alignment.Center) {
+                                        Icon(
+                                            imageVector = Icons.Default.Person,
+                                            contentDescription = null,
+                                            tint = BrandPrimary,
+                                            modifier = Modifier.size(38.dp)
+                                        )
+                                    }
+                                }
+                            }
+
+                            Surface(
+                                modifier = Modifier
+                                    .size(26.dp)
+                                    .clip(CircleShape)
+                                    .clickable {
+                                        if (!isUploadingAvatar) imagePickerLauncher.launch("image/*")
+                                    },
+                                color = BrandPrimary,
+                                shape = CircleShape
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    if (isUploadingAvatar) {
+                                        CircularProgressIndicator(
+                                            color = Color.White,
+                                            strokeWidth = 2.dp,
+                                            modifier = Modifier.size(14.dp)
+                                        )
+                                    } else {
+                                        Icon(
+                                            imageVector = Icons.Default.CameraAlt,
+                                            contentDescription = "Change Photo",
+                                            tint = Color.White,
+                                            modifier = Modifier.size(14.dp)
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.width(16.dp))
+
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = borrowerProfile?.name ?: "Customer",
+                                style = MaterialTheme.typography.titleLarge
+                            )
+                            Text(
+                                text = "+91 ${borrowerProfile?.mobileNumber ?: ""}",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = TextSecondaryLight
+                            )
+                            val location = listOfNotNull(
+                                borrowerProfile?.villageCity,
+                                borrowerProfile?.dist
+                            ).filter { it.isNotBlank() }.joinToString(", ")
+                            if (location.isNotBlank()) {
+                                Text(
+                                    text = "📍 $location",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = TextSecondaryLight
+                                )
+                            }
+                        }
+                    }
+                }
+
                 // Today's Status Banner
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -187,7 +320,6 @@ fun BorrowerDashboardScreen(
 
                 Text("Quick Actions", style = MaterialTheme.typography.titleMedium)
 
-                // 1. Pay EMI (NEW)
                 CustomerActionCard(
                     title = "Pay EMI",
                     subtitle = "Pay today's installment due via UPI or Cash",
@@ -196,7 +328,6 @@ fun BorrowerDashboardScreen(
                     onClick = onPayEmiClick
                 )
 
-                // 2. Approved Loans
                 CustomerActionCard(
                     title = "Approved Loans",
                     subtitle = "View loan details, tenure, start date & end date",
@@ -205,7 +336,6 @@ fun BorrowerDashboardScreen(
                     onClick = onApprovedLoansClick
                 )
 
-                // 3. Apply for New Loan
                 CustomerActionCard(
                     title = "Apply For Loan",
                     subtitle = "Submit a new daily repayment loan request",
@@ -214,7 +344,6 @@ fun BorrowerDashboardScreen(
                     onClick = onApplyLoanClick
                 )
 
-                // 4. View Ledger / History
                 CustomerActionCard(
                     title = "My Ledger & Receipts",
                     subtitle = "Detailed date-by-date statement and receipts",
@@ -244,7 +373,9 @@ private fun CustomerActionCard(
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
     ) {
         Row(
-            modifier = Modifier.fillMaxWidth().padding(16.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Surface(
