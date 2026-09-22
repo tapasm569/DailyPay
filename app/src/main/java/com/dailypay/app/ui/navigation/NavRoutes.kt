@@ -8,6 +8,7 @@ sealed class Screen(val route: String) {
     // Admin
     object AdminDashboard : Screen("admin_dashboard")
     object CreateLender : Screen("create_lender")
+    object ManageLender : Screen("manage_lender")
     object AdminSubscription : Screen("admin_subscription")
     object AdminReminder : Screen("admin_reminder")
 
