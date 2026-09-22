@@ -5,6 +5,9 @@ import com.dailypay.app.data.remote.SupabaseClientProvider
 import com.dailypay.app.util.DateUtils
 import io.github.jan.supabase.postgrest.from
 import io.github.jan.supabase.postgrest.query.Order
+import io.github.jan.supabase.storage.storage
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
@@ -13,6 +16,7 @@ import kotlin.math.round
 class BorrowerRepository {
 
     private val db = SupabaseClientProvider.db
+    private val storage = SupabaseClientProvider.storage
 
     suspend fun getBorrowerProfile(borrowerId: String): Result<Borrower> = runCatching {
         db.from("borrowers")
@@ -26,6 +30,30 @@ class BorrowerRepository {
             .select {
                 filter { eq("id", lenderId) }
             }.decodeSingle<Lender>()
+    }
+
+    suspend fun updateProfilePicture(
+        borrowerId: String,
+        mobileNumber: String,
+        avatarBytes: ByteArray
+    ): Result<String> = runCatching {
+        val timestamp = System.currentTimeMillis()
+        val path = "avatar_${mobileNumber}_$timestamp.jpg"
+
+        storage.from("profile-avatars")
+            .upload(path = path, data = avatarBytes, upsert = true)
+
+        val publicUrl = storage.from("profile-avatars").publicUrl(path)
+
+        db.from("borrowers").update(
+            buildJsonObject {
+                put("profile_pic_url", publicUrl)
+            }
+        ) {
+            filter { eq("id", borrowerId) }
+        }
+
+        publicUrl
     }
 
     suspend fun applyLoan(loan: Loan): Result<Unit> = runCatching {
