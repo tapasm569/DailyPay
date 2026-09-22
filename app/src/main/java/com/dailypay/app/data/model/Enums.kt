@@ -35,12 +35,15 @@ enum class RepaymentStatus {
 enum class SubscriptionStatus {
     ACTIVE,
     EXPIRED,
-    PENDING_VERIFICATION
+    PENDING_VERIFICATION,
+    TRIAL
 }
 
 @Serializable
 enum class ResetStatus {
     PENDING,
+    APPROVED,
+    REJECTED,
     SENT,
     COMPLETED,
     EXPIRED
