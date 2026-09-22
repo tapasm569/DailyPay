@@ -8,14 +8,19 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.ui.Modifier
 import androidx.navigation.compose.rememberNavController
+import com.dailypay.app.data.model.UserRole
 import com.dailypay.app.ui.navigation.AppNavHost
+import com.dailypay.app.ui.navigation.Screen
 import com.dailypay.app.ui.theme.DailyPayTheme
+import com.dailypay.app.util.SessionManager
 
 class MainActivity : ComponentActivity() {
+
     override fun onCreate(savedInstanceState: Bundle?) {
-        // Swap from the cold-start splash theme to the standard theme before rendering Compose
-        setTheme(R.style.Theme_DailyPay)
         super.onCreate(savedInstanceState)
+
+        val sessionManager = SessionManager(this)
+        val initialDestination = determineStartDestination(sessionManager)
 
         setContent {
             DailyPayTheme {
@@ -24,9 +29,34 @@ class MainActivity : ComponentActivity() {
                     color = MaterialTheme.colorScheme.background
                 ) {
                     val navController = rememberNavController()
-                    AppNavHost(navController = navController)
+                    AppNavHost(
+                        navController = navController,
+                        startDestination = initialDestination
+                    )
                 }
             }
+        }
+    }
+
+    private fun determineStartDestination(sessionManager: SessionManager): String {
+        if (!sessionManager.isLoggedIn()) {
+            return Screen.Login.route
+        }
+
+        val role = sessionManager.getUserRole()
+        val userId = sessionManager.getUserId() ?: ""
+
+        return when (role) {
+            UserRole.ADMIN -> Screen.AdminDashboard.route
+            UserRole.LENDER -> {
+                if (userId.isNotBlank()) Screen.LenderHome.createRoute(userId)
+                else Screen.Login.route
+            }
+            UserRole.BORROWER -> {
+                if (userId.isNotBlank()) Screen.BorrowerDashboard.createRoute(userId)
+                else Screen.Login.route
+            }
+            null -> Screen.Login.route
         }
     }
 }
