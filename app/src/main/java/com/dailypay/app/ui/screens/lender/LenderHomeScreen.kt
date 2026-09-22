@@ -1,7 +1,11 @@
+@file:OptIn(
+    androidx.compose.foundation.ExperimentalFoundationApi::class,
+    androidx.compose.material3.ExperimentalMaterial3Api::class
+)
+
 package com.dailypay.app.ui.screens.lender
 
 import android.widget.Toast
-import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -12,10 +16,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
-import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -37,7 +39,6 @@ import com.dailypay.app.util.CommunicationUtils
 import com.dailypay.app.util.DateUtils
 import kotlinx.coroutines.launch
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LenderHomeScreen(
     lenderId: String,
@@ -60,8 +61,8 @@ fun LenderHomeScreen(
     var selectedPaymentMode by remember { mutableStateOf(PaymentMode.CASH) }
     var isSubmittingPayment by remember { mutableStateOf(false) }
 
-    // 2-tab Pager: Page 0 = Pending, Page 1 = Paid Today
-    val pagerState = rememberPagerState(initialPage = 0, pageCount = { 2 })
+    // Multi-version compatible PagerState
+    val pagerState = rememberPagerState(initialPage = 0) { 2 }
 
     fun loadData() {
         scope.launch {
@@ -112,7 +113,7 @@ fun LenderHomeScreen(
                         Icon(Icons.Default.Dashboard, contentDescription = "Dashboard", tint = BrandPrimary)
                     }
                     IconButton(onClick = onLogoutClick) {
-                        Icon(Icons.AutoMirrored.Filled.Logout, contentDescription = "Logout", tint = DangerRed)
+                        Icon(Icons.Default.ExitToApp, contentDescription = "Logout", tint = DangerRed)
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface)
@@ -155,24 +156,12 @@ fun LenderHomeScreen(
                     singleLine = true
                 )
 
-                // WhatsApp-like synchronized TabRow
+                // TabRow synchronized with Pager
                 TabRow(
                     selectedTabIndex = pagerState.currentPage,
                     containerColor = MaterialTheme.colorScheme.surface,
-                    contentColor = BrandPrimary,
-                    indicator = { tabPositions ->
-                        if (pagerState.currentPage < tabPositions.size) {
-                            Box(
-                                modifier = Modifier
-                                    .tabIndicatorOffset(tabPositions[pagerState.currentPage])
-                                    .height(3.5.dp)
-                                    .background(BrandPrimary, RoundedCornerShape(topStart = 3.dp, topEnd = 3.dp))
-                            )
-                        }
-                    },
-                    divider = { HorizontalDivider(color = BorderSubtleLight) }
+                    contentColor = BrandPrimary
                 ) {
-                    // Tab 0: Pending
                     Tab(
                         selected = pagerState.currentPage == 0,
                         onClick = {
@@ -204,7 +193,6 @@ fun LenderHomeScreen(
                         }
                     )
 
-                    // Tab 1: Paid Today
                     Tab(
                         selected = pagerState.currentPage == 1,
                         onClick = {
@@ -354,7 +342,7 @@ fun LenderHomeScreen(
     }
 }
 
-// ----------------- PAGE 0: PENDING DUES -----------------
+// ----------------- TAB 0: PENDING DUES -----------------
 @Composable
 private fun PendingListTab(
     pendingList: List<DailyDueItem>,
@@ -523,7 +511,7 @@ private fun PendingListTab(
     }
 }
 
-// ----------------- PAGE 1: PAID TODAY -----------------
+// ----------------- TAB 1: PAID TODAY -----------------
 @Composable
 private fun PaidTodayListTab(
     paidList: List<DailyDueItem>
