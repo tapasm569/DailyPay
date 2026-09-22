@@ -1,21 +1,28 @@
 package com.dailypay.app.ui.navigation
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
+import androidx.compose.ui.platform.LocalContext
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
+import com.dailypay.app.data.model.UserRole
 import com.dailypay.app.ui.screens.admin.*
 import com.dailypay.app.ui.screens.auth.LoginScreen
 import com.dailypay.app.ui.screens.borrower.*
 import com.dailypay.app.ui.screens.lender.*
+import com.dailypay.app.util.SessionManager
 
 @Composable
 fun AppNavHost(
     navController: NavHostController,
     startDestination: String = Screen.Login.route
 ) {
+    val context = LocalContext.current
+    val sessionManager = remember { SessionManager(context) }
+
     NavHost(
         navController = navController,
         startDestination = startDestination
@@ -24,16 +31,19 @@ fun AppNavHost(
         composable(Screen.Login.route) {
             LoginScreen(
                 onAdminLoginSuccess = {
+                    sessionManager.saveSession(UserRole.ADMIN, "admin")
                     navController.navigate(Screen.AdminDashboard.route) {
                         popUpTo(Screen.Login.route) { inclusive = true }
                     }
                 },
                 onLenderLoginSuccess = { lenderId: String ->
+                    sessionManager.saveSession(UserRole.LENDER, lenderId)
                     navController.navigate(Screen.LenderHome.createRoute(lenderId)) {
                         popUpTo(Screen.Login.route) { inclusive = true }
                     }
                 },
                 onBorrowerLoginSuccess = { borrowerId: String ->
+                    sessionManager.saveSession(UserRole.BORROWER, borrowerId)
                     navController.navigate(Screen.BorrowerDashboard.createRoute(borrowerId)) {
                         popUpTo(Screen.Login.route) { inclusive = true }
                     }
@@ -50,6 +60,7 @@ fun AppNavHost(
                 onReminderClick = { navController.navigate(Screen.AdminReminder.route) },
                 onResetPasswordClick = { navController.navigate(Screen.AdminPasswordRequests.route) },
                 onLogoutClick = {
+                    sessionManager.clearSession()
                     navController.navigate(Screen.Login.route) {
                         popUpTo(0) { inclusive = true }
                     }
@@ -90,6 +101,7 @@ fun AppNavHost(
                 lenderId = lenderId,
                 onNavigateToDashboard = { navController.navigate(Screen.LenderDashboard.createRoute(lenderId)) },
                 onLogoutClick = {
+                    sessionManager.clearSession()
                     navController.navigate(Screen.Login.route) {
                         popUpTo(0) { inclusive = true }
                     }
@@ -242,6 +254,7 @@ fun AppNavHost(
                 onApprovedLoansClick = { navController.navigate(Screen.CustomerApprovedLoans.createRoute(borrowerId)) },
                 onViewLedgerClick = { navController.navigate(Screen.BorrowerLedger.createRoute(borrowerId)) },
                 onLogoutClick = {
+                    sessionManager.clearSession()
                     navController.navigate(Screen.Login.route) {
                         popUpTo(0) { inclusive = true }
                     }
