@@ -45,10 +45,10 @@ fun AppNavHost(
         composable(Screen.AdminDashboard.route) {
             AdminDashboardScreen(
                 onCreateLenderClick = { navController.navigate(Screen.CreateLender.route) },
-                onManageLenderClick = { navController.navigate(Screen.CreateLender.route) },
+                onManageLenderClick = { navController.navigate(Screen.ManageLender.route) },
                 onSubscriptionClick = { navController.navigate(Screen.AdminSubscription.route) },
                 onReminderClick = { navController.navigate(Screen.AdminReminder.route) },
-                onResetPasswordClick = { /* Handled via admin view or reminder */ },
+                onResetPasswordClick = { navController.navigate(Screen.ManageLender.route) },
                 onLogoutClick = {
                     navController.navigate(Screen.Login.route) {
                         popUpTo(0) { inclusive = true }
@@ -59,6 +59,13 @@ fun AppNavHost(
 
         composable(Screen.CreateLender.route) {
             CreateLenderScreen(onNavigateBack = { navController.popBackStack() })
+        }
+
+        composable(Screen.ManageLender.route) {
+            ManageLenderScreen(
+                onNavigateBack = { navController.popBackStack() },
+                onAddNewLenderClick = { navController.navigate(Screen.CreateLender.route) }
+            )
         }
 
         composable(Screen.AdminSubscription.route) {
