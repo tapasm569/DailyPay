@@ -48,21 +48,6 @@ fun AppNavHost(
                 onManageLenderClick = { navController.navigate(Screen.ManageLender.route) },
                 onSubscriptionClick = { navController.navigate(Screen.AdminSubscription.route) },
                 onReminderClick = { navController.navigate(Screen.AdminReminder.route) },
-                onResetPasswordClick = { navController.navigate(Screen.ManageLender.route) },
-                onLogoutClick = {
-                    navController.navigate(Screen.Login.route) {
-                        popUpTo(0) { inclusive = true }
-                    }
-                }
-            )
-        }
-// ================= ADMIN =================
-        composable(Screen.AdminDashboard.route) {
-            AdminDashboardScreen(
-                onCreateLenderClick = { navController.navigate(Screen.CreateLender.route) },
-                onManageLenderClick = { navController.navigate(Screen.ManageLender.route) },
-                onSubscriptionClick = { navController.navigate(Screen.AdminSubscription.route) },
-                onReminderClick = { navController.navigate(Screen.AdminReminder.route) },
                 onResetPasswordClick = { navController.navigate(Screen.AdminPasswordRequests.route) },
                 onLogoutClick = {
                     navController.navigate(Screen.Login.route) {
@@ -85,25 +70,6 @@ fun AppNavHost(
 
         composable(Screen.AdminPasswordRequests.route) {
             PasswordRequestsScreen(onNavigateBack = { navController.popBackStack() })
-        }
-
-        composable(Screen.AdminSubscription.route) {
-            SubscriptionScreen(onNavigateBack = { navController.popBackStack() })
-        }
-
-        composable(Screen.AdminReminder.route) {
-            ReminderScreen(onNavigateBack = { navController.popBackStack() })
-        }
-
-        composable(Screen.CreateLender.route) {
-            CreateLenderScreen(onNavigateBack = { navController.popBackStack() })
-        }
-
-        composable(Screen.ManageLender.route) {
-            ManageLenderScreen(
-                onNavigateBack = { navController.popBackStack() },
-                onAddNewLenderClick = { navController.navigate(Screen.CreateLender.route) }
-            )
         }
 
         composable(Screen.AdminSubscription.route) {
