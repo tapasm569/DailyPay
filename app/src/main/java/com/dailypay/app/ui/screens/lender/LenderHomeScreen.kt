@@ -40,6 +40,7 @@ import com.dailypay.app.data.repository.LenderRepository
 import com.dailypay.app.ui.theme.*
 import com.dailypay.app.util.CommunicationUtils
 import com.dailypay.app.util.DateUtils
+import com.dailypay.app.util.SessionManager
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -55,30 +56,44 @@ fun LenderHomeScreen(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val lenderRepo = remember { LenderRepository() }
+    val sessionManager = remember { SessionManager(context) }
+
+    // Fallback: if argument was empty, grab from SessionManager
+    val resolvedLenderId = remember(lenderId) {
+        if (lenderId.isNotBlank() && lenderId != "{lenderId}") {
+            lenderId
+        } else {
+            sessionManager.getUserId() ?: ""
+        }
+    }
 
     var lenderProfile by remember { mutableStateOf<Lender?>(null) }
     var duesList by remember { mutableStateOf<List<DailyDueItem>>(emptyList()) }
     var searchQuery by remember { mutableStateOf("") }
     var isLoading by remember { mutableStateOf(true) }
 
-    // Drawer state
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     var showAddressDialog by remember { mutableStateOf(false) }
     var showResetPasswordDialog by remember { mutableStateOf(false) }
 
-    // Repayment dialog states
     var selectedItemForPayment by remember { mutableStateOf<DailyDueItem?>(null) }
     var paymentAmountText by remember { mutableStateOf("") }
     var selectedPaymentMode by remember { mutableStateOf(PaymentMode.CASH) }
     var isSubmittingPayment by remember { mutableStateOf(false) }
 
-    // 2-tab Pager
     val pagerState = rememberPagerState(initialPage = 0) { 2 }
 
     fun loadData() {
+        if (resolvedLenderId.isBlank() || resolvedLenderId == "{lenderId}") {
+            // Guard: Never query Postgres with an empty UUID string
+            isLoading = false
+            onLogoutClick()
+            return
+        }
+
         scope.launch {
-            lenderRepo.getLenderProfile(lenderId).onSuccess { lenderProfile = it }
-            lenderRepo.getDailyDues(lenderId)
+            lenderRepo.getLenderProfile(resolvedLenderId).onSuccess { lenderProfile = it }
+            lenderRepo.getDailyDues(resolvedLenderId)
                 .onSuccess {
                     duesList = it
                     isLoading = false
@@ -90,7 +105,7 @@ fun LenderHomeScreen(
         }
     }
 
-    LaunchedEffect(lenderId) {
+    LaunchedEffect(resolvedLenderId) {
         loadData()
     }
 
@@ -109,7 +124,6 @@ fun LenderHomeScreen(
         drawerState = drawerState,
         drawerContent = {
             ModalDrawerSheet(modifier = Modifier.width(300.dp)) {
-                // Drawer Header
                 Surface(
                     modifier = Modifier.fillMaxWidth(),
                     color = BrandPrimary
@@ -188,7 +202,6 @@ fun LenderHomeScreen(
                         }
                     },
                     navigationIcon = {
-                        // 3-line Menu hamburger button
                         IconButton(onClick = { scope.launch { drawerState.open() } }) {
                             Icon(Icons.Default.Menu, contentDescription = "Main Menu", tint = BrandPrimary)
                         }
@@ -319,7 +332,7 @@ fun LenderHomeScreen(
                 }
             }
 
-            // ================= COLLECT EMI PAYMENT DIALOG =================
+            // ================= COLLECT PAYMENT DIALOG =================
             selectedItemForPayment?.let { item ->
                 AlertDialog(
                     onDismissRequest = { if (!isSubmittingPayment) selectedItemForPayment = null },
@@ -375,7 +388,7 @@ fun LenderHomeScreen(
                                     val repayment = Repayment(
                                         loanId = item.loanId,
                                         borrowerId = item.borrowerId,
-                                        lenderId = lenderId,
+                                        lenderId = resolvedLenderId,
                                         amountPaid = amount,
                                         paymentDate = DateUtils.getTodaySqlFormat(),
                                         paymentMode = selectedPaymentMode
@@ -407,7 +420,7 @@ fun LenderHomeScreen(
                 )
             }
 
-            // ================= EDIT ADDRESS ONLY DIALOG =================
+            // ================= EDIT ADDRESS DIALOG =================
             if (showAddressDialog) {
                 var editVillage by remember { mutableStateOf(lenderProfile?.villageTown ?: "") }
                 var editPostOffice by remember { mutableStateOf(lenderProfile?.postOffice ?: "") }
@@ -458,7 +471,7 @@ fun LenderHomeScreen(
                                 isSavingAddr = true
                                 scope.launch {
                                     lenderRepo.updateLenderAddress(
-                                        lenderId = lenderId,
+                                        lenderId = resolvedLenderId,
                                         villageTown = editVillage.ifBlank { null },
                                         postOffice = editPostOffice.ifBlank { null },
                                         dist = editDist.ifBlank { null },
@@ -529,7 +542,7 @@ fun LenderHomeScreen(
 
                                 isSavingPwd = true
                                 scope.launch {
-                                    lenderRepo.updateLenderPassword(lenderId, newPassword.trim())
+                                    lenderRepo.updateLenderPassword(resolvedLenderId, newPassword.trim())
                                         .onSuccess {
                                             isSavingPwd = false
                                             showResetPasswordDialog = false
@@ -682,7 +695,7 @@ private fun PendingListTab(
     }
 }
 
-// ----------------- TAB 1: PAID TODAY WITH WHATSAPP RECEIPT -----------------
+// ----------------- TAB 1: PAID TODAY WITH DIGITAL RECEIPT -----------------
 @Composable
 private fun PaidTodayListTab(
     paidList: List<DailyDueItem>,
@@ -741,7 +754,6 @@ private fun PaidTodayListTab(
                             }
 
                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                // WhatsApp button sends full digital receipt
                                 IconButton(
                                     onClick = {
                                         val currentDateTime = SimpleDateFormat("dd MMMM yyyy, hh:mm a", Locale.getDefault()).format(Date())
