@@ -280,7 +280,7 @@ fun MasterClientScreen(
             }
         }
 
-        // Edit Dialog
+          // Edit Dialog
         selectedBorrowerForEdit?.let { borrower ->
             var editName by remember { mutableStateOf(borrower.name) }
             var editMobile by remember { mutableStateOf(borrower.mobileNumber) }
@@ -373,6 +373,49 @@ fun MasterClientScreen(
                         colors = ButtonDefaults.buttonColors(containerColor = BrandPrimary)
                     ) {
                         Text(if (isSaving) "Saving..." else "Save Changes")
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { selectedBorrowerForEdit = null }, enabled = !isSaving) {
+                        Text("Cancel")
+                    }
+                }
+            )
+        }
+
+        // Delete Dialog
+        borrowerToDelete?.let { borrower ->
+            var isDeleting by remember { mutableStateOf(false) }
+
+            AlertDialog(
+                onDismissRequest = { if (!isDeleting) borrowerToDelete = null },
+                title = { Text("Delete Client Account?") },
+                text = {
+                    Text("Are you sure you want to delete ${borrower.name}? This will remove all their loan history.")
+                },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            val id = borrower.id ?: return@Button
+                            isDeleting = true
+                            scope.launch {
+                                lenderRepo.deleteBorrower(id)
+                                    .onSuccess {
+                                        isDeleting = false
+                                        borrowerToDelete = null
+                                        Toast.makeText(context, "Client deleted.", Toast.LENGTH_SHORT).show()
+                                        loadData()
+                                    }
+                                    .onFailure {
+                                        isDeleting = false
+                                        Toast.makeText(context, "Delete failed: ${it.message}", Toast.LENGTH_SHORT).show()
+                                    }
+                            }
+                        },
+                        enabled = !isDeleting,
+                        colors = ButtonDefaults.buttonColors(containerColor = DangerRed)
+                    ) {
+                        Text(if (isDeleting) "Deleting..." else "Confirm Delete")
                     }
                 },
                 dismissButton = {
