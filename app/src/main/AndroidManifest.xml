@@ -57,10 +57,10 @@
             </intent-filter>
         </activity>
 
-        <!-- FileProvider for PDF ledger exports -->
+        <!-- FileProvider configured to match PdfExporter.kt -->
         <provider
             android:name="androidx.core.content.FileProvider"
-            android:authorities="${applicationId}.provider"
+            android:authorities="${applicationId}.fileprovider"
             android:exported="false"
             android:grantUriPermissions="true">
             <meta-data
