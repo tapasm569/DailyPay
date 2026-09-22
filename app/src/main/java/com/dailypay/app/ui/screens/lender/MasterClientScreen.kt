@@ -2,15 +2,12 @@ package com.dailypay.app.ui.screens.lender
 
 import android.widget.Toast
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
@@ -19,28 +16,18 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import coil.compose.AsyncImage
 import com.dailypay.app.R
 import com.dailypay.app.data.model.Borrower
 import com.dailypay.app.data.repository.LenderRepository
 import com.dailypay.app.ui.theme.*
 import com.dailypay.app.util.CommunicationUtils
 import kotlinx.coroutines.launch
-
-@Composable
-private fun ProfileRow(label: String, value: String) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Text(text = label, style = MaterialTheme.typography.bodyMedium, color = TextSecondaryLight)
-        Text(text = value, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface)
-    }
-}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -54,19 +41,18 @@ fun MasterClientScreen(
     val scope = rememberCoroutineScope()
     val lenderRepo = remember { LenderRepository() }
 
-    var borrowers by remember { mutableStateOf<List<Borrower>>(emptyList()) }
+    var borrowersList by remember { mutableStateOf<List<Borrower>>(emptyList()) }
+    var searchQuery by remember { mutableStateOf("") }
     var isLoading by remember { mutableStateOf(true) }
 
-    var selectedBorrowerForDetails by remember { mutableStateOf<Borrower?>(null) }
-    var borrowerToEdit by remember { mutableStateOf<Borrower?>(null) }
+    var selectedBorrowerForEdit by remember { mutableStateOf<Borrower?>(null) }
     var borrowerToDelete by remember { mutableStateOf<Borrower?>(null) }
-    var isProcessingAction by remember { mutableStateOf(false) }
 
-    fun loadBorrowers() {
+    fun loadData() {
         scope.launch {
             lenderRepo.getBorrowers(lenderId)
                 .onSuccess {
-                    borrowers = it
+                    borrowersList = it
                     isLoading = false
                 }
                 .onFailure {
@@ -77,29 +63,31 @@ fun MasterClientScreen(
     }
 
     LaunchedEffect(lenderId) {
-        loadBorrowers()
+        loadData()
+    }
+
+    val filteredBorrowers = borrowersList.filter { borrower ->
+        borrower.name.contains(searchQuery, ignoreCase = true) ||
+                borrower.mobileNumber.contains(searchQuery) ||
+                (borrower.villageCity ?: "").contains(searchQuery, ignoreCase = true)
     }
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Master Client List (${borrowers.size})") },
+                title = { Text("Master Client (${filteredBorrowers.size})") },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                     }
                 },
+                actions = {
+                    IconButton(onClick = onAddNewBorrowerClick) {
+                        Icon(Icons.Default.PersonAdd, contentDescription = "Add Borrower", tint = BrandPrimary)
+                    }
+                },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface)
             )
-        },
-        floatingActionButton = {
-            FloatingActionButton(
-                onClick = onAddNewBorrowerClick,
-                containerColor = BrandPrimary,
-                contentColor = MaterialTheme.colorScheme.onPrimary
-            ) {
-                Icon(Icons.Default.PersonAdd, contentDescription = "Add Borrower")
-            }
         },
         containerColor = MaterialTheme.colorScheme.background
     ) { paddingValues ->
@@ -112,108 +100,178 @@ fun MasterClientScreen(
             ) {
                 CircularProgressIndicator(color = BrandPrimary)
             }
-        } else if (borrowers.isEmpty()) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(paddingValues),
-                contentAlignment = Alignment.Center
-            ) {
-                Text("No registered borrowers found.", color = TextSecondaryLight)
-            }
         } else {
-            LazyColumn(
+            Column(
                 modifier = modifier
                     .fillMaxSize()
                     .padding(paddingValues)
                     .padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                items(borrowers, key = { it.id ?: it.mobileNumber }) { borrower ->
-                    Card(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .border(1.dp, BorderSubtleLight, RoundedCornerShape(16.dp))
-                            .clickable { selectedBorrowerForDetails = borrower },
-                        shape = RoundedCornerShape(16.dp),
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
-                    ) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(16.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Column(modifier = Modifier.weight(1f)) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Text(
-                                        text = borrower.name,
-                                        style = MaterialTheme.typography.titleMedium,
-                                        color = MaterialTheme.colorScheme.onSurface
-                                    )
-                                    Spacer(modifier = Modifier.width(6.dp))
-                                    Icon(
-                                        imageVector = Icons.Default.ChevronRight,
-                                        contentDescription = "Manage",
-                                        tint = TextSecondaryLight,
-                                        modifier = Modifier.size(18.dp)
-                                    )
-                                }
-
-                                Text(
-                                    text = "+91 ${borrower.mobileNumber}",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = TextSecondaryLight
-                                )
-
-                                val location = listOfNotNull(borrower.villageCity, borrower.dist)
-                                    .filter { it.isNotBlank() }
-                                    .joinToString(", ")
-                                if (location.isNotBlank()) {
-                                    Text(
-                                        text = location,
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = TextSecondaryLight
-                                    )
-                                }
+                OutlinedTextField(
+                    value = searchQuery,
+                    onValueChange = { searchQuery = it },
+                    placeholder = { Text("Search client by name, mobile, village...") },
+                    leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+                    trailingIcon = {
+                        if (searchQuery.isNotEmpty()) {
+                            IconButton(onClick = { searchQuery = "" }) {
+                                Icon(Icons.Default.Close, contentDescription = "Clear")
                             }
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                    singleLine = true
+                )
 
-                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                IconButton(
-                                    onClick = {
-                                        CommunicationUtils.openWhatsAppChat(
-                                            context = context,
-                                            rawMobileNumber = borrower.mobileNumber,
-                                            message = "Hello ${borrower.name}, contacting you from DailyPay."
-                                        )
-                                    },
-                                    modifier = Modifier
-                                        .size(38.dp)
-                                        .clip(CircleShape)
-                                        .border(1.dp, WhatsAppGreen.copy(alpha = 0.3f), CircleShape)
-                                ) {
-                                    Icon(
-                                        painter = painterResource(id = R.drawable.ic_whatsapp),
-                                        contentDescription = "WhatsApp",
-                                        tint = WhatsAppGreen,
-                                        modifier = Modifier.size(20.dp)
-                                    )
-                                }
+                if (filteredBorrowers.isEmpty()) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .weight(1f),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = if (searchQuery.isBlank()) "No clients found." else "No clients match your search.",
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = TextSecondaryLight
+                        )
+                    }
+                } else {
+                    LazyColumn(
+                        modifier = Modifier.weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        itemsIndexed(filteredBorrowers, key = { index, item -> item.id ?: "borrower_$index" }) { _, borrower ->
+                            Card(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .border(1.dp, BorderSubtleLight, RoundedCornerShape(16.dp)),
+                                shape = RoundedCornerShape(16.dp),
+                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                            ) {
+                                Column(modifier = Modifier.padding(16.dp)) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        // Profile picture thumbnail from borrowers table
+                                        if (!borrower.profilePicUrl.isNullOrBlank()) {
+                                            AsyncImage(
+                                                model = borrower.profilePicUrl,
+                                                contentDescription = borrower.name,
+                                                modifier = Modifier
+                                                    .size(54.dp)
+                                                    .clip(CircleShape)
+                                                    .border(1.5.dp, BrandPrimary, CircleShape),
+                                                contentScale = ContentScale.Crop
+                                            )
+                                        } else {
+                                            Surface(
+                                                modifier = Modifier.size(54.dp),
+                                                shape = CircleShape,
+                                                color = BrandPrimary.copy(alpha = 0.12f)
+                                            ) {
+                                                Box(contentAlignment = Alignment.Center) {
+                                                    Icon(
+                                                        imageVector = Icons.Default.Person,
+                                                        contentDescription = null,
+                                                        tint = BrandPrimary,
+                                                        modifier = Modifier.size(30.dp)
+                                                    )
+                                                }
+                                            }
+                                        }
 
-                                IconButton(
-                                    onClick = { CommunicationUtils.openPhoneDialer(context, borrower.mobileNumber) },
-                                    modifier = Modifier
-                                        .size(38.dp)
-                                        .clip(CircleShape)
-                                        .border(1.dp, CallBlue.copy(alpha = 0.3f), CircleShape)
-                                ) {
-                                    Icon(
-                                        painter = painterResource(id = R.drawable.ic_call),
-                                        contentDescription = "Call",
-                                        tint = CallBlue,
-                                        modifier = Modifier.size(20.dp)
-                                    )
+                                        Spacer(modifier = Modifier.width(14.dp))
+
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Text(
+                                                text = borrower.name,
+                                                style = MaterialTheme.typography.titleMedium
+                                            )
+                                            Text(
+                                                text = "+91 ${borrower.mobileNumber}",
+                                                style = MaterialTheme.typography.bodyMedium,
+                                                color = BrandPrimary
+                                            )
+                                            val address = listOfNotNull(borrower.villageCity, borrower.dist)
+                                                .filter { it.isNotBlank() }
+                                                .joinToString(", ")
+                                            if (address.isNotBlank()) {
+                                                Text(
+                                                    text = "📍 $address",
+                                                    style = MaterialTheme.typography.bodySmall,
+                                                    color = TextSecondaryLight
+                                                )
+                                            }
+                                        }
+
+                                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                            IconButton(
+                                                onClick = {
+                                                    CommunicationUtils.openWhatsAppChat(
+                                                        context = context,
+                                                        rawMobileNumber = borrower.mobileNumber,
+                                                        message = "Hello ${borrower.name},"
+                                                    )
+                                                },
+                                                modifier = Modifier
+                                                    .size(36.dp)
+                                                    .clip(CircleShape)
+                                                    .border(1.dp, WhatsAppGreen.copy(alpha = 0.3f), CircleShape)
+                                            ) {
+                                                Icon(
+                                                    painter = painterResource(id = R.drawable.ic_whatsapp),
+                                                    contentDescription = "WhatsApp",
+                                                    tint = WhatsAppGreen,
+                                                    modifier = Modifier.size(18.dp)
+                                                )
+                                            }
+
+                                            IconButton(
+                                                onClick = { CommunicationUtils.openPhoneDialer(context, borrower.mobileNumber) },
+                                                modifier = Modifier
+                                                    .size(36.dp)
+                                                    .clip(CircleShape)
+                                                    .border(1.dp, CallBlue.copy(alpha = 0.3f), CircleShape)
+                                            ) {
+                                                Icon(
+                                                    painter = painterResource(id = R.drawable.ic_call),
+                                                    contentDescription = "Call",
+                                                    tint = CallBlue,
+                                                    modifier = Modifier.size(18.dp)
+                                                )
+                                            }
+                                        }
+                                    }
+
+                                    Spacer(modifier = Modifier.height(10.dp))
+                                    HorizontalDivider(color = BorderSubtleLight)
+                                    Spacer(modifier = Modifier.height(8.dp))
+
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        OutlinedButton(
+                                            onClick = { selectedBorrowerForEdit = borrower },
+                                            modifier = Modifier.weight(1f),
+                                            shape = RoundedCornerShape(8.dp)
+                                        ) {
+                                            Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(16.dp))
+                                            Spacer(modifier = Modifier.width(4.dp))
+                                            Text("Edit Profile")
+                                        }
+
+                                        IconButton(
+                                            onClick = { borrowerToDelete = borrower }
+                                        ) {
+                                            Icon(Icons.Default.Delete, contentDescription = "Delete", tint = DangerRed)
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -222,302 +280,103 @@ fun MasterClientScreen(
             }
         }
 
-        // 1. View Profile Modal
-        selectedBorrowerForDetails?.let { borrower ->
-            AlertDialog(
-                onDismissRequest = { selectedBorrowerForDetails = null },
-                confirmButton = {
-                    TextButton(onClick = { selectedBorrowerForDetails = null }) {
-                        Text("Close")
-                    }
-                },
-                title = {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text("Borrower Profile", style = MaterialTheme.typography.titleLarge)
-                        IconButton(onClick = { selectedBorrowerForDetails = null }) {
-                            Icon(Icons.Default.Close, contentDescription = "Close")
-                        }
-                    }
-                },
-                text = {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .verticalScroll(rememberScrollState()),
-                        verticalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        Surface(
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(12.dp),
-                            color = BrandPrimary.copy(alpha = 0.08f)
-                        ) {
-                            Column(modifier = Modifier.padding(14.dp)) {
-                                Text(
-                                    text = borrower.name,
-                                    style = MaterialTheme.typography.titleLarge,
-                                    color = BrandPrimary
-                                )
-                                Text(
-                                    text = "Mobile: +91 ${borrower.mobileNumber}",
-                                    style = MaterialTheme.typography.bodyMedium
-                                )
-                            }
-                        }
-
-                        Card(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .border(1.dp, BorderSubtleLight, RoundedCornerShape(12.dp)),
-                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
-                        ) {
-                            Column(
-                                modifier = Modifier.padding(12.dp),
-                                verticalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                ProfileRow("Village / City", borrower.villageCity ?: "-")
-                                HorizontalDivider(color = BorderSubtleLight)
-                                ProfileRow("Post Office", borrower.postOffice ?: "-")
-                                HorizontalDivider(color = BorderSubtleLight)
-                                ProfileRow("Police Station", borrower.policeStation ?: "-")
-                                HorizontalDivider(color = BorderSubtleLight)
-                                ProfileRow("District", borrower.dist ?: "-")
-                                HorizontalDivider(color = BorderSubtleLight)
-                                ProfileRow("Password", borrower.passwordHash)
-                            }
-                        }
-
-                        Text("KYC Documents Attached:", style = MaterialTheme.typography.labelMedium)
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            SuggestionChip(
-                                onClick = {},
-                                label = { Text(if (!borrower.aadhaarCardUrl.isNullOrBlank()) "Aadhaar ✓" else "No Aadhaar") }
-                            )
-                            SuggestionChip(
-                                onClick = {},
-                                label = { Text(if (!borrower.panCardUrl.isNullOrBlank()) "PAN ✓" else "No PAN") }
-                            )
-                        }
-
-                        Spacer(modifier = Modifier.height(6.dp))
-
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(10.dp)
-                        ) {
-                            Button(
-                                onClick = {
-                                    borrowerToEdit = borrower
-                                    selectedBorrowerForDetails = null
-                                },
-                                modifier = Modifier.weight(1f),
-                                shape = RoundedCornerShape(12.dp),
-                                colors = ButtonDefaults.buttonColors(containerColor = BrandPrimary)
-                            ) {
-                                Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(18.dp))
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text("Update")
-                            }
-
-                            Button(
-                                onClick = {
-                                    borrowerToDelete = borrower
-                                    selectedBorrowerForDetails = null
-                                },
-                                modifier = Modifier.weight(1f),
-                                shape = RoundedCornerShape(12.dp),
-                                colors = ButtonDefaults.buttonColors(containerColor = DangerRed)
-                            ) {
-                                Icon(Icons.Default.Delete, contentDescription = null, modifier = Modifier.size(18.dp))
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text("Delete")
-                            }
-                        }
-                    }
-                }
-            )
-        }
-
-        // 2. Update Profile Modal
-        borrowerToEdit?.let { borrower ->
+        // Edit Dialog
+        selectedBorrowerForEdit?.let { borrower ->
             var editName by remember { mutableStateOf(borrower.name) }
             var editMobile by remember { mutableStateOf(borrower.mobileNumber) }
-            var editVillage by remember { mutableStateOf(borrower.villageCity ?: "") }
+            var editVillageCity by remember { mutableStateOf(borrower.villageCity ?: "") }
             var editPostOffice by remember { mutableStateOf(borrower.postOffice ?: "") }
             var editPoliceStation by remember { mutableStateOf(borrower.policeStation ?: "") }
             var editDist by remember { mutableStateOf(borrower.dist ?: "") }
-            var editPassword by remember { mutableStateOf(borrower.passwordHash) }
+            var isSaving by remember { mutableStateOf(false) }
 
             AlertDialog(
-                onDismissRequest = { if (!isProcessingAction) borrowerToEdit = null },
-                title = { Text("Update Borrower Profile") },
+                onDismissRequest = { if (!isSaving) selectedBorrowerForEdit = null },
+                title = { Text("Edit Client Details") },
                 text = {
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .verticalScroll(rememberScrollState()),
-                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                            .heightIn(max = 400.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         OutlinedTextField(
                             value = editName,
                             onValueChange = { editName = it },
                             label = { Text("Full Name *") },
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(12.dp)
+                            modifier = Modifier.fillMaxWidth()
                         )
-
                         OutlinedTextField(
                             value = editMobile,
-                            onValueChange = { if (it.length <= 10) editMobile = it.filter { ch -> ch.isDigit() } },
-                            label = { Text("Mobile Number *") },
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(12.dp)
+                            onValueChange = { editMobile = it.filter { ch -> ch.isDigit() }.take(10) },
+                            label = { Text("Mobile Number (10 Digits) *") },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
+                            modifier = Modifier.fillMaxWidth()
                         )
-
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            OutlinedTextField(
-                                value = editVillage,
-                                onValueChange = { editVillage = it },
-                                label = { Text("Village/City") },
-                                modifier = Modifier.weight(1f),
-                                shape = RoundedCornerShape(12.dp)
-                            )
-                            OutlinedTextField(
-                                value = editPostOffice,
-                                onValueChange = { editPostOffice = it },
-                                label = { Text("Post Office") },
-                                modifier = Modifier.weight(1f),
-                                shape = RoundedCornerShape(12.dp)
-                            )
-                        }
-
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            OutlinedTextField(
-                                value = editPoliceStation,
-                                onValueChange = { editPoliceStation = it },
-                                label = { Text("Police Station") },
-                                modifier = Modifier.weight(1f),
-                                shape = RoundedCornerShape(12.dp)
-                            )
-                            OutlinedTextField(
-                                value = editDist,
-                                onValueChange = { editDist = it },
-                                label = { Text("District") },
-                                modifier = Modifier.weight(1f),
-                                shape = RoundedCornerShape(12.dp)
-                            )
-                        }
-
                         OutlinedTextField(
-                            value = editPassword,
-                            onValueChange = { editPassword = it },
-                            label = { Text("Password *") },
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(12.dp)
+                            value = editVillageCity,
+                            onValueChange = { editVillageCity = it },
+                            label = { Text("Village / City") },
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        OutlinedTextField(
+                            value = editPostOffice,
+                            onValueChange = { editPostOffice = it },
+                            label = { Text("Post Office") },
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        OutlinedTextField(
+                            value = editPoliceStation,
+                            onValueChange = { editPoliceStation = it },
+                            label = { Text("Police Station") },
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        OutlinedTextField(
+                            value = editDist,
+                            onValueChange = { editDist = it },
+                            label = { Text("District") },
+                            modifier = Modifier.fillMaxWidth()
                         )
                     }
                 },
                 confirmButton = {
                     Button(
                         onClick = {
-                            if (editName.isBlank() || editMobile.length != 10 || editPassword.isBlank()) {
-                                Toast.makeText(context, "Please fill required fields properly.", Toast.LENGTH_SHORT).show()
-                            } else {
-                                isProcessingAction = true
-                                scope.launch {
-                                    val updated = borrower.copy(
-                                        name = editName.trim(),
-                                        mobileNumber = editMobile.trim(),
-                                        villageCity = editVillage.trim(),
-                                        postOffice = editPostOffice.trim(),
-                                        policeStation = editPoliceStation.trim(),
-                                        dist = editDist.trim(),
-                                        passwordHash = editPassword.trim()
-                                    )
-
-                                    lenderRepo.updateBorrower(updated)
-                                        .onSuccess {
-                                            isProcessingAction = false
-                                            borrowerToEdit = null
-                                            Toast.makeText(context, "Borrower profile updated successfully!", Toast.LENGTH_SHORT).show()
-                                            loadBorrowers()
-                                        }
-                                        .onFailure {
-                                            isProcessingAction = false
-                                            Toast.makeText(context, "Update failed: ${it.message}", Toast.LENGTH_SHORT).show()
-                                        }
-                                }
+                            if (editName.isBlank() || editMobile.length != 10) {
+                                Toast.makeText(context, "Enter a valid name and 10-digit mobile number.", Toast.LENGTH_SHORT).show()
+                                return@Button
+                            }
+                            isSaving = true
+                            scope.launch {
+                                val updated = borrower.copy(
+                                    name = editName.trim(),
+                                    mobileNumber = editMobile.trim(),
+                                    villageCity = editVillageCity.trim().ifBlank { null },
+                                    postOffice = editPostOffice.trim().ifBlank { null },
+                                    policeStation = editPoliceStation.trim().ifBlank { null },
+                                    dist = editDist.trim().ifBlank { null }
+                                )
+                                lenderRepo.updateBorrower(updated)
+                                    .onSuccess {
+                                        isSaving = false
+                                        selectedBorrowerForEdit = null
+                                        Toast.makeText(context, "Client updated successfully!", Toast.LENGTH_SHORT).show()
+                                        loadData()
+                                    }
+                                    .onFailure {
+                                        isSaving = false
+                                        Toast.makeText(context, "Update failed: ${it.message}", Toast.LENGTH_SHORT).show()
+                                    }
                             }
                         },
-                        enabled = !isProcessingAction,
+                        enabled = !isSaving,
                         colors = ButtonDefaults.buttonColors(containerColor = BrandPrimary)
                     ) {
-                        Text(if (isProcessingAction) "Saving..." else "Save Changes")
+                        Text(if (isSaving) "Saving..." else "Save Changes")
                     }
                 },
                 dismissButton = {
-                    TextButton(
-                        onClick = { borrowerToEdit = null },
-                        enabled = !isProcessingAction
-                    ) {
-                        Text("Cancel")
-                    }
-                }
-            )
-        }
-
-        // 3. Delete Confirmation Modal
-        borrowerToDelete?.let { borrower ->
-            AlertDialog(
-                onDismissRequest = { if (!isProcessingAction) borrowerToDelete = null },
-                title = { Text("Delete Borrower?") },
-                text = {
-                    Text(
-                        text = "Are you sure you want to permanently delete \"${borrower.name}\" (+91 ${borrower.mobileNumber})? Note: Borrowers with active loans or payment history cannot be deleted until those records are cleared.",
-                        style = MaterialTheme.typography.bodyMedium
-                    )
-                },
-                confirmButton = {
-                    Button(
-                        onClick = {
-                            val bId = borrower.id
-                            if (!bId.isNullOrBlank()) {
-                                isProcessingAction = true
-                                scope.launch {
-                                    lenderRepo.deleteBorrower(bId)
-                                        .onSuccess {
-                                            isProcessingAction = false
-                                            borrowerToDelete = null
-                                            Toast.makeText(context, "Borrower deleted successfully.", Toast.LENGTH_SHORT).show()
-                                            loadBorrowers()
-                                        }
-                                        .onFailure { error ->
-                                            isProcessingAction = false
-                                            val errorMsg = if (error.message?.contains("violates foreign key constraint", ignoreCase = true) == true) {
-                                                "Cannot delete borrower with existing loans or repayments. Remove their loans first."
-                                            } else {
-                                                error.message ?: "Deletion failed"
-                                            }
-                                            Toast.makeText(context, errorMsg, Toast.LENGTH_LONG).show()
-                                        }
-                                }
-                            }
-                        },
-                        enabled = !isProcessingAction,
-                        colors = ButtonDefaults.buttonColors(containerColor = DangerRed)
-                    ) {
-                        Text(if (isProcessingAction) "Deleting..." else "Confirm Delete")
-                    }
-                },
-                dismissButton = {
-                    TextButton(
-                        onClick = { borrowerToDelete = null },
-                        enabled = !isProcessingAction
-                    ) {
+                    TextButton(onClick = { borrowerToDelete = null }, enabled = !isDeleting) {
                         Text("Cancel")
                     }
                 }
