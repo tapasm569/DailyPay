@@ -18,7 +18,15 @@ class LenderRepository {
     private val db = SupabaseClientProvider.db
     private val storage = SupabaseClientProvider.storage
 
-    // 1. Borrower Management
+    // 1. Lender Profile
+    suspend fun getLenderProfile(lenderId: String): Result<Lender> = runCatching {
+        db.from("lenders")
+            .select {
+                filter { eq("id", lenderId) }
+            }.decodeSingle<Lender>()
+    }
+
+    // 2. Borrower Management
     suspend fun addBorrower(
         borrower: Borrower,
         aadhaarBytes: ByteArray?,
@@ -75,7 +83,10 @@ class LenderRepository {
                 borrower.postOffice?.let { put("post_office", it) }
                 borrower.policeStation?.let { put("police_station", it) }
                 borrower.dist?.let { put("dist", it) }
-                put("password_hash", borrower.passwordHash)
+                borrower.profilePicUrl?.let { put("profile_pic_url", it) }
+                if (borrower.passwordHash.isNotBlank()) {
+                    put("password_hash", borrower.passwordHash)
+                }
             }
         ) {
             filter { eq("id", id) }
@@ -86,7 +97,7 @@ class LenderRepository {
         db.from("borrowers").delete { filter { eq("id", borrowerId) } }
     }
 
-    // 2. Loan Management & Creation
+    // 3. Loan Management & Creation
     suspend fun giveLoanManually(loan: Loan): Result<Unit> = runCatching {
         val tenure = if (loan.tenureDays > 0) loan.tenureDays else 30
         val totalInterest = loan.principalAmount * (loan.monthlyInterestRate / 100.0) * (tenure / 30.0)
@@ -190,7 +201,7 @@ class LenderRepository {
         }
     }
 
-    // 3. Payments, Collections & Verification
+    // 4. Payments, Collections & Verification
     suspend fun getDailyDues(lenderId: String): Result<List<DailyDueItem>> = runCatching {
         db.from("v_lender_daily_dues")
             .select { filter { eq("lender_id", lenderId) } }
@@ -253,7 +264,7 @@ class LenderRepository {
             }.decodeList<Repayment>()
     }
 
-    // 4. Portfolio Ledger Summary
+    // 5. Portfolio Ledger Summary
     suspend fun getLedgerSummary(lenderId: String): Result<LenderLedgerSummary> = runCatching {
         val dues = getDailyDues(lenderId).getOrThrow()
         LenderLedgerSummary(
