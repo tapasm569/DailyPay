@@ -1,13 +1,19 @@
 package com.dailypay.app.ui.screens.lender
 
 import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
@@ -16,11 +22,15 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import coil.compose.AsyncImage
 import com.dailypay.app.R
 import com.dailypay.app.data.model.Borrower
@@ -45,14 +55,25 @@ fun MasterClientScreen(
     var searchQuery by remember { mutableStateOf("") }
     var isLoading by remember { mutableStateOf(true) }
 
+    // Dialog States
+    var selectedBorrowerForDetail by remember { mutableStateOf<Borrower?>(null) }
     var selectedBorrowerForEdit by remember { mutableStateOf<Borrower?>(null) }
     var borrowerToDelete by remember { mutableStateOf<Borrower?>(null) }
+    var previewDocUrl by remember { mutableStateOf<Pair<String, String>?>(null) } // Pair(Title, Url)
+    var isUploadingDoc by remember { mutableStateOf(false) }
+
+    // Pending upload target: "avatar", "aadhaar", or "pan"
+    var pendingUploadType by remember { mutableStateOf<String?>(null) }
 
     fun loadData() {
         scope.launch {
             lenderRepo.getBorrowers(lenderId)
                 .onSuccess {
                     borrowersList = it
+                    // Also refresh currently open details dialog if active
+                    selectedBorrowerForDetail?.let { current ->
+                        selectedBorrowerForDetail = it.find { b -> b.id == current.id }
+                    }
                     isLoading = false
                 }
                 .onFailure {
@@ -64,6 +85,40 @@ fun MasterClientScreen(
 
     LaunchedEffect(lenderId) {
         loadData()
+    }
+
+    val docImagePickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri ->
+        uri?.let { selectedUri ->
+            val borrower = selectedBorrowerForDetail ?: return@let
+            val docType = pendingUploadType ?: return@let
+            val borrowerId = borrower.id ?: return@let
+
+            scope.launch {
+                try {
+                    isUploadingDoc = true
+                    val bytes = context.contentResolver.openInputStream(selectedUri)?.use { it.readBytes() }
+                    if (bytes != null && bytes.isNotEmpty()) {
+                        lenderRepo.updateBorrowerKycDoc(borrowerId, borrower.mobileNumber, docType, bytes)
+                            .onSuccess { newUrl ->
+                                isUploadingDoc = false
+                                Toast.makeText(context, "${docType.replaceFirstChar { it.uppercase() }} updated successfully!", Toast.LENGTH_SHORT).show()
+                                loadData()
+                            }
+                            .onFailure { err ->
+                                isUploadingDoc = false
+                                Toast.makeText(context, "Upload failed: ${err.message}", Toast.LENGTH_SHORT).show()
+                            }
+                    } else {
+                        isUploadingDoc = false
+                    }
+                } catch (e: Exception) {
+                    isUploadingDoc = false
+                    Toast.makeText(context, "Error: ${e.message}", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
     }
 
     val filteredBorrowers = borrowersList.filter { borrower ->
@@ -133,7 +188,7 @@ fun MasterClientScreen(
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
-                            text = if (searchQuery.isBlank()) "No clients found." else "No clients match your search.",
+                            text = if (searchQuery.isBlank()) "No clients registered yet." else "No clients match your search.",
                             style = MaterialTheme.typography.bodyLarge,
                             color = TextSecondaryLight
                         )
@@ -144,132 +199,108 @@ fun MasterClientScreen(
                         verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
                         itemsIndexed(filteredBorrowers, key = { index, item -> item.id ?: "borrower_$index" }) { _, borrower ->
+                            // Clean Card View: Clicking opens the full detail profile dialog
                             Card(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .border(1.dp, BorderSubtleLight, RoundedCornerShape(16.dp)),
+                                    .border(1.dp, BorderSubtleLight, RoundedCornerShape(16.dp))
+                                    .clickable { selectedBorrowerForDetail = borrower },
                                 shape = RoundedCornerShape(16.dp),
                                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
                             ) {
-                                Column(modifier = Modifier.padding(16.dp)) {
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        // Profile picture thumbnail from borrowers table
-                                        if (!borrower.profilePicUrl.isNullOrBlank()) {
-                                            AsyncImage(
-                                                model = borrower.profilePicUrl,
-                                                contentDescription = borrower.name,
-                                                modifier = Modifier
-                                                    .size(54.dp)
-                                                    .clip(CircleShape)
-                                                    .border(1.5.dp, BrandPrimary, CircleShape),
-                                                contentScale = ContentScale.Crop
-                                            )
-                                        } else {
-                                            Surface(
-                                                modifier = Modifier.size(54.dp),
-                                                shape = CircleShape,
-                                                color = BrandPrimary.copy(alpha = 0.12f)
-                                            ) {
-                                                Box(contentAlignment = Alignment.Center) {
-                                                    Icon(
-                                                        imageVector = Icons.Default.Person,
-                                                        contentDescription = null,
-                                                        tint = BrandPrimary,
-                                                        modifier = Modifier.size(30.dp)
-                                                    )
-                                                }
-                                            }
-                                        }
-
-                                        Spacer(modifier = Modifier.width(14.dp))
-
-                                        Column(modifier = Modifier.weight(1f)) {
-                                            Text(
-                                                text = borrower.name,
-                                                style = MaterialTheme.typography.titleMedium
-                                            )
-                                            Text(
-                                                text = "+91 ${borrower.mobileNumber}",
-                                                style = MaterialTheme.typography.bodyMedium,
-                                                color = BrandPrimary
-                                            )
-                                            val address = listOfNotNull(borrower.villageCity, borrower.dist)
-                                                .filter { it.isNotBlank() }
-                                                .joinToString(", ")
-                                            if (address.isNotBlank()) {
-                                                Text(
-                                                    text = "📍 $address",
-                                                    style = MaterialTheme.typography.bodySmall,
-                                                    color = TextSecondaryLight
-                                                )
-                                            }
-                                        }
-
-                                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                            IconButton(
-                                                onClick = {
-                                                    CommunicationUtils.openWhatsAppChat(
-                                                        context = context,
-                                                        rawMobileNumber = borrower.mobileNumber,
-                                                        message = "Hello ${borrower.name},"
-                                                    )
-                                                },
-                                                modifier = Modifier
-                                                    .size(36.dp)
-                                                    .clip(CircleShape)
-                                                    .border(1.dp, WhatsAppGreen.copy(alpha = 0.3f), CircleShape)
-                                            ) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(14.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    if (!borrower.profilePicUrl.isNullOrBlank()) {
+                                        AsyncImage(
+                                            model = borrower.profilePicUrl,
+                                            contentDescription = borrower.name,
+                                            modifier = Modifier
+                                                .size(54.dp)
+                                                .clip(CircleShape)
+                                                .border(1.5.dp, BrandPrimary, CircleShape),
+                                            contentScale = ContentScale.Crop
+                                        )
+                                    } else {
+                                        Surface(
+                                            modifier = Modifier.size(54.dp),
+                                            shape = CircleShape,
+                                            color = BrandPrimary.copy(alpha = 0.12f)
+                                        ) {
+                                            Box(contentAlignment = Alignment.Center) {
                                                 Icon(
-                                                    painter = painterResource(id = R.drawable.ic_whatsapp),
-                                                    contentDescription = "WhatsApp",
-                                                    tint = WhatsAppGreen,
-                                                    modifier = Modifier.size(18.dp)
-                                                )
-                                            }
-
-                                            IconButton(
-                                                onClick = { CommunicationUtils.openPhoneDialer(context, borrower.mobileNumber) },
-                                                modifier = Modifier
-                                                    .size(36.dp)
-                                                    .clip(CircleShape)
-                                                    .border(1.dp, CallBlue.copy(alpha = 0.3f), CircleShape)
-                                            ) {
-                                                Icon(
-                                                    painter = painterResource(id = R.drawable.ic_call),
-                                                    contentDescription = "Call",
-                                                    tint = CallBlue,
-                                                    modifier = Modifier.size(18.dp)
+                                                    imageVector = Icons.Default.Person,
+                                                    contentDescription = null,
+                                                    tint = BrandPrimary,
+                                                    modifier = Modifier.size(30.dp)
                                                 )
                                             }
                                         }
                                     }
 
-                                    Spacer(modifier = Modifier.height(10.dp))
-                                    HorizontalDivider(color = BorderSubtleLight)
-                                    Spacer(modifier = Modifier.height(8.dp))
+                                    Spacer(modifier = Modifier.width(14.dp))
 
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        OutlinedButton(
-                                            onClick = { selectedBorrowerForEdit = borrower },
-                                            modifier = Modifier.weight(1f),
-                                            shape = RoundedCornerShape(8.dp)
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            text = borrower.name,
+                                            style = MaterialTheme.typography.titleMedium,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                        Text(
+                                            text = "+91 ${borrower.mobileNumber}",
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            color = BrandPrimary
+                                        )
+                                        val address = listOfNotNull(borrower.villageCity, borrower.dist)
+                                            .filter { it.isNotBlank() }
+                                            .joinToString(", ")
+                                        if (address.isNotBlank()) {
+                                            Text(
+                                                text = "📍 $address",
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = TextSecondaryLight
+                                            )
+                                        }
+                                    }
+
+                                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                        IconButton(
+                                            onClick = {
+                                                CommunicationUtils.openWhatsAppChat(
+                                                    context = context,
+                                                    rawMobileNumber = borrower.mobileNumber,
+                                                    message = "Hello ${borrower.name},"
+                                                )
+                                            },
+                                            modifier = Modifier
+                                                .size(34.dp)
+                                                .clip(CircleShape)
+                                                .border(1.dp, WhatsAppGreen.copy(alpha = 0.3f), CircleShape)
                                         ) {
-                                            Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(16.dp))
-                                            Spacer(modifier = Modifier.width(4.dp))
-                                            Text("Edit Profile")
+                                            Icon(
+                                                painter = painterResource(id = R.drawable.ic_whatsapp),
+                                                contentDescription = "WhatsApp",
+                                                tint = WhatsAppGreen,
+                                                modifier = Modifier.size(16.dp)
+                                            )
                                         }
 
                                         IconButton(
-                                            onClick = { borrowerToDelete = borrower }
+                                            onClick = { CommunicationUtils.openPhoneDialer(context, borrower.mobileNumber) },
+                                            modifier = Modifier
+                                                .size(34.dp)
+                                                .clip(CircleShape)
+                                                .border(1.dp, CallBlue.copy(alpha = 0.3f), CircleShape)
                                         ) {
-                                            Icon(Icons.Default.Delete, contentDescription = "Delete", tint = DangerRed)
+                                            Icon(
+                                                painter = painterResource(id = R.drawable.ic_call),
+                                                contentDescription = "Call",
+                                                tint = CallBlue,
+                                                modifier = Modifier.size(16.dp)
+                                            )
                                         }
                                     }
                                 }
@@ -280,7 +311,333 @@ fun MasterClientScreen(
             }
         }
 
-          // Edit Dialog
+        // ================= 1. STYLISH BORROWER PROFILE DETAILS DIALOG =================
+        selectedBorrowerForDetail?.let { borrower ->
+            Dialog(
+                onDismissRequest = { selectedBorrowerForDetail = null },
+                properties = DialogProperties(usePlatformDefaultWidth = false)
+            ) {
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth(0.94f)
+                        .fillMaxHeight(0.88f)
+                        .border(1.dp, BorderSubtleLight, RoundedCornerShape(20.dp)),
+                    shape = RoundedCornerShape(20.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(20.dp)
+                    ) {
+                        // Header with Close
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text("Customer Profile Details", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                            IconButton(onClick = { selectedBorrowerForDetail = null }) {
+                                Icon(Icons.Default.Close, contentDescription = "Close")
+                            }
+                        }
+
+                        HorizontalDivider(color = BorderSubtleLight)
+
+                        Column(
+                            modifier = Modifier
+                                .weight(1f)
+                                .verticalScroll(rememberScrollState()),
+                            verticalArrangement = Arrangement.spacedBy(14.dp)
+                        ) {
+                            Spacer(modifier = Modifier.height(4.dp))
+
+                            // Profile Avatar & Update Button
+                            Box(modifier = Modifier.align(Alignment.CenterHorizontally)) {
+                                if (!borrower.profilePicUrl.isNullOrBlank()) {
+                                    AsyncImage(
+                                        model = borrower.profilePicUrl,
+                                        contentDescription = "Profile Picture",
+                                        modifier = Modifier
+                                            .size(88.dp)
+                                            .clip(CircleShape)
+                                            .border(2.5.dp, BrandPrimary, CircleShape),
+                                        contentScale = ContentScale.Crop
+                                    )
+                                } else {
+                                    Surface(
+                                        modifier = Modifier.size(88.dp),
+                                        shape = CircleShape,
+                                        color = BrandPrimary.copy(alpha = 0.12f)
+                                    ) {
+                                        Box(contentAlignment = Alignment.Center) {
+                                            Icon(
+                                                imageVector = Icons.Default.Person,
+                                                contentDescription = null,
+                                                tint = BrandPrimary,
+                                                modifier = Modifier.size(46.dp)
+                                            )
+                                        }
+                                    }
+                                }
+
+                                Surface(
+                                    modifier = Modifier
+                                        .size(30.dp)
+                                        .align(Alignment.BottomEnd)
+                                        .clip(CircleShape)
+                                        .clickable {
+                                            if (!isUploadingDoc) {
+                                                pendingUploadType = "avatar"
+                                                docImagePickerLauncher.launch("image/*")
+                                            }
+                                        },
+                                    color = BrandPrimary,
+                                    shape = CircleShape
+                                ) {
+                                    Box(contentAlignment = Alignment.Center) {
+                                        if (isUploadingDoc && pendingUploadType == "avatar") {
+                                            CircularProgressIndicator(color = Color.White, strokeWidth = 2.dp, modifier = Modifier.size(16.dp))
+                                        } else {
+                                            Icon(Icons.Default.CameraAlt, contentDescription = "Change Photo", tint = Color.White, modifier = Modifier.size(16.dp))
+                                        }
+                                    }
+                                }
+                            }
+
+                            // Details Table
+                            Card(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .border(1.dp, BorderSubtleLight, RoundedCornerShape(12.dp)),
+                                shape = RoundedCornerShape(12.dp),
+                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.background.copy(alpha = 0.5f))
+                            ) {
+                                Column(modifier = Modifier.padding(12.dp)) {
+                                    DetailTableRow("Full Name", borrower.name)
+                                    DetailTableRow("Mobile Number", "+91 ${borrower.mobileNumber}")
+                                    DetailTableRow("Village / City", borrower.villageCity ?: "Not Specified")
+                                    DetailTableRow("Post Office", borrower.postOffice ?: "Not Specified")
+                                    DetailTableRow("Police Station", borrower.policeStation ?: "Not Specified")
+                                    DetailTableRow("District", borrower.dist ?: "Not Specified")
+                                }
+                            }
+
+                            // KYC Documents Section
+                            Text("KYC Documents", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+
+                            // Aadhaar Card Row
+                            Card(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .border(1.dp, BorderSubtleLight, RoundedCornerShape(12.dp)),
+                                shape = RoundedCornerShape(12.dp),
+                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                            ) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(12.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                                        Icon(Icons.Default.Badge, contentDescription = null, tint = BrandPrimary, modifier = Modifier.size(26.dp))
+                                        Spacer(modifier = Modifier.width(10.dp))
+                                        Column {
+                                            Text("Aadhaar Card", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+                                            Text(
+                                                text = if (borrower.aadhaarCardUrl.isNullOrBlank()) "Not Uploaded" else "Document Uploaded",
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = if (borrower.aadhaarCardUrl.isNullOrBlank()) AlertOrange else MoneyGreen
+                                            )
+                                        }
+                                    }
+
+                                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                        if (!borrower.aadhaarCardUrl.isNullOrBlank()) {
+                                            FilledTonalButton(
+                                                onClick = { previewDocUrl = Pair("${borrower.name}'s Aadhaar Card", borrower.aadhaarCardUrl) },
+                                                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                                                shape = RoundedCornerShape(8.dp)
+                                            ) {
+                                                Icon(Icons.Default.Visibility, contentDescription = null, modifier = Modifier.size(16.dp))
+                                                Spacer(modifier = Modifier.width(4.dp))
+                                                Text("View")
+                                            }
+                                        }
+
+                                        OutlinedButton(
+                                            onClick = {
+                                                if (!isUploadingDoc) {
+                                                    pendingUploadType = "aadhaar"
+                                                    docImagePickerLauncher.launch("image/*")
+                                                }
+                                            },
+                                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                                            shape = RoundedCornerShape(8.dp)
+                                        ) {
+                                            Icon(Icons.Default.CloudUpload, contentDescription = null, modifier = Modifier.size(16.dp))
+                                            Spacer(modifier = Modifier.width(4.dp))
+                                            Text(if (borrower.aadhaarCardUrl.isNullOrBlank()) "Upload" else "Update")
+                                        }
+                                    }
+                                }
+                            }
+
+                            // PAN Card Row
+                            Card(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .border(1.dp, BorderSubtleLight, RoundedCornerShape(12.dp)),
+                                shape = RoundedCornerShape(12.dp),
+                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                            ) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(12.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                                        Icon(Icons.Default.CreditCard, contentDescription = null, tint = CallBlue, modifier = Modifier.size(26.dp))
+                                        Spacer(modifier = Modifier.width(10.dp))
+                                        Column {
+                                            Text("PAN Card", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+                                            Text(
+                                                text = if (borrower.panCardUrl.isNullOrBlank()) "Not Uploaded" else "Document Uploaded",
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = if (borrower.panCardUrl.isNullOrBlank()) AlertOrange else MoneyGreen
+                                            )
+                                        }
+                                    }
+
+                                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                        if (!borrower.panCardUrl.isNullOrBlank()) {
+                                            FilledTonalButton(
+                                                onClick = { previewDocUrl = Pair("${borrower.name}'s PAN Card", borrower.panCardUrl) },
+                                                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                                                shape = RoundedCornerShape(8.dp)
+                                            ) {
+                                                Icon(Icons.Default.Visibility, contentDescription = null, modifier = Modifier.size(16.dp))
+                                                Spacer(modifier = Modifier.width(4.dp))
+                                                Text("View")
+                                            }
+                                        }
+
+                                        OutlinedButton(
+                                            onClick = {
+                                                if (!isUploadingDoc) {
+                                                    pendingUploadType = "pan"
+                                                    docImagePickerLauncher.launch("image/*")
+                                                }
+                                            },
+                                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                                            shape = RoundedCornerShape(8.dp)
+                                        ) {
+                                            Icon(Icons.Default.CloudUpload, contentDescription = null, modifier = Modifier.size(16.dp))
+                                            Spacer(modifier = Modifier.width(4.dp))
+                                            Text(if (borrower.panCardUrl.isNullOrBlank()) "Upload" else "Update")
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(12.dp))
+                        HorizontalDivider(color = BorderSubtleLight)
+                        Spacer(modifier = Modifier.height(10.dp))
+
+                        // Bottom Actions: Edit and Delete
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            OutlinedButton(
+                                onClick = {
+                                    selectedBorrowerForEdit = borrower
+                                    selectedBorrowerForDetail = null
+                                },
+                                modifier = Modifier.weight(1f),
+                                shape = RoundedCornerShape(10.dp)
+                            ) {
+                                Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Edit Profile")
+                            }
+
+                            Button(
+                                onClick = {
+                                    borrowerToDelete = borrower
+                                    selectedBorrowerForDetail = null
+                                },
+                                modifier = Modifier.weight(1f),
+                                colors = ButtonDefaults.buttonColors(containerColor = DangerRed),
+                                shape = RoundedCornerShape(10.dp)
+                            ) {
+                                Icon(Icons.Default.Delete, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Delete Profile")
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // ================= 2. FULLSCREEN KYC DOCUMENT PREVIEW DIALOG =================
+        previewDocUrl?.let { (title, url) ->
+            Dialog(
+                onDismissRequest = { previewDocUrl = null },
+                properties = DialogProperties(usePlatformDefaultWidth = false)
+            ) {
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth(0.96f)
+                        .fillMaxHeight(0.90f),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(16.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(text = title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                            IconButton(onClick = { previewDocUrl = null }) {
+                                Icon(Icons.Default.Close, contentDescription = "Close")
+                            }
+                        }
+
+                        HorizontalDivider(color = BorderSubtleLight)
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(Color.Black.copy(alpha = 0.05f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            AsyncImage(
+                                model = url,
+                                contentDescription = title,
+                                modifier = Modifier.fillMaxSize(),
+                                contentScale = ContentScale.Fit
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        // ================= 3. EDIT PROFILE DIALOG =================
         selectedBorrowerForEdit?.let { borrower ->
             var editName by remember { mutableStateOf(borrower.name) }
             var editMobile by remember { mutableStateOf(borrower.mobileNumber) }
@@ -297,7 +654,8 @@ fun MasterClientScreen(
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .heightIn(max = 400.dp),
+                            .heightIn(max = 400.dp)
+                            .verticalScroll(rememberScrollState()),
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         OutlinedTextField(
@@ -383,7 +741,7 @@ fun MasterClientScreen(
             )
         }
 
-        // Delete Dialog
+        // ================= 4. DELETE PROFILE DIALOG =================
         borrowerToDelete?.let { borrower ->
             var isDeleting by remember { mutableStateOf(false) }
 
@@ -391,7 +749,7 @@ fun MasterClientScreen(
                 onDismissRequest = { if (!isDeleting) borrowerToDelete = null },
                 title = { Text("Delete Client Account?") },
                 text = {
-                    Text("Are you sure you want to delete ${borrower.name}? This will remove all their loan history.")
+                    Text("Are you sure you want to delete ${borrower.name}? This will remove all their records.")
                 },
                 confirmButton = {
                     Button(
@@ -403,7 +761,7 @@ fun MasterClientScreen(
                                     .onSuccess {
                                         isDeleting = false
                                         borrowerToDelete = null
-                                        Toast.makeText(context, "Client deleted.", Toast.LENGTH_SHORT).show()
+                                        Toast.makeText(context, "Client deleted successfully.", Toast.LENGTH_SHORT).show()
                                         loadData()
                                     }
                                     .onFailure {
@@ -425,5 +783,20 @@ fun MasterClientScreen(
                 }
             )
         }
+    }
+}
+
+@Composable
+private fun DetailTableRow(label: String, value: String) {
+    Column(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(text = label, style = MaterialTheme.typography.bodySmall, color = TextSecondaryLight)
+            Text(text = value, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+        }
+        HorizontalDivider(color = BorderSubtleLight.copy(alpha = 0.5f), modifier = Modifier.padding(top = 4.dp))
     }
 }
