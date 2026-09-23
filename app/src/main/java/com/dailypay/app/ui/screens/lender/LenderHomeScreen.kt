@@ -55,7 +55,7 @@ fun LenderHomeScreen(
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val lenderRepo = remember { LenderRepository() }
+    val lenderRepo = remember { LenderRepository(context) }
     val sessionManager = remember { SessionManager(context) }
 
     // Fallback: if argument was empty, grab from SessionManager
@@ -82,10 +82,12 @@ fun LenderHomeScreen(
     var isSubmittingPayment by remember { mutableStateOf(false) }
 
     val pagerState = rememberPagerState(initialPage = 0) { 2 }
+    val currentDateText = remember {
+        SimpleDateFormat("dd MMM yyyy", Locale.getDefault()).format(Date())
+    }
 
     fun loadData() {
         if (resolvedLenderId.isBlank() || resolvedLenderId == "{lenderId}") {
-            // Guard: Never query Postgres with an empty UUID string
             isLoading = false
             onLogoutClick()
             return
@@ -317,6 +319,7 @@ fun LenderHomeScreen(
                         when (pageIndex) {
                             0 -> PendingListTab(
                                 pendingList = pendingDues,
+                                currentDateStr = currentDateText,
                                 onCollectClick = { item ->
                                     selectedItemForPayment = item
                                     paymentAmountText = item.todayDueBalance.toString()
@@ -325,7 +328,8 @@ fun LenderHomeScreen(
                             )
                             1 -> PaidTodayListTab(
                                 paidList = paidDues,
-                                businessName = businessName
+                                businessName = businessName,
+                                currentDateStr = currentDateText
                             )
                         }
                     }
@@ -575,6 +579,7 @@ fun LenderHomeScreen(
 @Composable
 private fun PendingListTab(
     pendingList: List<DailyDueItem>,
+    currentDateStr: String,
     onCollectClick: (DailyDueItem) -> Unit
 ) {
     val context = LocalContext.current
@@ -600,6 +605,8 @@ private fun PendingListTab(
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             items(pendingList, key = { it.loanId }) { item ->
+                val hasOverdue = item.todayDueBalance > item.dailyInstallment
+
                 Card(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -627,6 +634,51 @@ private fun PendingListTab(
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(item.borrowerName, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                                 Text("+91 ${item.borrowerMobile}", style = MaterialTheme.typography.bodySmall, color = TextSecondaryLight)
+
+                                // Current Date Badge & Overdue indicator
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.padding(top = 4.dp),
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    Surface(
+                                        shape = RoundedCornerShape(6.dp),
+                                        color = MaterialTheme.colorScheme.background
+                                    ) {
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.Event,
+                                                contentDescription = null,
+                                                modifier = Modifier.size(12.dp),
+                                                tint = TextSecondaryLight
+                                            )
+                                            Spacer(modifier = Modifier.width(4.dp))
+                                            Text(
+                                                text = currentDateStr,
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = TextSecondaryLight
+                                            )
+                                        }
+                                    }
+
+                                    if (hasOverdue) {
+                                        Surface(
+                                            shape = RoundedCornerShape(6.dp),
+                                            color = DangerRed.copy(alpha = 0.12f)
+                                        ) {
+                                            Text(
+                                                text = "Includes Overdue",
+                                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = DangerRed,
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                        }
+                                    }
+                                }
                             }
 
                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -635,7 +687,7 @@ private fun PendingListTab(
                                         CommunicationUtils.openWhatsAppChat(
                                             context = context,
                                             rawMobileNumber = item.borrowerMobile,
-                                            message = "Hello ${item.borrowerName}, your daily installment of ₹${item.todayDueBalance} is due today."
+                                            message = "Hello ${item.borrowerName}, your daily installment for $currentDateStr of ₹${item.todayDueBalance} is due today."
                                         )
                                     },
                                     modifier = Modifier
@@ -673,6 +725,11 @@ private fun PendingListTab(
                             }
 
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text("Daily EMI", style = MaterialTheme.typography.labelSmall, color = TextSecondaryLight)
+                                Text("₹${item.dailyInstallment}", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+                            }
+
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                 Text("Balance Left", style = MaterialTheme.typography.labelSmall, color = TextSecondaryLight)
                                 Text("₹${maxOf(0.0, item.remainingBalance)}", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
                             }
@@ -699,7 +756,8 @@ private fun PendingListTab(
 @Composable
 private fun PaidTodayListTab(
     paidList: List<DailyDueItem>,
-    businessName: String
+    businessName: String,
+    currentDateStr: String
 ) {
     val context = LocalContext.current
 
@@ -751,6 +809,32 @@ private fun PaidTodayListTab(
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(item.borrowerName, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                                 Text("+91 ${item.borrowerMobile}", style = MaterialTheme.typography.bodySmall, color = TextSecondaryLight)
+
+                                // Current Date Badge for Paid Collections
+                                Surface(
+                                    shape = RoundedCornerShape(6.dp),
+                                    color = MoneyGreen.copy(alpha = 0.12f),
+                                    modifier = Modifier.padding(top = 4.dp)
+                                ) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Event,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(12.dp),
+                                            tint = MoneyGreen
+                                        )
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Text(
+                                            text = "Paid: $currentDateStr",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MoneyGreen,
+                                            fontWeight = FontWeight.Medium
+                                        )
+                                    }
+                                }
                             }
 
                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
