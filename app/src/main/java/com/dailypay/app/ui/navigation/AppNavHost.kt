@@ -287,9 +287,7 @@ fun AppNavHost(
             AdminDashboardScreen(
                 onCreateLenderClick = { navController.navigate(Screen.CreateLender.route) },
                 onManageLenderClick = { navController.navigate(Screen.ManageLender.route) },
-                onSubscriptionClick = { navController.navigate(Screen.AdminSubscription.route) },
-                onReminderClick = { navController.navigate(Screen.AdminReminder.route) },
-                onResetPasswordClick = { navController.navigate(Screen.AdminPasswordRequests.route) },
+                onLenderStatusClick = { navController.navigate(Screen.LenderStatus.route) },
                 onLogoutClick = {
                     sessionManager.clearSession()
                     navController.navigate(Screen.Login.route) {
@@ -310,16 +308,8 @@ fun AppNavHost(
             )
         }
 
-        composable(Screen.AdminSubscription.route) {
-            SubscriptionScreen(onNavigateBack = { navController.popBackStack() })
-        }
-
-        composable(Screen.AdminReminder.route) {
-            ReminderScreen(onNavigateBack = { navController.popBackStack() })
-        }
-
-        composable(Screen.AdminPasswordRequests.route) {
-            PasswordRequestsScreen(onNavigateBack = { navController.popBackStack() })
+        composable(Screen.LenderStatus.route) {
+            LenderStatusScreen(onNavigateBack = { navController.popBackStack() })
         }
     }
 }
