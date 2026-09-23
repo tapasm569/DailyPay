@@ -2,6 +2,7 @@ plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.serialization")
+    id("com.google.devtools.ksp") version "1.9.24-1.0.20"
 }
 
 android {
@@ -67,6 +68,7 @@ dependencies {
     val composeBom = platform("androidx.compose:compose-bom:2024.05.00")
     val supabaseVersion = "2.4.0"
     val ktorVersion = "2.3.11"
+    val roomVersion = "2.6.1"
 
     // AndroidX & Core
     implementation("androidx.core:core-ktx:1.13.1")
@@ -85,6 +87,11 @@ dependencies {
     implementation("androidx.compose.material:material-icons-extended")
     debugImplementation("androidx.compose.ui:ui-tooling")
     debugImplementation("androidx.compose.ui:ui-test-manifest")
+
+    // Room Database (Local Offline Cache)
+    implementation("androidx.room:room-runtime:$roomVersion")
+    implementation("androidx.room:room-ktx:$roomVersion")
+    ksp("androidx.room:room-compiler:$roomVersion")
 
     // Supabase Kotlin SDK
     implementation("io.github.jan-tennert.supabase:postgrest-kt:$supabaseVersion")
