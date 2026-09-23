@@ -1,11 +1,17 @@
 package com.dailypay.app.data.repository
 
+import android.content.Context
+import com.dailypay.app.data.local.DailyPayDatabase
+import com.dailypay.app.data.local.entity.BorrowerEntity
+import com.dailypay.app.data.local.entity.DailyDueEntity
 import com.dailypay.app.data.model.*
 import com.dailypay.app.data.remote.SupabaseClientProvider
 import com.dailypay.app.util.DateUtils
 import io.github.jan.supabase.postgrest.from
 import io.github.jan.supabase.postgrest.query.Order
 import io.github.jan.supabase.storage.storage
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.map
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import java.text.SimpleDateFormat
@@ -13,10 +19,11 @@ import java.util.Calendar
 import java.util.Locale
 import kotlin.math.round
 
-class LenderRepository {
+class LenderRepository(context: Context? = null) {
 
     private val db = SupabaseClientProvider.db
     private val storage = SupabaseClientProvider.storage
+    private val localDb = context?.let { DailyPayDatabase.getDatabase(it) }
 
     // ================= 1. LENDER PROFILE & ACCOUNT =================
     suspend fun getLenderProfile(lenderId: String): Result<Lender> = runCatching {
@@ -58,7 +65,32 @@ class LenderRepository {
         }
     }
 
-    // ================= 2. BORROWER MANAGEMENT & KYC =================
+    // ================= 2. BORROWER MANAGEMENT & KYC (CACHE-FIRST) =================
+    fun observeBorrowers(lenderId: String): Flow<List<Borrower>>? {
+        return localDb?.borrowerDao()?.getBorrowersFlow(lenderId)?.map { list ->
+            list.map { it.toBorrower() }
+        }
+    }
+
+    suspend fun getBorrowers(lenderId: String): Result<List<Borrower>> = runCatching {
+        val cached = localDb?.borrowerDao()?.getBorrowersDirect(lenderId)?.map { it.toBorrower() }
+
+        try {
+            val remoteBorrowers = db.from("borrowers")
+                .select { filter { eq("lender_id", lenderId) } }
+                .decodeList<Borrower>()
+
+            localDb?.borrowerDao()?.insertAll(remoteBorrowers.map { BorrowerEntity.fromModel(it) })
+            remoteBorrowers
+        } catch (e: Exception) {
+            if (!cached.isNullOrEmpty()) {
+                cached
+            } else {
+                throw e
+            }
+        }
+    }
+
     suspend fun addBorrower(
         borrower: Borrower,
         aadhaarBytes: ByteArray?,
@@ -97,12 +129,6 @@ class LenderRepository {
         )
 
         db.from("borrowers").insert(updatedBorrower)
-    }
-
-    suspend fun getBorrowers(lenderId: String): Result<List<Borrower>> = runCatching {
-        db.from("borrowers")
-            .select { filter { eq("lender_id", lenderId) } }
-            .decodeList<Borrower>()
     }
 
     suspend fun updateBorrower(borrower: Borrower): Result<Unit> = runCatching {
@@ -159,6 +185,7 @@ class LenderRepository {
 
     suspend fun deleteBorrower(borrowerId: String): Result<Unit> = runCatching {
         db.from("borrowers").delete { filter { eq("id", borrowerId) } }
+        localDb?.borrowerDao()?.deleteById(borrowerId)
     }
 
     // ================= 3. LOAN MANAGEMENT & ACTIONS =================
@@ -275,11 +302,30 @@ class LenderRepository {
         }
     }
 
-    // ================= 4. PAYMENTS & COLLECTIONS =================
+    // ================= 4. PAYMENTS & COLLECTIONS (CACHE-FIRST) =================
+    fun observeDailyDues(lenderId: String): Flow<List<DailyDueItem>>? {
+        return localDb?.dailyDueDao()?.getDailyDuesFlow(lenderId)?.map { list ->
+            list.map { it.toDailyDueItem() }
+        }
+    }
+
     suspend fun getDailyDues(lenderId: String): Result<List<DailyDueItem>> = runCatching {
-        db.from("v_lender_daily_dues")
-            .select { filter { eq("lender_id", lenderId) } }
-            .decodeList<DailyDueItem>()
+        val cached = localDb?.dailyDueDao()?.getDailyDuesDirect(lenderId)?.map { it.toDailyDueItem() }
+
+        try {
+            val remoteDues = db.from("v_lender_daily_dues")
+                .select { filter { eq("lender_id", lenderId) } }
+                .decodeList<DailyDueItem>()
+
+            localDb?.dailyDueDao()?.insertAll(remoteDues.map { DailyDueEntity.fromModel(lenderId, it) })
+            remoteDues
+        } catch (e: Exception) {
+            if (!cached.isNullOrEmpty()) {
+                cached
+            } else {
+                throw e
+            }
+        }
     }
 
     suspend fun recordRepayment(repayment: Repayment): Result<Unit> = runCatching {
