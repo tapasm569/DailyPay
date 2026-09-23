@@ -22,10 +22,19 @@ import com.dailypay.app.ui.theme.*
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AdminDashboardScreen(
-    onCreateLenderClick: () -> Unit,
-    onManageLenderClick: () -> Unit,
-    onLenderStatusClick: () -> Unit,
-    onLogoutClick: () -> Unit,
+    onCreateLenderClick: () -> Unit = {},
+    onManageLenderClick: () -> Unit = {},
+    onLenderStatusClick: () -> Unit = {},
+    onLogoutClick: () -> Unit = {},
+    // Backward-compatibility parameter defaults (prevents build errors if older AppNavHost calls exist)
+    onSubscriptionClick: () -> Unit = {},
+    onReminderClick: () -> Unit = {},
+    onResetPasswordClick: () -> Unit = {},
+    onNavigateToCreateLender: () -> Unit = onCreateLenderClick,
+    onNavigateToManageLender: () -> Unit = onManageLenderClick,
+    onNavigateToSubscriptions: () -> Unit = onSubscriptionClick,
+    onNavigateToReminders: () -> Unit = onReminderClick,
+    onNavigateToPasswordRequests: () -> Unit = onResetPasswordClick,
     modifier: Modifier = Modifier
 ) {
     Scaffold(
@@ -63,10 +72,12 @@ fun AdminDashboardScreen(
             Text(
                 text = "Lender Administration",
                 style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onBackground
             )
 
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                // Row 1: Lender Status & Create Lender
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(10.dp)
@@ -87,6 +98,7 @@ fun AdminDashboardScreen(
                     )
                 }
 
+                // Row 2: Manage Lenders & Quick Logout (balanced 2x2 grid)
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(10.dp)
@@ -98,9 +110,17 @@ fun AdminDashboardScreen(
                         onClick = onManageLenderClick,
                         modifier = Modifier.weight(1f)
                     )
-                    Spacer(modifier = Modifier.weight(1f))
+                    AdminOptionTile(
+                        title = "Logout",
+                        icon = Icons.AutoMirrored.Filled.ExitToApp,
+                        tint = DangerRed,
+                        onClick = onLogoutClick,
+                        modifier = Modifier.weight(1f)
+                    )
                 }
             }
+
+            Spacer(modifier = Modifier.height(16.dp))
         }
     }
 }
