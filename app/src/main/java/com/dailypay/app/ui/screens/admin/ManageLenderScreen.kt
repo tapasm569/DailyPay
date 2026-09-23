@@ -4,10 +4,12 @@ import android.widget.Toast
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
@@ -16,44 +18,40 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.input.PasswordVisualTransformation
-import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
-import com.dailypay.app.R
 import com.dailypay.app.data.model.Lender
 import com.dailypay.app.data.repository.AdminRepository
 import com.dailypay.app.ui.theme.*
-import com.dailypay.app.util.CommunicationUtils
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ManageLenderScreen(
     onNavigateBack: () -> Unit,
-    onAddNewLenderClick: () -> Unit,
+    onAddNewLenderClick: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val adminRepo = remember { AdminRepository() }
 
-    var lendersList by remember { mutableStateOf<List<Lender>>(emptyList()) }
-    var searchQuery by remember { mutableStateOf("") }
+    var lenders by remember { mutableStateOf<List<Lender>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
+    var searchQuery by remember { mutableStateOf("") }
 
-    // Dialog States
     var selectedLenderForEdit by remember { mutableStateOf<Lender?>(null) }
-    var selectedLenderForPasswordReset by remember { mutableStateOf<Lender?>(null) }
-    var lenderToDelete by remember { mutableStateOf<Lender?>(null) }
+    var selectedLenderForDelete by remember { mutableStateOf<Lender?>(null) }
+    var isSubmitting by remember { mutableStateOf(false) }
 
-    fun loadData() {
+    fun loadLenders() {
         scope.launch {
             adminRepo.getAllLenders()
                 .onSuccess {
-                    lendersList = it
+                    lenders = it
                     isLoading = false
                 }
                 .onFailure {
@@ -64,20 +62,21 @@ fun ManageLenderScreen(
     }
 
     LaunchedEffect(Unit) {
-        loadData()
+        loadLenders()
     }
 
-    val filteredLenders = lendersList.filter { lender ->
-        lender.businessName.contains(searchQuery, ignoreCase = true) ||
-                lender.ownerName.contains(searchQuery, ignoreCase = true) ||
-                lender.name.contains(searchQuery, ignoreCase = true) ||
-                lender.mobileNumber.contains(searchQuery)
+    val filteredList = lenders.filter { lender ->
+        lender.name.contains(searchQuery, ignoreCase = true) ||
+                (lender.businessName ?: "").contains(searchQuery, ignoreCase = true) ||
+                (lender.ownerName ?: "").contains(searchQuery, ignoreCase = true) ||
+                lender.mobileNumber.contains(searchQuery) ||
+                (lender.upiId ?: "").contains(searchQuery, ignoreCase = true)
     }
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Manage Lenders (${filteredLenders.size})") },
+                title = { Text("Manage Lenders (${lenders.size})") },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
@@ -85,11 +84,20 @@ fun ManageLenderScreen(
                 },
                 actions = {
                     IconButton(onClick = onAddNewLenderClick) {
-                        Icon(Icons.Default.PersonAdd, contentDescription = "Add Lender", tint = BrandPrimary)
+                        Icon(Icons.Default.PersonAdd, contentDescription = "Add New Lender", tint = BrandPrimary)
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface)
             )
+        },
+        floatingActionButton = {
+            FloatingActionButton(
+                onClick = onAddNewLenderClick,
+                containerColor = BrandPrimary,
+                contentColor = Color.White
+            ) {
+                Icon(Icons.Default.Add, contentDescription = "Add Lender")
+            }
         },
         containerColor = MaterialTheme.colorScheme.background
     ) { paddingValues ->
@@ -107,14 +115,12 @@ fun ManageLenderScreen(
                 modifier = modifier
                     .fillMaxSize()
                     .padding(paddingValues)
-                    .padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
+                    .padding(horizontal = 16.dp, vertical = 8.dp)
             ) {
-                // Search Bar
                 OutlinedTextField(
                     value = searchQuery,
                     onValueChange = { searchQuery = it },
-                    placeholder = { Text("Search by name, business or mobile...") },
+                    placeholder = { Text("Search name, business, mobile, UPI...") },
                     leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
                     trailingIcon = {
                         if (searchQuery.isNotEmpty()) {
@@ -123,30 +129,27 @@ fun ManageLenderScreen(
                             }
                         }
                     },
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 12.dp),
                     shape = RoundedCornerShape(12.dp),
                     singleLine = true
                 )
 
-                if (filteredLenders.isEmpty()) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .weight(1f),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = if (searchQuery.isBlank()) "No lenders registered yet." else "No matching lenders found.",
-                            style = MaterialTheme.typography.bodyLarge,
-                            color = TextSecondaryLight
-                        )
+                if (filteredList.isEmpty()) {
+                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        Text("No lenders found.", color = TextSecondaryLight)
                     }
                 } else {
                     LazyColumn(
-                        modifier = Modifier.weight(1f),
-                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                        contentPadding = PaddingValues(bottom = 80.dp)
                     ) {
-                        itemsIndexed(filteredLenders, key = { index, item -> item.id ?: "lender_$index" }) { _, lender ->
+                        items(filteredList, key = { it.id ?: it.mobileNumber }) { lender ->
+                            val isRunning = lender.status.uppercase() == "RUN"
+                            val displayName = (lender.businessName ?: "").ifBlank { lender.name }
+                            val displayOwner = (lender.ownerName ?: "").ifBlank { lender.name }
+
                             Card(
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -157,122 +160,122 @@ fun ManageLenderScreen(
                                 Column(modifier = Modifier.padding(16.dp)) {
                                     Row(
                                         modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.SpaceBetween,
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
+                                        Surface(
+                                            modifier = Modifier.size(44.dp),
+                                            shape = CircleShape,
+                                            color = if (isRunning) MoneyGreen.copy(alpha = 0.12f) else DangerRed.copy(alpha = 0.12f)
+                                        ) {
+                                            Box(contentAlignment = Alignment.Center) {
+                                                Icon(
+                                                    imageVector = Icons.Default.Storefront,
+                                                    contentDescription = null,
+                                                    tint = if (isRunning) MoneyGreen else DangerRed,
+                                                    modifier = Modifier.size(24.dp)
+                                                )
+                                            }
+                                        }
+
+                                        Spacer(modifier = Modifier.width(12.dp))
+
                                         Column(modifier = Modifier.weight(1f)) {
                                             Text(
-                                                text = lender.businessName.ifBlank { lender.name },
+                                                text = displayName,
                                                 style = MaterialTheme.typography.titleMedium,
-                                                color = MaterialTheme.colorScheme.onSurface
+                                                fontWeight = FontWeight.Bold
                                             )
                                             Text(
-                                                text = "Owner: ${lender.ownerName.ifBlank { lender.name }}",
+                                                text = "Prop: $displayOwner • +91 ${lender.mobileNumber}",
                                                 style = MaterialTheme.typography.bodySmall,
                                                 color = TextSecondaryLight
                                             )
+                                        }
+
+                                        Surface(
+                                            shape = RoundedCornerShape(8.dp),
+                                            color = if (isRunning) MoneyGreen.copy(alpha = 0.15f) else DangerRed.copy(alpha = 0.15f)
+                                        ) {
                                             Text(
-                                                text = "+91 ${lender.mobileNumber}",
-                                                style = MaterialTheme.typography.bodyMedium,
-                                                color = BrandPrimary
+                                                text = if (isRunning) "RUN" else "STOP",
+                                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                                                style = MaterialTheme.typography.labelSmall,
+                                                fontWeight = FontWeight.Bold,
+                                                color = if (isRunning) MoneyGreen else DangerRed
                                             )
                                         }
-
-                                        // Actions: WhatsApp & Call
-                                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                            IconButton(
-                                                onClick = {
-                                                    CommunicationUtils.openWhatsAppChat(
-                                                        context = context,
-                                                        rawMobileNumber = lender.mobileNumber,
-                                                        message = "Hello ${lender.name}, DailyPay Admin notification:"
-                                                    )
-                                                },
-                                                modifier = Modifier
-                                                    .size(36.dp)
-                                                    .clip(CircleShape)
-                                                    .border(1.dp, WhatsAppGreen.copy(alpha = 0.3f), CircleShape)
-                                            ) {
-                                                Icon(
-                                                    painter = painterResource(id = R.drawable.ic_whatsapp),
-                                                    contentDescription = "WhatsApp",
-                                                    tint = WhatsAppGreen,
-                                                    modifier = Modifier.size(18.dp)
-                                                )
-                                            }
-
-                                            IconButton(
-                                                onClick = { CommunicationUtils.openPhoneDialer(context, lender.mobileNumber) },
-                                                modifier = Modifier
-                                                    .size(36.dp)
-                                                    .clip(CircleShape)
-                                                    .border(1.dp, CallBlue.copy(alpha = 0.3f), CircleShape)
-                                            ) {
-                                                Icon(
-                                                    painter = painterResource(id = R.drawable.ic_call),
-                                                    contentDescription = "Call",
-                                                    tint = CallBlue,
-                                                    modifier = Modifier.size(18.dp)
-                                                )
-                                            }
-                                        }
-                                    }
-
-                                    // Location & Details
-                                    val location = listOfNotNull(lender.villageTown, lender.postOffice, lender.dist)
-                                        .filter { it.isNotBlank() }
-                                        .joinToString(", ")
-                                    if (location.isNotBlank()) {
-                                        Spacer(modifier = Modifier.height(6.dp))
-                                        Text(
-                                            text = "📍 $location",
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = TextSecondaryLight
-                                        )
                                     }
 
                                     if (!lender.upiId.isNullOrBlank()) {
-                                        Text(
-                                            text = "UPI: ${lender.upiId}",
-                                            style = MaterialTheme.typography.labelSmall,
-                                            color = MoneyGreen
-                                        )
+                                        Spacer(modifier = Modifier.height(6.dp))
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Icon(
+                                                Icons.Default.AccountBalance,
+                                                contentDescription = null,
+                                                tint = TextSecondaryLight,
+                                                modifier = Modifier.size(14.dp)
+                                            )
+                                            Spacer(modifier = Modifier.width(4.dp))
+                                            Text(
+                                                text = "UPI: ${lender.upiId}",
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = TextSecondaryLight
+                                            )
+                                        }
+                                    }
+
+                                    val locationParts = listOfNotNull(
+                                        lender.villageTown?.ifBlank { null },
+                                        lender.dist?.ifBlank { null }
+                                    )
+                                    if (locationParts.isNotEmpty()) {
+                                        Spacer(modifier = Modifier.height(4.dp))
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Icon(
+                                                Icons.Default.LocationOn,
+                                                contentDescription = null,
+                                                tint = TextSecondaryLight,
+                                                modifier = Modifier.size(14.dp)
+                                            )
+                                            Spacer(modifier = Modifier.width(4.dp))
+                                            Text(
+                                                text = locationParts.joinToString(", "),
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = TextSecondaryLight
+                                            )
+                                        }
                                     }
 
                                     Spacer(modifier = Modifier.height(10.dp))
-                                    HorizontalDivider(color = BorderSubtleLight)
+                                    HorizontalDivider(color = BorderSubtleLight.copy(alpha = 0.6f))
                                     Spacer(modifier = Modifier.height(10.dp))
 
-                                    // Management Buttons
                                     Row(
                                         modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                        horizontalArrangement = Arrangement.End,
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
                                         OutlinedButton(
                                             onClick = { selectedLenderForEdit = lender },
-                                            modifier = Modifier.weight(1f),
-                                            shape = RoundedCornerShape(8.dp)
+                                            shape = RoundedCornerShape(8.dp),
+                                            contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp)
                                         ) {
                                             Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(16.dp))
-                                            Spacer(modifier = Modifier.width(4.dp))
+                                            Spacer(modifier = Modifier.width(6.dp))
                                             Text("Edit")
                                         }
 
-                                        OutlinedButton(
-                                            onClick = { selectedLenderForPasswordReset = lender },
-                                            modifier = Modifier.weight(1.3f),
-                                            shape = RoundedCornerShape(8.dp)
-                                        ) {
-                                            Icon(Icons.Default.LockReset, contentDescription = null, modifier = Modifier.size(16.dp))
-                                            Spacer(modifier = Modifier.width(4.dp))
-                                            Text("Password")
-                                        }
+                                        Spacer(modifier = Modifier.width(8.dp))
 
-                                        IconButton(
-                                            onClick = { lenderToDelete = lender }
+                                        OutlinedButton(
+                                            onClick = { selectedLenderForDelete = lender },
+                                            shape = RoundedCornerShape(8.dp),
+                                            colors = ButtonDefaults.outlinedButtonColors(contentColor = DangerRed),
+                                            contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp)
                                         ) {
-                                            Icon(Icons.Default.Delete, contentDescription = "Delete", tint = DangerRed)
+                                            Icon(Icons.Default.Delete, contentDescription = null, modifier = Modifier.size(16.dp), tint = DangerRed)
+                                            Spacer(modifier = Modifier.width(6.dp))
+                                            Text("Delete")
                                         }
                                     }
                                 }
@@ -286,53 +289,61 @@ fun ManageLenderScreen(
         // ================= EDIT LENDER DIALOG =================
         selectedLenderForEdit?.let { lender ->
             var editName by remember { mutableStateOf(lender.name) }
-            var editOwnerName by remember { mutableStateOf(lender.ownerName) }
-            var editBusinessName by remember { mutableStateOf(lender.businessName) }
+            var editOwnerName by remember { mutableStateOf(lender.ownerName ?: "") }
+            var editBusinessName by remember { mutableStateOf(lender.businessName ?: "") }
             var editMobile by remember { mutableStateOf(lender.mobileNumber) }
-            var editVillageTown by remember { mutableStateOf(lender.villageTown ?: "") }
+            var editUpiId by remember { mutableStateOf(lender.upiId ?: "") }
+            var editVillage by remember { mutableStateOf(lender.villageTown ?: "") }
             var editPostOffice by remember { mutableStateOf(lender.postOffice ?: "") }
             var editDist by remember { mutableStateOf(lender.dist ?: "") }
-            var editUpiId by remember { mutableStateOf(lender.upiId ?: "") }
-            var isSaving by remember { mutableStateOf(false) }
+            var editAddress by remember { mutableStateOf(lender.address ?: "") }
+            var editStatus by remember { mutableStateOf(lender.status.uppercase()) }
+            var editPassword by remember { mutableStateOf("") }
 
             AlertDialog(
-                onDismissRequest = { if (!isSaving) selectedLenderForEdit = null },
+                onDismissRequest = { if (!isSubmitting) selectedLenderForEdit = null },
                 title = { Text("Edit Lender Details") },
                 text = {
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .heightIn(max = 420.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                            .verticalScroll(rememberScrollState()),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
-                        OutlinedTextField(
-                            value = editName,
-                            onValueChange = { editName = it },
-                            label = { Text("Lender Name *") },
-                            modifier = Modifier.fillMaxWidth()
-                        )
                         OutlinedTextField(
                             value = editBusinessName,
                             onValueChange = { editBusinessName = it },
-                            label = { Text("Business Name *") },
+                            label = { Text("Business / Store Name") },
                             modifier = Modifier.fillMaxWidth()
                         )
                         OutlinedTextField(
                             value = editOwnerName,
                             onValueChange = { editOwnerName = it },
-                            label = { Text("Owner Name") },
+                            label = { Text("Proprietor / Owner Name") },
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        OutlinedTextField(
+                            value = editName,
+                            onValueChange = { editName = it },
+                            label = { Text("Full Name *") },
                             modifier = Modifier.fillMaxWidth()
                         )
                         OutlinedTextField(
                             value = editMobile,
                             onValueChange = { editMobile = it.filter { ch -> ch.isDigit() }.take(10) },
-                            label = { Text("Mobile Number (10 Digits) *") },
+                            label = { Text("Mobile Number (10 digits) *") },
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
                             modifier = Modifier.fillMaxWidth()
                         )
                         OutlinedTextField(
-                            value = editVillageTown,
-                            onValueChange = { editVillageTown = it },
+                            value = editUpiId,
+                            onValueChange = { editUpiId = it },
+                            label = { Text("UPI ID (e.g. name@upi)") },
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        OutlinedTextField(
+                            value = editVillage,
+                            onValueChange = { editVillage = it },
                             label = { Text("Village / Town") },
                             modifier = Modifier.fillMaxWidth()
                         )
@@ -349,9 +360,35 @@ fun ManageLenderScreen(
                             modifier = Modifier.fillMaxWidth()
                         )
                         OutlinedTextField(
-                            value = editUpiId,
-                            onValueChange = { editUpiId = it },
-                            label = { Text("UPI ID (for payments)") },
+                            value = editAddress,
+                            onValueChange = { editAddress = it },
+                            label = { Text("Complete Address") },
+                            modifier = Modifier.fillMaxWidth()
+                        )
+
+                        Text("Account Status:", style = MaterialTheme.typography.labelMedium)
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            FilterChip(
+                                selected = editStatus == "RUN",
+                                onClick = { editStatus = "RUN" },
+                                label = { Text("RUN (Active)") },
+                                modifier = Modifier.weight(1f)
+                            )
+                            FilterChip(
+                                selected = editStatus == "STOP",
+                                onClick = { editStatus = "STOP" },
+                                label = { Text("STOP (Suspended)") },
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+
+                        OutlinedTextField(
+                            value = editPassword,
+                            onValueChange = { editPassword = it },
+                            label = { Text("New Password (optional)") },
                             modifier = Modifier.fillMaxWidth()
                         )
                     }
@@ -359,110 +396,52 @@ fun ManageLenderScreen(
                 confirmButton = {
                     Button(
                         onClick = {
-                            if (editName.isBlank() || editMobile.length != 10) {
-                                Toast.makeText(context, "Enter a valid name and 10-digit mobile number.", Toast.LENGTH_SHORT).show()
+                            if (editName.isBlank()) {
+                                Toast.makeText(context, "Name cannot be empty", Toast.LENGTH_SHORT).show()
                                 return@Button
                             }
-                            isSaving = true
+                            if (editMobile.length < 10) {
+                                Toast.makeText(context, "Enter a valid 10-digit mobile number", Toast.LENGTH_SHORT).show()
+                                return@Button
+                            }
+
+                            val updatedLender = lender.copy(
+                                name = editName.trim(),
+                                ownerName = editOwnerName.trim().ifBlank { null },
+                                businessName = editBusinessName.trim().ifBlank { null },
+                                mobileNumber = editMobile.trim(),
+                                upiId = editUpiId.trim().ifBlank { null },
+                                villageTown = editVillage.trim().ifBlank { null },
+                                postOffice = editPostOffice.trim().ifBlank { null },
+                                dist = editDist.trim().ifBlank { null },
+                                address = editAddress.trim().ifBlank { null },
+                                status = editStatus,
+                                passwordHash = if (editPassword.isNotBlank()) editPassword.trim() else lender.passwordHash
+                            )
+
+                            isSubmitting = true
                             scope.launch {
-                                val updated = lender.copy(
-                                    name = editName.trim(),
-                                    ownerName = editOwnerName.trim(),
-                                    businessName = editBusinessName.trim(),
-                                    mobileNumber = editMobile.trim(),
-                                    villageTown = editVillageTown.trim().ifBlank { null },
-                                    postOffice = editPostOffice.trim().ifBlank { null },
-                                    dist = editDist.trim().ifBlank { null },
-                                    upiId = editUpiId.trim().ifBlank { null }
-                                )
-                                adminRepo.updateLender(updated)
+                                adminRepo.updateLender(updatedLender)
                                     .onSuccess {
-                                        isSaving = false
+                                        isSubmitting = false
                                         selectedLenderForEdit = null
                                         Toast.makeText(context, "Lender updated successfully!", Toast.LENGTH_SHORT).show()
-                                        loadData()
+                                        loadLenders()
                                     }
                                     .onFailure {
-                                        isSaving = false
+                                        isSubmitting = false
                                         Toast.makeText(context, "Update failed: ${it.message}", Toast.LENGTH_SHORT).show()
                                     }
                             }
                         },
-                        enabled = !isSaving,
+                        enabled = !isSubmitting,
                         colors = ButtonDefaults.buttonColors(containerColor = BrandPrimary)
                     ) {
-                        Text(if (isSaving) "Saving..." else "Save Changes")
+                        Text(if (isSubmitting) "Saving..." else "Save Changes")
                     }
                 },
                 dismissButton = {
-                    TextButton(onClick = { selectedLenderForEdit = null }, enabled = !isSaving) {
-                        Text("Cancel")
-                    }
-                }
-            )
-        }
-
-        // ================= RESET PASSWORD DIALOG =================
-        selectedLenderForPasswordReset?.let { lender ->
-            var newPassword by remember { mutableStateOf("") }
-            var passwordVisible by remember { mutableStateOf(false) }
-            var isUpdating by remember { mutableStateOf(false) }
-
-            AlertDialog(
-                onDismissRequest = { if (!isUpdating) selectedLenderForPasswordReset = null },
-                title = { Text("Reset Password") },
-                text = {
-                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text("Set a new password for ${lender.name} (+91 ${lender.mobileNumber})")
-                        OutlinedTextField(
-                            value = newPassword,
-                            onValueChange = { newPassword = it },
-                            label = { Text("New Password *") },
-                            singleLine = true,
-                            visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
-                            trailingIcon = {
-                                IconButton(onClick = { passwordVisible = !passwordVisible }) {
-                                    Icon(
-                                        imageVector = if (passwordVisible) Icons.Default.Visibility else Icons.Default.VisibilityOff,
-                                        contentDescription = null
-                                    )
-                                }
-                            },
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                    }
-                },
-                confirmButton = {
-                    Button(
-                        onClick = {
-                            if (newPassword.length < 4) {
-                                Toast.makeText(context, "Password must be at least 4 characters.", Toast.LENGTH_SHORT).show()
-                                return@Button
-                            }
-                            isUpdating = true
-                            scope.launch {
-                                val updated = lender.copy(passwordHash = newPassword.trim())
-                                adminRepo.updateLender(updated)
-                                    .onSuccess {
-                                        isUpdating = false
-                                        selectedLenderForPasswordReset = null
-                                        Toast.makeText(context, "Password updated successfully!", Toast.LENGTH_SHORT).show()
-                                        loadData()
-                                    }
-                                    .onFailure {
-                                        isUpdating = false
-                                        Toast.makeText(context, "Failed: ${it.message}", Toast.LENGTH_SHORT).show()
-                                    }
-                            }
-                        },
-                        enabled = !isUpdating,
-                        colors = ButtonDefaults.buttonColors(containerColor = BrandPrimary)
-                    ) {
-                        Text(if (isUpdating) "Updating..." else "Reset Password")
-                    }
-                },
-                dismissButton = {
-                    TextButton(onClick = { selectedLenderForPasswordReset = null }, enabled = !isUpdating) {
+                    TextButton(onClick = { selectedLenderForEdit = null }, enabled = !isSubmitting) {
                         Text("Cancel")
                     }
                 }
@@ -470,42 +449,46 @@ fun ManageLenderScreen(
         }
 
         // ================= DELETE CONFIRMATION DIALOG =================
-        lenderToDelete?.let { lender ->
-            var isDeleting by remember { mutableStateOf(false) }
-
+        selectedLenderForDelete?.let { lender ->
             AlertDialog(
-                onDismissRequest = { if (!isDeleting) lenderToDelete = null },
-                title = { Text("Delete Lender Account?") },
+                onDismissRequest = { if (!isSubmitting) selectedLenderForDelete = null },
+                title = { Text("Delete Lender") },
                 text = {
-                    Text("Are you sure you want to delete ${lender.businessName.ifBlank { lender.name }}? This action cannot be undone.")
+                    val displayName = (lender.businessName ?: "").ifBlank { lender.name }
+                    Text("Are you sure you want to delete '$displayName'? All associated lender records will be affected.")
                 },
                 confirmButton = {
                     Button(
                         onClick = {
-                            val id = lender.id ?: return@Button
-                            isDeleting = true
+                            val lenderId = lender.id
+                            if (lenderId.isNullOrBlank()) {
+                                selectedLenderForDelete = null
+                                return@Button
+                            }
+
+                            isSubmitting = true
                             scope.launch {
-                                adminRepo.deleteLender(id)
+                                adminRepo.deleteLender(lenderId)
                                     .onSuccess {
-                                        isDeleting = false
-                                        lenderToDelete = null
-                                        Toast.makeText(context, "Lender deleted successfully.", Toast.LENGTH_SHORT).show()
-                                        loadData()
+                                        isSubmitting = false
+                                        selectedLenderForDelete = null
+                                        Toast.makeText(context, "Lender deleted successfully", Toast.LENGTH_SHORT).show()
+                                        loadLenders()
                                     }
                                     .onFailure {
-                                        isDeleting = false
-                                        Toast.makeText(context, "Delete failed: ${it.message}", Toast.LENGTH_SHORT).show()
+                                        isSubmitting = false
+                                        Toast.makeText(context, "Failed: ${it.message}", Toast.LENGTH_SHORT).show()
                                     }
                             }
                         },
-                        enabled = !isDeleting,
+                        enabled = !isSubmitting,
                         colors = ButtonDefaults.buttonColors(containerColor = DangerRed)
                     ) {
-                        Text(if (isDeleting) "Deleting..." else "Confirm Delete")
+                        Text(if (isSubmitting) "Deleting..." else "Confirm Delete")
                     }
                 },
                 dismissButton = {
-                    TextButton(onClick = { lenderToDelete = null }, enabled = !isDeleting) {
+                    TextButton(onClick = { selectedLenderForDelete = null }, enabled = !isSubmitting) {
                         Text("Cancel")
                     }
                 }
@@ -513,3 +496,4 @@ fun ManageLenderScreen(
         }
     }
 }
+                           
