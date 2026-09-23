@@ -13,6 +13,8 @@ data class Lender(
     val businessName: String? = null,
     @SerialName("mobile_number")
     val mobileNumber: String,
+    @SerialName("upi_id")
+    val upiId: String? = null,
     @SerialName("village_town")
     val villageTown: String? = null,
     @SerialName("post_office")
@@ -22,6 +24,22 @@ data class Lender(
     @SerialName("password_hash")
     val passwordHash: String? = null,
     val status: String = "RUN", // "RUN" or "STOP"
+    @SerialName("created_at")
+    val createdAt: String? = null
+)
+
+@Serializable
+data class Subscription(
+    val id: String? = null,
+    @SerialName("lender_id")
+    val lenderId: String = "",
+    val plan: String = "MONTHLY",
+    @SerialName("start_date")
+    val startDate: String? = null,
+    @SerialName("end_date")
+    val endDate: String? = null,
+    val status: String = "ACTIVE",
+    val amount: Double = 0.0,
     @SerialName("created_at")
     val createdAt: String? = null
 )
