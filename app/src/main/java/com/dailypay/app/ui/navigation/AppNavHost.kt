@@ -228,7 +228,7 @@ fun AppNavHost(
                 onApplyLoanClick = { navController.navigate(Screen.ApplyLoan.createRoute(borrowerId)) },
                 onPayEmiClick = { navController.navigate(Screen.BorrowerPayEmi.createRoute(borrowerId)) },
                 onApprovedLoansClick = { navController.navigate(Screen.CustomerApprovedLoans.createRoute(borrowerId)) },
-                onBorrowerLedgerClick = { navController.navigate(Screen.BorrowerLedger.createRoute(borrowerId)) },
+                onViewLedgerClick = { navController.navigate(Screen.BorrowerLedger.createRoute(borrowerId)) },
                 onLogoutClick = {
                     sessionManager.clearSession()
                     navController.navigate(Screen.Login.route) {
@@ -285,11 +285,11 @@ fun AppNavHost(
         // ================= ADMIN SCREENS =================
         composable(Screen.AdminDashboard.route) {
             AdminDashboardScreen(
-                onNavigateToCreateLender = { navController.navigate(Screen.CreateLender.route) },
-                onNavigateToManageLender = { navController.navigate(Screen.ManageLender.route) },
-                onNavigateToSubscriptions = { navController.navigate(Screen.AdminSubscriptions.route) },
-                onNavigateToReminders = { navController.navigate(Screen.AdminReminders.route) },
-                onNavigateToPasswordRequests = { navController.navigate(Screen.AdminPasswordRequests.route) },
+                onCreateLenderClick = { navController.navigate(Screen.CreateLender.route) },
+                onManageLenderClick = { navController.navigate(Screen.ManageLender.route) },
+                onSubscriptionClick = { navController.navigate(Screen.AdminSubscriptions.route) },
+                onReminderClick = { navController.navigate(Screen.AdminReminders.route) },
+                onResetPasswordClick = { navController.navigate(Screen.AdminPasswordRequests.route) },
                 onLogoutClick = {
                     sessionManager.clearSession()
                     navController.navigate(Screen.Login.route) {
@@ -304,7 +304,10 @@ fun AppNavHost(
         }
 
         composable(Screen.ManageLender.route) {
-            ManageLenderScreen(onNavigateBack = { navController.popBackStack() })
+            ManageLenderScreen(
+                onNavigateBack = { navController.popBackStack() },
+                onAddNewLenderClick = { navController.navigate(Screen.CreateLender.route) }
+            )
         }
 
         composable(Screen.AdminSubscriptions.route) {
