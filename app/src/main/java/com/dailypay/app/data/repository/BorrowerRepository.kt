@@ -67,7 +67,46 @@ class BorrowerRepository {
     }
 
     suspend fun submitEmiPayment(repayment: Repayment): Result<Unit> = runCatching {
-        db.from("repayments").insert(repayment.copy(status = RepaymentStatus.PENDING))
+        db.from("repayments").insert(repayment.copy(status = "PENDING"))
+    }
+
+    /**
+     * Submits a UPI repayment with transaction UTR reference awaiting lender verification.
+     */
+    suspend fun submitUpiPayment(
+        loanId: String,
+        borrowerId: String,
+        lenderId: String,
+        amount: Double,
+        transactionRef: String,
+        notes: String? = null
+    ): Result<Unit> = runCatching {
+        val repayment = Repayment(
+            loanId = loanId,
+            borrowerId = borrowerId,
+            lenderId = lenderId,
+            amountPaid = amount,
+            paymentDate = DateUtils.getTodaySqlFormat(),
+            paymentMode = PaymentMode.UPI,
+            transactionRef = transactionRef.trim(),
+            status = "PENDING",
+            notes = notes ?: "UPI Repayment submitted by borrower"
+        )
+        db.from("repayments").insert(repayment)
+    }
+
+    /**
+     * Fetches all repayments made by the borrower that are awaiting lender approval.
+     */
+    suspend fun getPendingRepayments(borrowerId: String): Result<List<Repayment>> = runCatching {
+        db.from("repayments")
+            .select {
+                filter {
+                    eq("borrower_id", borrowerId)
+                    eq("status", "PENDING")
+                }
+                order("created_at", Order.DESCENDING)
+            }.decodeList<Repayment>()
     }
 
     suspend fun getRepaymentHistory(borrowerId: String): Result<List<Repayment>> = runCatching {
@@ -75,7 +114,7 @@ class BorrowerRepository {
             .select {
                 filter {
                     eq("borrower_id", borrowerId)
-                    eq("status", RepaymentStatus.VERIFIED.name)
+                    eq("status", "VERIFIED")
                 }
                 order("created_at", Order.DESCENDING)
             }.decodeList<Repayment>()
@@ -139,7 +178,7 @@ class BorrowerRepository {
             .select {
                 filter {
                     eq("loan_id", loanId)
-                    eq("status", RepaymentStatus.VERIFIED.name)
+                    eq("status", "VERIFIED")
                 }
                 order("created_at", Order.DESCENDING)
             }.decodeList<Repayment>()
