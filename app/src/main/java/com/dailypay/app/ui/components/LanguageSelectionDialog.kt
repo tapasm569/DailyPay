@@ -10,6 +10,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.dailypay.app.ui.theme.BrandPrimary
@@ -19,7 +20,8 @@ import com.dailypay.app.util.LocaleHelper
 fun LanguageSelectionDialog(
     onDismissRequest: () -> Unit
 ) {
-    val currentCode = remember { LocaleHelper.getCurrentLanguageCode() }
+    val context = LocalContext.current
+    val currentCode = remember { LocaleHelper.getCurrentLanguageCode(context) }
     var selectedCode by remember { mutableStateOf(currentCode) }
 
     AlertDialog(
@@ -54,7 +56,7 @@ fun LanguageSelectionDialog(
                             .fillMaxWidth()
                             .clickable {
                                 selectedCode = lang.code
-                                LocaleHelper.setAppLanguage(lang.code)
+                                LocaleHelper.setAppLanguage(context, lang.code)
                                 onDismissRequest()
                             }
                     ) {
