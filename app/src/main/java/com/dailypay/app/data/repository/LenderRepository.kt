@@ -156,7 +156,7 @@ class LenderRepository(context: Context? = null) {
     suspend fun updateBorrowerKycDoc(
         borrowerId: String,
         mobileNumber: String,
-        docType: String, // "aadhaar", "pan", or "avatar"
+        docType: String,
         imageBytes: ByteArray
     ): Result<String> = runCatching {
         val timestamp = System.currentTimeMillis()
@@ -329,14 +329,14 @@ class LenderRepository(context: Context? = null) {
     }
 
     suspend fun recordRepayment(repayment: Repayment): Result<Unit> = runCatching {
-        db.from("repayments").insert(repayment.copy(status = RepaymentStatus.VERIFIED))
+        db.from("repayments").insert(repayment.copy(status = "VERIFIED"))
     }
 
     suspend fun getPendingVerifications(lenderId: String): Result<List<PendingPaymentItem>> = runCatching {
         val pendingRepayments = db.from("repayments").select {
             filter {
                 eq("lender_id", lenderId)
-                eq("status", RepaymentStatus.PENDING.name)
+                eq("status", "PENDING")
             }
             order("created_at", Order.DESCENDING)
         }.decodeList<Repayment>()
@@ -354,7 +354,7 @@ class LenderRepository(context: Context? = null) {
     }
 
     suspend fun verifyRepayment(repaymentId: String, accept: Boolean): Result<Unit> = runCatching {
-        val newStatus = if (accept) RepaymentStatus.VERIFIED.name else RepaymentStatus.REJECTED.name
+        val newStatus = if (accept) "VERIFIED" else "REJECTED"
         db.from("repayments").update(
             buildJsonObject { put("status", newStatus) }
         ) {
@@ -366,7 +366,7 @@ class LenderRepository(context: Context? = null) {
         db.from("repayments").select {
             filter {
                 eq("lender_id", lenderId)
-                eq("status", RepaymentStatus.VERIFIED.name)
+                eq("status", "VERIFIED")
             }
             order("payment_date", Order.DESCENDING)
             order("created_at", Order.DESCENDING)
@@ -378,7 +378,7 @@ class LenderRepository(context: Context? = null) {
             .select {
                 filter {
                     eq("loan_id", loanId)
-                    eq("status", RepaymentStatus.VERIFIED.name)
+                    eq("status", "VERIFIED")
                 }
                 order("created_at", Order.DESCENDING)
             }.decodeList<Repayment>()
