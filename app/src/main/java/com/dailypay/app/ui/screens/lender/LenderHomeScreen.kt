@@ -1,3 +1,8 @@
+@file:OptIn(
+    androidx.compose.foundation.ExperimentalFoundationApi::class,
+    androidx.compose.material3.ExperimentalMaterial3Api::class
+)
+
 package com.dailypay.app.ui.screens.lender
 
 import android.widget.Toast
@@ -55,7 +60,6 @@ fun LenderHomeScreen(
     val lenderRepo = remember { LenderRepository(context) }
     val sessionManager = remember { SessionManager(context) }
 
-    // Fallback: if argument was empty, grab from SessionManager
     val resolvedLenderId = remember(lenderId) {
         if (lenderId.isNotBlank() && lenderId != "{lenderId}") {
             lenderId
@@ -169,14 +173,13 @@ fun LenderHomeScreen(
                     modifier = Modifier.padding(horizontal = 12.dp)
                 )
 
-                // Language selection item inside the 3-line menu
                 NavigationDrawerItem(
                     icon = { Icon(Icons.Default.Language, contentDescription = null, tint = BrandPrimary) },
                     label = {
                         Column {
                             Text("Language / ভাষা / भाषा")
                             Text(
-                                text = when (LocaleHelper.getCurrentLanguageCode()) {
+                                text = when (LocaleHelper.getCurrentLanguageCode(context)) {
                                     "bn" -> "বাংলা (Bengali)"
                                     "hi" -> "हिन्दी (Hindi)"
                                     else -> "English"
@@ -360,14 +363,12 @@ fun LenderHomeScreen(
                 }
             }
 
-            // ================= LANGUAGE SELECTION DIALOG =================
             if (showLanguageDialog) {
                 LanguageSelectionDialog(
                     onDismissRequest = { showLanguageDialog = false }
                 )
             }
 
-            // ================= COLLECT PAYMENT DIALOG =================
             selectedItemForPayment?.let { item ->
                 AlertDialog(
                     onDismissRequest = { if (!isSubmittingPayment) selectedItemForPayment = null },
@@ -455,7 +456,6 @@ fun LenderHomeScreen(
                 )
             }
 
-            // ================= EDIT ADDRESS DIALOG =================
             if (showAddressDialog) {
                 var editVillage by remember { mutableStateOf(lenderProfile?.villageTown ?: "") }
                 var editPostOffice by remember { mutableStateOf(lenderProfile?.postOffice ?: "") }
@@ -536,7 +536,6 @@ fun LenderHomeScreen(
                 )
             }
 
-            // ================= RESET PASSWORD DIALOG =================
             if (showResetPasswordDialog) {
                 var newPassword by remember { mutableStateOf("") }
                 var confirmPassword by remember { mutableStateOf("") }
@@ -666,7 +665,6 @@ private fun PendingListTab(
                                 Text(item.borrowerName, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                                 Text("+91 ${item.borrowerMobile}", style = MaterialTheme.typography.bodySmall, color = TextSecondaryLight)
 
-                                // Current Date Badge & Overdue indicator
                                 Row(
                                     verticalAlignment = Alignment.CenterVertically,
                                     modifier = Modifier.padding(top = 4.dp),
@@ -841,7 +839,6 @@ private fun PaidTodayListTab(
                                 Text(item.borrowerName, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                                 Text("+91 ${item.borrowerMobile}", style = MaterialTheme.typography.bodySmall, color = TextSecondaryLight)
 
-                                // Current Date Badge for Paid Collections
                                 Surface(
                                     shape = RoundedCornerShape(6.dp),
                                     color = MoneyGreen.copy(alpha = 0.12f),
