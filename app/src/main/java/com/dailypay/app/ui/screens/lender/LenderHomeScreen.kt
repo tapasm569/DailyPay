@@ -48,6 +48,75 @@ import java.util.Locale
 
 @Composable
 fun LenderHomeScreen(
+    // your navigation parameters
+) {
+    val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
+    val scope = rememberCoroutineScope()
+
+    // 1. State controlling the dialog
+    var showLanguageDialog by remember { mutableStateOf(false) }
+
+    ModalNavigationDrawer(
+        drawerState = drawerState,
+        drawerContent = {
+            ModalDrawerSheet {
+                // Header (Profile name, business name)
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // Standard Menu Items (Dashboard, Ledger, etc.)
+
+                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+
+                // 2. The Language Item in the 3-line menu
+                NavigationDrawerItem(
+                    icon = { Icon(Icons.Default.Language, contentDescription = "Language") },
+                    label = {
+                        Column {
+                            Text("Language / ভাষা / भाषा")
+                            Text(
+                                text = when (LocaleHelper.getCurrentLanguageCode()) {
+                                    "bn" -> "বাংলা"
+                                    "hi" -> "हिन्दी"
+                                    else -> "English"
+                                },
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                    },
+                    selected = false,
+                    onClick = {
+                        scope.launch { drawerState.close() }
+                        showLanguageDialog = true
+                    },
+                    modifier = Modifier.padding(horizontal = 12.dp)
+                )
+
+                // Other items (Logout, About, etc.)
+            }
+        }
+    ) {
+        // Main Screen UI (Scaffold, TopBar with hamburger icon, screen content)
+        Scaffold(
+            topBar = {
+                // Clicking the hamburger icon calls scope.launch { drawerState.open() }
+            }
+        ) { paddingValues ->
+            // Screen content
+        }
+    }
+
+    // 3. Render dialog conditionally
+    if (showLanguageDialog) {
+        LanguageSelectionDialog(
+            onDismissRequest = { showLanguageDialog = false }
+        )
+    }
+}
+
+
+@Composable
+fun LenderHomeScreen(
     lenderId: String,
     onNavigateToDashboard: () -> Unit,
     onLogoutClick: () -> Unit,
