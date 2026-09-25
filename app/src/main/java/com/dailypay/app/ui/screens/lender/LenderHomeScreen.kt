@@ -37,83 +37,16 @@ import com.dailypay.app.data.model.Lender
 import com.dailypay.app.data.model.PaymentMode
 import com.dailypay.app.data.model.Repayment
 import com.dailypay.app.data.repository.LenderRepository
+import com.dailypay.app.ui.components.LanguageSelectionDialog
 import com.dailypay.app.ui.theme.*
 import com.dailypay.app.util.CommunicationUtils
 import com.dailypay.app.util.DateUtils
+import com.dailypay.app.util.LocaleHelper
 import com.dailypay.app.util.SessionManager
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
-
-@Composable
-fun LenderHomeScreen(
-    // your navigation parameters
-) {
-    val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
-    val scope = rememberCoroutineScope()
-
-    // 1. State controlling the dialog
-    var showLanguageDialog by remember { mutableStateOf(false) }
-
-    ModalNavigationDrawer(
-        drawerState = drawerState,
-        drawerContent = {
-            ModalDrawerSheet {
-                // Header (Profile name, business name)
-                Spacer(modifier = Modifier.height(16.dp))
-
-                // Standard Menu Items (Dashboard, Ledger, etc.)
-
-                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-
-                // 2. The Language Item in the 3-line menu
-                NavigationDrawerItem(
-                    icon = { Icon(Icons.Default.Language, contentDescription = "Language") },
-                    label = {
-                        Column {
-                            Text("Language / ভাষা / भाषा")
-                            Text(
-                                text = when (LocaleHelper.getCurrentLanguageCode()) {
-                                    "bn" -> "বাংলা"
-                                    "hi" -> "हिन्दी"
-                                    else -> "English"
-                                },
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.primary
-                            )
-                        }
-                    },
-                    selected = false,
-                    onClick = {
-                        scope.launch { drawerState.close() }
-                        showLanguageDialog = true
-                    },
-                    modifier = Modifier.padding(horizontal = 12.dp)
-                )
-
-                // Other items (Logout, About, etc.)
-            }
-        }
-    ) {
-        // Main Screen UI (Scaffold, TopBar with hamburger icon, screen content)
-        Scaffold(
-            topBar = {
-                // Clicking the hamburger icon calls scope.launch { drawerState.open() }
-            }
-        ) { paddingValues ->
-            // Screen content
-        }
-    }
-
-    // 3. Render dialog conditionally
-    if (showLanguageDialog) {
-        LanguageSelectionDialog(
-            onDismissRequest = { showLanguageDialog = false }
-        )
-    }
-}
-
 
 @Composable
 fun LenderHomeScreen(
@@ -136,16 +69,17 @@ fun LenderHomeScreen(
         }
     }
 
-    var lenderProfile by remember { mutableStateOf<Lender?>(null) }
-    var duesList by remember { mutableStateOf<List<DailyDueItem>>(emptyList()) }
+    var lenderProfile by remember { mutableStateOf(null) }
+    var duesList by remember { mutableStateOf>(emptyList()) }
     var searchQuery by remember { mutableStateOf("") }
     var isLoading by remember { mutableStateOf(true) }
 
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     var showAddressDialog by remember { mutableStateOf(false) }
     var showResetPasswordDialog by remember { mutableStateOf(false) }
+    var showLanguageDialog by remember { mutableStateOf(false) }
 
-    var selectedItemForPayment by remember { mutableStateOf<DailyDueItem?>(null) }
+    var selectedItemForPayment by remember { mutableStateOf(null) }
     var paymentAmountText by remember { mutableStateOf("") }
     var selectedPaymentMode by remember { mutableStateOf(PaymentMode.CASH) }
     var isSubmittingPayment by remember { mutableStateOf(false) }
@@ -236,6 +170,32 @@ fun LenderHomeScreen(
                     onClick = {
                         scope.launch { drawerState.close() }
                         showResetPasswordDialog = true
+                    },
+                    modifier = Modifier.padding(horizontal = 12.dp)
+                )
+
+                // Language selection item inside the 3-line menu
+                NavigationDrawerItem(
+                    icon = { Icon(Icons.Default.Language, contentDescription = null, tint = BrandPrimary) },
+                    label = {
+                        Column {
+                            Text("Language / ভাষা / भाषा")
+                            Text(
+                                text = when (LocaleHelper.getCurrentLanguageCode()) {
+                                    "bn" -> "বাংলা (Bengali)"
+                                    "hi" -> "हिन्दी (Hindi)"
+                                    else -> "English"
+                                },
+                                style = MaterialTheme.typography.labelSmall,
+                                color = BrandPrimary,
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
+                    },
+                    selected = false,
+                    onClick = {
+                        scope.launch { drawerState.close() }
+                        showLanguageDialog = true
                     },
                     modifier = Modifier.padding(horizontal = 12.dp)
                 )
@@ -403,6 +363,13 @@ fun LenderHomeScreen(
                         }
                     }
                 }
+            }
+
+            // ================= LANGUAGE SELECTION DIALOG =================
+            if (showLanguageDialog) {
+                LanguageSelectionDialog(
+                    onDismissRequest = { showLanguageDialog = false }
+                )
             }
 
             // ================= COLLECT PAYMENT DIALOG =================
@@ -647,7 +614,7 @@ fun LenderHomeScreen(
 // ----------------- TAB 0: PENDING DUES -----------------
 @Composable
 private fun PendingListTab(
-    pendingList: List<DailyDueItem>,
+    pendingList: List,
     currentDateStr: String,
     onCollectClick: (DailyDueItem) -> Unit
 ) {
@@ -756,7 +723,7 @@ private fun PendingListTab(
                                         CommunicationUtils.openWhatsAppChat(
                                             context = context,
                                             rawMobileNumber = item.borrowerMobile,
-                                            message = "Hello ${item.borrowerName}, your daily installment for $currentDateStr of ₹${item.todayDueBalance} is due today."
+                                            message = "Hello \({item.borrowerName}, your daily installment for\)currentDateStr of ₹${item.todayDueBalance} is due today."
                                         )
                                     },
                                     modifier = Modifier
@@ -824,7 +791,7 @@ private fun PendingListTab(
 // ----------------- TAB 1: PAID TODAY WITH DIGITAL RECEIPT -----------------
 @Composable
 private fun PaidTodayListTab(
-    paidList: List<DailyDueItem>,
+    paidList: List,
     businessName: String,
     currentDateStr: String
 ) {
