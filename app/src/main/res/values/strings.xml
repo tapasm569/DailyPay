@@ -13,9 +13,21 @@
     <string name="action_submit">Submit</string>
     <string name="action_save">Save Changes</string>
     <string name="action_cancel">Cancel</string>
+    <string name="action_close">Close</string>
+    <string name="action_confirm">Confirm</string>
     <string name="action_download_pdf">Download PDF</string>
+    <string name="btn_collect">Collect</string>
+    <string name="btn_verify">Verify &amp; Clear</string>
+    <string name="btn_reject">Reject</string>
+    <string name="search_hint">Search client name or mobile...</string>
 
-    <!-- Financial Labels -->
+    <!-- Navigation Drawer -->
+    <string name="menu_edit_profile">Edit Profile (Address)</string>
+    <string name="menu_reset_password">Reset Password</string>
+    <string name="menu_language">Language / ভাষা / भाषा</string>
+    <string name="menu_logout">Logout</string>
+
+    <!-- Financial Labels & Lender Home -->
     <string name="currency_symbol">₹</string>
     <string name="pending_due">Pending Due</string>
     <string name="received_payment">Received Payment</string>
@@ -23,6 +35,19 @@
     <string name="remaining_balance">Remaining Balance</string>
     <string name="todays_due">Today\'s Due</string>
     <string name="todays_payment">Today\'s Payment</string>
+    <string name="tab_pending">Pending</string>
+    <string name="tab_paid_today">Paid Today</string>
+    <string name="lbl_today_due">Today Due</string>
+    <string name="lbl_daily_emi">Daily EMI</string>
+    <string name="lbl_balance_left">Balance Left</string>
+    <string name="lbl_paid_today">Paid Today</string>
+    <string name="lbl_total_recovered">Total Recovered</string>
+    <string name="lbl_remaining_bal">Remaining Bal</string>
+    <string name="lbl_includes_overdue">Includes Overdue</string>
+    <string name="no_pending_dues">No pending dues for today!</string>
+    <string name="all_cleared">All scheduled collections are cleared.</string>
+    <string name="no_paid_today">No payments cleared today yet.</string>
+    <string name="paid_today_subtext">Approved payments will show here.</string>
 
     <!-- Admin Options -->
     <string name="admin_create_lender">Create Lender Account</string>
@@ -44,4 +69,30 @@
     <string name="borrower_apply_loan">Apply Loan</string>
     <string name="borrower_approved_loan">Approved Loan</string>
     <string name="borrower_pay_now">Pay Now (UPI)</string>
+
+    <!-- Dialogs -->
+    <string name="dialog_language_title">Choose Language / ভাষা নির্বাচন</string>
+    <string name="dialog_collect_title">Collect EMI Payment</string>
+    <string name="dialog_address_title">Update Business Address</string>
+    <string name="dialog_password_title">Reset Login Password</string>
+
+    <!-- Payment & Verification Workflow -->
+    <string name="pay_emi_title">Pay EMI</string>
+    <string name="todays_due_card">Today\'s Installment Due</string>
+    <string name="payment_amount_hint">Payment Amount (₹) *</string>
+    <string name="payment_method">Payment Method</string>
+    <string name="method_upi">UPI Online</string>
+    <string name="method_cash">Cash Handover</string>
+    <string name="upi_instructions">UPI Payment Instructions</string>
+    <string name="lender_upi_id">Lender UPI ID</string>
+    <string name="btn_open_upi">Open UPI App to Pay</string>
+    <string name="lbl_utr_field">12-Digit UPI Ref / UTR Number *</string>
+    <string name="utr_placeholder">Enter UTR from payment receipt</string>
+    <string name="btn_submit_verification">Submit for Lender Verification</string>
+    <string name="cash_instruction_note">Hand over cash to your lender in person. After submitting here, your lender will verify the cash to clear today\'s due.</string>
+
+    <!-- Statuses -->
+    <string name="status_pending">Pending Verification</string>
+    <string name="status_verified">Verified &amp; Cleared</string>
+    <string name="status_rejected">Rejected</string>
 </resources>
