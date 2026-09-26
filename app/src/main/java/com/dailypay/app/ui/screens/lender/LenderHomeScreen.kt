@@ -27,7 +27,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -38,11 +37,9 @@ import com.dailypay.app.data.model.Lender
 import com.dailypay.app.data.model.PaymentMode
 import com.dailypay.app.data.model.Repayment
 import com.dailypay.app.data.repository.LenderRepository
-import com.dailypay.app.ui.components.LanguageSelectionDialog
 import com.dailypay.app.ui.theme.*
 import com.dailypay.app.util.CommunicationUtils
 import com.dailypay.app.util.DateUtils
-import com.dailypay.app.util.LocaleHelper
 import com.dailypay.app.util.SessionManager
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
@@ -61,6 +58,7 @@ fun LenderHomeScreen(
     val lenderRepo = remember { LenderRepository(context) }
     val sessionManager = remember { SessionManager(context) }
 
+    // Fallback: if argument was empty, grab from SessionManager
     val resolvedLenderId = remember(lenderId) {
         if (lenderId.isNotBlank() && lenderId != "{lenderId}") {
             lenderId
@@ -69,17 +67,16 @@ fun LenderHomeScreen(
         }
     }
 
-    var lenderProfile by remember { mutableStateOf(null) }
-    var duesList by remember { mutableStateOf>(emptyList()) }
+    var lenderProfile by remember { mutableStateOf<Lender?>(null) }
+    var duesList by remember { mutableStateOf<List<DailyDueItem>>(emptyList()) }
     var searchQuery by remember { mutableStateOf("") }
     var isLoading by remember { mutableStateOf(true) }
 
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     var showAddressDialog by remember { mutableStateOf(false) }
     var showResetPasswordDialog by remember { mutableStateOf(false) }
-    var showLanguageDialog by remember { mutableStateOf(false) }
 
-    var selectedItemForPayment by remember { mutableStateOf(null) }
+    var selectedItemForPayment by remember { mutableStateOf<DailyDueItem?>(null) }
     var paymentAmountText by remember { mutableStateOf("") }
     var selectedPaymentMode by remember { mutableStateOf(PaymentMode.CASH) }
     var isSubmittingPayment by remember { mutableStateOf(false) }
@@ -154,7 +151,7 @@ fun LenderHomeScreen(
 
                 NavigationDrawerItem(
                     icon = { Icon(Icons.Default.EditLocation, contentDescription = null, tint = BrandPrimary) },
-                    label = { Text(stringResource(R.string.menu_edit_profile)) },
+                    label = { Text("Edit Profile (Address)") },
                     selected = false,
                     onClick = {
                         scope.launch { drawerState.close() }
@@ -165,7 +162,7 @@ fun LenderHomeScreen(
 
                 NavigationDrawerItem(
                     icon = { Icon(Icons.Default.LockReset, contentDescription = null, tint = AlertOrange) },
-                    label = { Text(stringResource(R.string.menu_reset_password)) },
+                    label = { Text("Reset Password") },
                     selected = false,
                     onClick = {
                         scope.launch { drawerState.close() }
@@ -174,36 +171,11 @@ fun LenderHomeScreen(
                     modifier = Modifier.padding(horizontal = 12.dp)
                 )
 
-                NavigationDrawerItem(
-                    icon = { Icon(Icons.Default.Language, contentDescription = null, tint = BrandPrimary) },
-                    label = {
-                        Column {
-                            Text(stringResource(R.string.menu_language))
-                            Text(
-                                text = when (LocaleHelper.getCurrentLanguageCode(context)) {
-                                    "bn" -> "বাংলা (Bengali)"
-                                    "hi" -> "हिन्दी (Hindi)"
-                                    else -> "English"
-                                },
-                                style = MaterialTheme.typography.labelSmall,
-                                color = BrandPrimary,
-                                fontWeight = FontWeight.Medium
-                            )
-                        }
-                    },
-                    selected = false,
-                    onClick = {
-                        scope.launch { drawerState.close() }
-                        showLanguageDialog = true
-                    },
-                    modifier = Modifier.padding(horizontal = 12.dp)
-                )
-
                 HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp, horizontal = 16.dp), color = BorderSubtleLight)
 
                 NavigationDrawerItem(
                     icon = { Icon(Icons.Default.ExitToApp, contentDescription = null, tint = DangerRed) },
-                    label = { Text(stringResource(R.string.menu_logout), color = DangerRed, fontWeight = FontWeight.SemiBold) },
+                    label = { Text("Logout", color = DangerRed, fontWeight = FontWeight.SemiBold) },
                     selected = false,
                     onClick = {
                         scope.launch { drawerState.close() }
@@ -264,7 +236,7 @@ fun LenderHomeScreen(
                     OutlinedTextField(
                         value = searchQuery,
                         onValueChange = { searchQuery = it },
-                        placeholder = { Text(stringResource(R.string.search_hint)) },
+                        placeholder = { Text("Search client name or mobile...") },
                         leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
                         trailingIcon = {
                             if (searchQuery.isNotEmpty()) {
@@ -291,7 +263,7 @@ fun LenderHomeScreen(
                             text = {
                                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                                     Text(
-                                        text = stringResource(R.string.tab_pending),
+                                        text = "Pending",
                                         fontWeight = if (pagerState.currentPage == 0) FontWeight.Bold else FontWeight.Medium,
                                         color = if (pagerState.currentPage == 0) BrandPrimary else TextSecondaryLight
                                     )
@@ -317,7 +289,7 @@ fun LenderHomeScreen(
                             text = {
                                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                                     Text(
-                                        text = stringResource(R.string.tab_paid_today),
+                                        text = "Paid Today",
                                         fontWeight = if (pagerState.currentPage == 1) FontWeight.Bold else FontWeight.Medium,
                                         color = if (pagerState.currentPage == 1) BrandPrimary else TextSecondaryLight
                                     )
@@ -364,23 +336,16 @@ fun LenderHomeScreen(
                 }
             }
 
-            // ================= LANGUAGE SELECTION DIALOG =================
-            if (showLanguageDialog) {
-                LanguageSelectionDialog(
-                    onDismissRequest = { showLanguageDialog = false }
-                )
-            }
-
             // ================= COLLECT PAYMENT DIALOG =================
             selectedItemForPayment?.let { item ->
                 AlertDialog(
                     onDismissRequest = { if (!isSubmittingPayment) selectedItemForPayment = null },
-                    title = { Text(stringResource(R.string.dialog_collect_title)) },
+                    title = { Text("Collect EMI Payment") },
                     text = {
                         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                             Text("Borrower: ${item.borrowerName}")
                             Text(
-                                text = stringResource(R.string.lbl_today_due) + ": ₹" + maxOf(0.0, item.todayDueBalance),
+                                text = "Today's Due: ₹${maxOf(0.0, item.todayDueBalance)}",
                                 fontWeight = FontWeight.Bold,
                                 color = AlertOrange
                             )
@@ -388,12 +353,12 @@ fun LenderHomeScreen(
                             OutlinedTextField(
                                 value = paymentAmountText,
                                 onValueChange = { paymentAmountText = it },
-                                label = { Text(stringResource(R.string.payment_amount_hint)) },
+                                label = { Text("Amount Collected (₹) *") },
                                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                                 modifier = Modifier.fillMaxWidth()
                             )
 
-                            Text(stringResource(R.string.payment_method), style = MaterialTheme.typography.labelMedium)
+                            Text("Payment Method:", style = MaterialTheme.typography.labelMedium)
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -401,13 +366,13 @@ fun LenderHomeScreen(
                                 FilterChip(
                                     selected = selectedPaymentMode == PaymentMode.CASH,
                                     onClick = { selectedPaymentMode = PaymentMode.CASH },
-                                    label = { Text(stringResource(R.string.method_cash)) },
+                                    label = { Text("Cash") },
                                     modifier = Modifier.weight(1f)
                                 )
                                 FilterChip(
                                     selected = selectedPaymentMode == PaymentMode.UPI,
                                     onClick = { selectedPaymentMode = PaymentMode.UPI },
-                                    label = { Text(stringResource(R.string.method_upi)) },
+                                    label = { Text("UPI") },
                                     modifier = Modifier.weight(1f)
                                 )
                             }
@@ -448,12 +413,12 @@ fun LenderHomeScreen(
                             enabled = !isSubmittingPayment,
                             colors = ButtonDefaults.buttonColors(containerColor = BrandPrimary)
                         ) {
-                            Text(if (isSubmittingPayment) "Saving..." else stringResource(R.string.action_confirm))
+                            Text(if (isSubmittingPayment) "Saving..." else "Confirm Payment")
                         }
                     },
                     dismissButton = {
                         TextButton(onClick = { selectedItemForPayment = null }, enabled = !isSubmittingPayment) {
-                            Text(stringResource(R.string.action_cancel))
+                            Text("Cancel")
                         }
                     }
                 )
@@ -469,7 +434,7 @@ fun LenderHomeScreen(
 
                 AlertDialog(
                     onDismissRequest = { if (!isSavingAddr) showAddressDialog = false },
-                    title = { Text(stringResource(R.string.dialog_address_title)) },
+                    title = { Text("Update Business Address") },
                     text = {
                         Column(
                             modifier = Modifier
@@ -529,12 +494,12 @@ fun LenderHomeScreen(
                             enabled = !isSavingAddr,
                             colors = ButtonDefaults.buttonColors(containerColor = BrandPrimary)
                         ) {
-                            Text(if (isSavingAddr) "Saving..." else stringResource(R.string.action_save))
+                            Text(if (isSavingAddr) "Saving..." else "Save Address")
                         }
                     },
                     dismissButton = {
                         TextButton(onClick = { showAddressDialog = false }, enabled = !isSavingAddr) {
-                            Text(stringResource(R.string.action_cancel))
+                            Text("Cancel")
                         }
                     }
                 )
@@ -548,7 +513,7 @@ fun LenderHomeScreen(
 
                 AlertDialog(
                     onDismissRequest = { if (!isSavingPwd) showResetPasswordDialog = false },
-                    title = { Text(stringResource(R.string.dialog_password_title)) },
+                    title = { Text("Reset Login Password") },
                     text = {
                         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             OutlinedTextField(
@@ -596,12 +561,12 @@ fun LenderHomeScreen(
                             enabled = !isSavingPwd,
                             colors = ButtonDefaults.buttonColors(containerColor = BrandPrimary)
                         ) {
-                            Text(if (isSavingPwd) "Saving..." else stringResource(R.string.action_save))
+                            Text(if (isSavingPwd) "Saving..." else "Update Password")
                         }
                     },
                     dismissButton = {
                         TextButton(onClick = { showResetPasswordDialog = false }, enabled = !isSavingPwd) {
-                            Text(stringResource(R.string.action_cancel))
+                            Text("Cancel")
                         }
                     }
                 )
@@ -613,7 +578,7 @@ fun LenderHomeScreen(
 // ----------------- TAB 0: PENDING DUES -----------------
 @Composable
 private fun PendingListTab(
-    pendingList: List,
+    pendingList: List<DailyDueItem>,
     currentDateStr: String,
     onCollectClick: (DailyDueItem) -> Unit
 ) {
@@ -629,8 +594,8 @@ private fun PendingListTab(
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Icon(Icons.Default.CheckCircle, contentDescription = null, tint = MoneyGreen, modifier = Modifier.size(54.dp))
                 Spacer(modifier = Modifier.height(10.dp))
-                Text(stringResource(R.string.no_pending_dues), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-                Text(stringResource(R.string.all_cleared), style = MaterialTheme.typography.bodySmall, color = TextSecondaryLight)
+                Text("No pending dues for today!", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                Text("All scheduled collections are cleared.", style = MaterialTheme.typography.bodySmall, color = TextSecondaryLight)
             }
         }
     } else {
@@ -670,6 +635,7 @@ private fun PendingListTab(
                                 Text(item.borrowerName, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                                 Text("+91 ${item.borrowerMobile}", style = MaterialTheme.typography.bodySmall, color = TextSecondaryLight)
 
+                                // Current Date Badge & Overdue indicator
                                 Row(
                                     verticalAlignment = Alignment.CenterVertically,
                                     modifier = Modifier.padding(top = 4.dp),
@@ -704,7 +670,7 @@ private fun PendingListTab(
                                             color = DangerRed.copy(alpha = 0.12f)
                                         ) {
                                             Text(
-                                                text = stringResource(R.string.lbl_includes_overdue),
+                                                text = "Includes Overdue",
                                                 modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
                                                 style = MaterialTheme.typography.labelSmall,
                                                 color = DangerRed,
@@ -718,11 +684,10 @@ private fun PendingListTab(
                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                 IconButton(
                                     onClick = {
-                                        val messageText = "Hello " + item.borrowerName + ", your daily installment for " + currentDateStr + " of ₹" + item.todayDueBalance + " is due today."
                                         CommunicationUtils.openWhatsAppChat(
                                             context = context,
                                             rawMobileNumber = item.borrowerMobile,
-                                            message = messageText
+                                            message = "Hello ${item.borrowerName}, your daily installment for $currentDateStr of ₹${item.todayDueBalance} is due today."
                                         )
                                     },
                                     modifier = Modifier
@@ -755,17 +720,17 @@ private fun PendingListTab(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Column {
-                                Text(stringResource(R.string.lbl_today_due), style = MaterialTheme.typography.labelSmall, color = AlertOrange)
+                                Text("Today Due", style = MaterialTheme.typography.labelSmall, color = AlertOrange)
                                 Text("₹${maxOf(0.0, item.todayDueBalance)}", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = AlertOrange)
                             }
 
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text(stringResource(R.string.lbl_daily_emi), style = MaterialTheme.typography.labelSmall, color = TextSecondaryLight)
+                                Text("Daily EMI", style = MaterialTheme.typography.labelSmall, color = TextSecondaryLight)
                                 Text("₹${item.dailyInstallment}", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
                             }
 
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text(stringResource(R.string.lbl_balance_left), style = MaterialTheme.typography.labelSmall, color = TextSecondaryLight)
+                                Text("Balance Left", style = MaterialTheme.typography.labelSmall, color = TextSecondaryLight)
                                 Text("₹${maxOf(0.0, item.remainingBalance)}", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
                             }
 
@@ -777,7 +742,7 @@ private fun PendingListTab(
                             ) {
                                 Icon(Icons.Default.Payment, contentDescription = null, modifier = Modifier.size(16.dp))
                                 Spacer(modifier = Modifier.width(6.dp))
-                                Text(stringResource(R.string.btn_collect))
+                                Text("Collect")
                             }
                         }
                     }
@@ -790,7 +755,7 @@ private fun PendingListTab(
 // ----------------- TAB 1: PAID TODAY WITH DIGITAL RECEIPT -----------------
 @Composable
 private fun PaidTodayListTab(
-    paidList: List,
+    paidList: List<DailyDueItem>,
     businessName: String,
     currentDateStr: String
 ) {
@@ -806,8 +771,8 @@ private fun PaidTodayListTab(
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Icon(Icons.Default.Payment, contentDescription = null, tint = TextSecondaryLight, modifier = Modifier.size(54.dp))
                 Spacer(modifier = Modifier.height(10.dp))
-                Text(stringResource(R.string.no_paid_today), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-                Text(stringResource(R.string.paid_today_subtext), style = MaterialTheme.typography.bodySmall, color = TextSecondaryLight)
+                Text("No payments cleared today yet.", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                Text("Approved payments will show here.", style = MaterialTheme.typography.bodySmall, color = TextSecondaryLight)
             }
         }
     } else {
@@ -845,6 +810,7 @@ private fun PaidTodayListTab(
                                 Text(item.borrowerName, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                                 Text("+91 ${item.borrowerMobile}", style = MaterialTheme.typography.bodySmall, color = TextSecondaryLight)
 
+                                // Current Date Badge for Paid Collections
                                 Surface(
                                     shape = RoundedCornerShape(6.dp),
                                     color = MoneyGreen.copy(alpha = 0.12f),
@@ -862,7 +828,7 @@ private fun PaidTodayListTab(
                                         )
                                         Spacer(modifier = Modifier.width(4.dp))
                                         Text(
-                                            text = stringResource(R.string.lbl_paid_today) + ": " + currentDateStr,
+                                            text = "Paid: $currentDateStr",
                                             style = MaterialTheme.typography.labelSmall,
                                             color = MoneyGreen,
                                             fontWeight = FontWeight.Medium
@@ -875,20 +841,23 @@ private fun PaidTodayListTab(
                                 IconButton(
                                     onClick = {
                                         val currentDateTime = SimpleDateFormat("dd MMMM yyyy, hh:mm a", Locale.getDefault()).format(Date())
-                                        val businessHeader = businessName.uppercase(Locale.getDefault())
-                                        val receiptText =
-                                            "*PAYMENT RECEIPT*\n" +
-                                            "*" + businessHeader + "*\n" +
-                                            "Date: " + currentDateTime + "\n\n" +
-                                            "Customer: " + item.borrowerName + "\n" +
-                                            "Mobile: +91 " + item.borrowerMobile + "\n\n" +
-                                            "-----------------------------------\n" +
-                                            "Amount Paid Today: ₹" + item.todayPaidAmount + "\n" +
-                                            "Total Recovered: ₹" + item.totalPaid + "\n" +
-                                            "Remaining Balance: ₹" + maxOf(0.0, item.remainingBalance) + "\n" +
-                                            "-----------------------------------\n\n" +
-                                            "Status: VERIFIED & CLEARED\n" +
-                                            "Thank you for your timely repayment!"
+                                        val receiptText = """
+                                            🧾 *PAYMENT RECEIPT*
+                                            🏪 *${businessName.uppercase(Locale.getDefault())}*
+                                            📅 Date: $currentDateTime
+
+                                            👤 Customer: ${item.borrowerName}
+                                            📱 Mobile: +91 ${item.borrowerMobile}
+
+                                            ━━━━━━━━━━━━━━━━━━━
+                                            💵 *Amount Paid Today: ₹${item.todayPaidAmount}*
+                                            ✅ Total Recovered: ₹${item.totalPaid}
+                                            ⚠️ Remaining Balance: ₹${maxOf(0.0, item.remainingBalance)}
+                                            ━━━━━━━━━━━━━━━━━━━
+
+                                            Status: VERIFIED & CLEARED ✅
+                                            Thank you for your timely repayment!
+                                        """.trimIndent()
 
                                         CommunicationUtils.openWhatsAppChat(
                                             context = context,
@@ -926,17 +895,17 @@ private fun PaidTodayListTab(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Column {
-                                Text(stringResource(R.string.lbl_paid_today), style = MaterialTheme.typography.labelSmall, color = MoneyGreen)
+                                Text("Paid Today", style = MaterialTheme.typography.labelSmall, color = MoneyGreen)
                                 Text("₹${item.todayPaidAmount}", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MoneyGreen)
                             }
 
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text(stringResource(R.string.lbl_total_recovered), style = MaterialTheme.typography.labelSmall, color = TextSecondaryLight)
+                                Text("Total Recovered", style = MaterialTheme.typography.labelSmall, color = TextSecondaryLight)
                                 Text("₹${item.totalPaid}", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
                             }
 
                             Column(horizontalAlignment = Alignment.End) {
-                                Text(stringResource(R.string.lbl_remaining_bal), style = MaterialTheme.typography.labelSmall, color = TextSecondaryLight)
+                                Text("Remaining Bal", style = MaterialTheme.typography.labelSmall, color = TextSecondaryLight)
                                 Text(
                                     text = "₹${maxOf(0.0, item.remainingBalance)}",
                                     style = MaterialTheme.typography.bodyMedium,
