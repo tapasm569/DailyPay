@@ -43,7 +43,7 @@
     <string name="lbl_paid_today">আজকে জমা</string>
     <string name="lbl_total_recovered">মোট আদায়</string>
     <string name="lbl_remaining_bal">অবশিষ্ট বাকি</string>
-    <string name="lbl_includes_overdue">বকেয়া অন্তর্ভুক্ত</string>
+    <string name="lbl_includes_overdue">বকেয়া</string>
     <string name="no_pending_dues">আজকের জন্য কোনো বাকি নেই!</string>
     <string name="all_cleared">সকল কিস্তি সফলভাবে পরিশোধ হয়েছে।</string>
     <string name="no_paid_today">আজকে এখনো কোনো পেমেন্ট ক্লিয়ার হয়নি।</string>
