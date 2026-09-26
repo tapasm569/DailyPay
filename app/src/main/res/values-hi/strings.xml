@@ -1,98 +1,98 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">डेली पे</string>
+    <string name="app_name">DailyPay</string>
 
     <!-- Role Titles -->
-    <string name="role_admin">एडमिन</string>
-    <string name="role_lender">ऋणदाता</string>
-    <string name="role_borrower">ग्राहक</string>
+    <string name="role_admin">Admin</string>
+    <string name="role_lender">Lender</string>
+    <string name="role_borrower">Borrower</string>
 
     <!-- Common Actions -->
-    <string name="action_login">लॉग इन</string>
-    <string name="action_logout">लॉग आउट</string>
-    <string name="action_submit">जमा करें</string>
-    <string name="action_save">सुरक्षित करें</string>
-    <string name="action_cancel">रद्द करें</string>
-    <string name="action_close">बंद करें</string>
-    <string name="action_confirm">पुष्टि करें</string>
-    <string name="action_download_pdf">पीडीएफ डाउनलोड</string>
-    <string name="btn_collect">वसूली करें</string>
-    <string name="btn_verify">सत्यापित और स्वीकृत</string>
-    <string name="btn_reject">अस्वीकार करें</string>
-    <string name="search_hint">ग्राहक का नाम या मोबाइल खोजें...</string>
+    <string name="action_login">Login</string>
+    <string name="action_logout">Logout</string>
+    <string name="action_submit">Submit</string>
+    <string name="action_save">Save Changes</string>
+    <string name="action_cancel">Cancel</string>
+    <string name="action_close">Close</string>
+    <string name="action_confirm">Confirm</string>
+    <string name="action_download_pdf">Download PDF</string>
+    <string name="btn_collect">Collect</string>
+    <string name="btn_verify">Verify &amp; Clear</string>
+    <string name="btn_reject">Reject</string>
+    <string name="search_hint">Search client name or mobile...</string>
 
     <!-- Navigation Drawer -->
-    <string name="menu_edit_profile">प्रोफाइल (पता) बदलें</string>
-    <string name="menu_reset_password">पासवर्ड रीसेट करें</string>
-    <string name="menu_language">भाषा चुनें (Language)</string>
-    <string name="menu_logout">लॉग आउट</string>
+    <string name="menu_edit_profile">Edit Profile (Address)</string>
+    <string name="menu_reset_password">Reset Password</string>
+    <string name="menu_language">Language / ভাষা / भाषा</string>
+    <string name="menu_logout">Logout</string>
 
     <!-- Financial Labels & Lender Home -->
     <string name="currency_symbol">₹</string>
-    <string name="pending_due">कुल बकाया</string>
-    <string name="received_payment">प्राप्त भुगतान</string>
-    <string name="total_disbursed">कुल वितरित ऋण</string>
-    <string name="remaining_balance">शेष राशि</string>
-    <string name="todays_due">आज का बकाया</string>
-    <string name="todays_payment">आज का भुगतान</string>
-    <string name="tab_pending">बकाया</string>
-    <string name="tab_paid_today">आज प्राप्त हुआ</string>
-    <string name="lbl_today_due">आज का बकाया</string>
-    <string name="lbl_daily_emi">दैनिक ईएमआई</string>
-    <string name="lbl_balance_left">शेष राशि</string>
-    <string name="lbl_paid_today">आज दिया गया</string>
-    <string name="lbl_total_recovered">कुल वसूली</string>
-    <string name="lbl_remaining_bal">बाकी बैलेंस</string>
-    <string name="lbl_includes_overdue">पिछला बकाया शामिल है</string>
-    <string name="no_pending_dues">आज कोई बकाया नहीं है!</string>
-    <string name="all_cleared">आज की सभी किस्तें जमा हो चुकी हैं।</string>
-    <string name="no_paid_today">आज कोई भुगतान स्वीकृत नहीं हुआ है।</string>
-    <string name="paid_today_subtext">स्वीकृत किए गए भुगतान यहां दिखेंगे।</string>
+    <string name="pending_due">Pending Due</string>
+    <string name="received_payment">Received Payment</string>
+    <string name="total_disbursed">Total Disbursed</string>
+    <string name="remaining_balance">Remaining Balance</string>
+    <string name="todays_due">Today\'s Due</string>
+    <string name="todays_payment">Today\'s Payment</string>
+    <string name="tab_pending">Pending</string>
+    <string name="tab_paid_today">Paid Today</string>
+    <string name="lbl_today_due">Today Due</string>
+    <string name="lbl_daily_emi">Daily EMI</string>
+    <string name="lbl_balance_left">Balance Left</string>
+    <string name="lbl_paid_today">Paid Today</string>
+    <string name="lbl_total_recovered">Total Recovered</string>
+    <string name="lbl_remaining_bal">Remaining Bal</string>
+    <string name="lbl_includes_overdue">Overdue</string>
+    <string name="no_pending_dues">No pending dues for today!</string>
+    <string name="all_cleared">All scheduled collections are cleared.</string>
+    <string name="no_paid_today">No payments cleared today yet.</string>
+    <string name="paid_today_subtext">Approved payments will show here.</string>
 
     <!-- Admin Options -->
-    <string name="admin_create_lender">ऋणदाता खाता बनाएं</string>
-    <string name="admin_manage_lender">ऋणदाता प्रबंधन</string>
-    <string name="admin_subscription">सदस्यता (Subscription)</string>
-    <string name="admin_payment_history">भुगतान का इतिहास</string>
-    <string name="admin_reminder">अनुस्मारक (Reminder)</string>
-    <string name="admin_set_password">पासवर्ड रीसेट अनुरोध</string>
+    <string name="admin_create_lender">Create Lender Account</string>
+    <string name="admin_manage_lender">Manage Lender</string>
+    <string name="admin_subscription">Subscription</string>
+    <string name="admin_payment_history">Payment History</string>
+    <string name="admin_reminder">Reminder</string>
+    <string name="admin_set_password">Reset Password Requests</string>
 
     <!-- Lender Options -->
-    <string name="lender_add_borrower">नया ग्राहक जोड़ें</string>
-    <string name="lender_new_loan_request">नए ऋण का अनुरोध</string>
-    <string name="lender_set_interest">ब्याज दर निर्धारित करें</string>
-    <string name="lender_give_loan_manually">मैन्युअल ऋण प्रदान करें</string>
-    <string name="lender_master_client">ग्राहक सूची</string>
-    <string name="lender_ledger_book">खाता बही (लेजर)</string>
+    <string name="lender_add_borrower">Add Borrower</string>
+    <string name="lender_new_loan_request">New Loan Request</string>
+    <string name="lender_set_interest">Set Interest</string>
+    <string name="lender_give_loan_manually">Give Loan Manually</string>
+    <string name="lender_master_client">Master Client</string>
+    <string name="lender_ledger_book">Ledger Book</string>
 
     <!-- Borrower Options -->
-    <string name="borrower_apply_loan">ऋण हेतु आवेदन करें</string>
-    <string name="borrower_approved_loan">स्वीकृत ऋण</string>
-    <string name="borrower_pay_now">भुगतान करें (UPI)</string>
+    <string name="borrower_apply_loan">Apply Loan</string>
+    <string name="borrower_approved_loan">Approved Loan</string>
+    <string name="borrower_pay_now">Pay Now (UPI)</string>
 
     <!-- Dialogs -->
-    <string name="dialog_language_title">भाषा चुनें / Choose Language</string>
-    <string name="dialog_collect_title">ईएमआई वसूली दर्ज करें</string>
-    <string name="dialog_address_title">व्यापार का पता अपडेट करें</string>
-    <string name="dialog_password_title">नया पासवर्ड सेट करें</string>
+    <string name="dialog_language_title">Choose Language / ভাষা নির্বাচন</string>
+    <string name="dialog_collect_title">Collect EMI Payment</string>
+    <string name="dialog_address_title">Update Business Address</string>
+    <string name="dialog_password_title">Reset Login Password</string>
 
     <!-- Payment & Verification Workflow -->
-    <string name="pay_emi_title">ईएमआई भुगतान</string>
-    <string name="todays_due_card">आज की कुल देय किस्त</string>
-    <string name="payment_amount_hint">भुगतान राशि (₹) *</string>
-    <string name="payment_method">भुगतान का माध्यम</string>
-    <string name="method_upi">यूपीआई ऑनलाइन</string>
-    <string name="method_cash">नकद भुगतान</string>
-    <string name="upi_instructions">यूपीआई भुगतान निर्देश</string>
-    <string name="lender_upi_id">ऋणदाता की UPI ID</string>
-    <string name="btn_open_upi">UPI ऐप से भुगतान करें</string>
-    <string name="lbl_utr_field">12-अंकीय UPI UTR नंबर *</string>
-    <string name="utr_placeholder">रसीद से 12 अंकों का UTR दर्ज करें</string>
-    <string name="btn_submit_verification">सत्यापन हेतु भेजें</string>
-    <string name="cash_instruction_note">ऋणदाता को सीधे नकद भुगतान करें। विवरण जमा करने के बाद ऋणदाता द्वारा पुष्टि की जाएगी।</string>
+    <string name="pay_emi_title">Pay EMI</string>
+    <string name="todays_due_card">Today\'s Installment Due</string>
+    <string name="payment_amount_hint">Payment Amount (₹) *</string>
+    <string name="payment_method">Payment Method</string>
+    <string name="method_upi">UPI Online</string>
+    <string name="method_cash">Cash Handover</string>
+    <string name="upi_instructions">UPI Payment Instructions</string>
+    <string name="lender_upi_id">Lender UPI ID</string>
+    <string name="btn_open_upi">Open UPI App to Pay</string>
+    <string name="lbl_utr_field">12-Digit UPI Ref / UTR Number *</string>
+    <string name="utr_placeholder">Enter UTR from payment receipt</string>
+    <string name="btn_submit_verification">Submit for Lender Verification</string>
+    <string name="cash_instruction_note">Hand over cash to your lender in person. After submitting here, your lender will verify the cash to clear today\'s due.</string>
 
     <!-- Statuses -->
-    <string name="status_pending">सत्यापन लंबित</string>
-    <string name="status_verified">सत्यापित व पूर्ण</string>
-    <string name="status_rejected">अस्वीकृत</string>
+    <string name="status_pending">Pending Verification</string>
+    <string name="status_verified">Verified &amp; Cleared</string>
+    <string name="status_rejected">Rejected</string>
 </resources>
