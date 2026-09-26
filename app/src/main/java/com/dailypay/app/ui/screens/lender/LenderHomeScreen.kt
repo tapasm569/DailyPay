@@ -68,8 +68,8 @@ fun LenderHomeScreen(
         }
     }
 
-    var lenderProfile by remember { mutableStateOf(null) }
-    var duesList by remember { mutableStateOf>(emptyList()) }
+    var lenderProfile by remember { mutableStateOf<Lender?>(null) }
+    var duesList by remember { mutableStateOf<List<DailyDueItem>>(emptyList()) }
     var searchQuery by remember { mutableStateOf("") }
     var isLoading by remember { mutableStateOf(true) }
 
@@ -78,7 +78,7 @@ fun LenderHomeScreen(
     var showResetPasswordDialog by remember { mutableStateOf(false) }
     var showLanguageDialog by remember { mutableStateOf(false) }
 
-    var selectedItemForPayment by remember { mutableStateOf(null) }
+    var selectedItemForPayment by remember { mutableStateOf<DailyDueItem?>(null) }
     var paymentAmountText by remember { mutableStateOf("") }
     var selectedPaymentMode by remember { mutableStateOf(PaymentMode.CASH) }
     var isSubmittingPayment by remember { mutableStateOf(false) }
@@ -608,7 +608,7 @@ fun LenderHomeScreen(
 // ----------------- TAB 0: PENDING DUES -----------------
 @Composable
 private fun PendingListTab(
-    pendingList: List,
+    pendingList: List<DailyDueItem>,
     currentDateStr: String,
     onCollectClick: (DailyDueItem) -> Unit
 ) {
@@ -716,7 +716,7 @@ private fun PendingListTab(
                                         CommunicationUtils.openWhatsAppChat(
                                             context = context,
                                             rawMobileNumber = item.borrowerMobile,
-                                            message = "Hello \({item.borrowerName}, your daily installment for\)currentDateStr of ₹${item.todayDueBalance} is due today."
+                                            message = "Hello ${item.borrowerName}, your daily installment for $currentDateStr of ₹${item.todayDueBalance} is due today."
                                         )
                                     },
                                     modifier = Modifier
@@ -784,7 +784,7 @@ private fun PendingListTab(
 // ----------------- TAB 1: PAID TODAY WITH DIGITAL RECEIPT -----------------
 @Composable
 private fun PaidTodayListTab(
-    paidList: List,
+    paidList: List<DailyDueItem>,
     businessName: String,
     currentDateStr: String
 ) {
