@@ -1,97 +1,52 @@
-package com.dailypay.app
+package com.dailypay.app.util
 
+import android.app.Activity
 import android.content.Context
 import android.content.res.Configuration
-import android.os.Bundle
-import androidx.activity.ComponentActivity
-import androidx.activity.compose.setContent
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
-import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalConfiguration
-import androidx.compose.ui.platform.LocalContext
-import androidx.navigation.compose.rememberNavController
-import com.dailypay.app.data.model.UserRole
-import com.dailypay.app.ui.navigation.AppNavHost
-import com.dailypay.app.ui.navigation.Screen
-import com.dailypay.app.ui.theme.DailyPayTheme
-import com.dailypay.app.util.LocaleHelper
-import com.dailypay.app.util.SessionManager
 import java.util.Locale
 
-class MainActivity : ComponentActivity() {
+object LocaleHelper {
 
-    override fun attachBaseContext(newBase: Context) {
-        super.attachBaseContext(LocaleHelper.applyLanguageContext(newBase))
+    val supportedLanguages = listOf(
+        LanguageOption("en", "English", "English"),
+        LanguageOption("bn", "বাংলা", "Bengali"),
+        LanguageOption("hi", "हिन्दी", "Hindi")
+    )
+
+    private const val PREF_KEY_LANG = "app_language"
+
+    fun getCurrentLanguageCode(context: Context): String {
+        val prefs = context.getSharedPreferences("dailypay_prefs", Context.MODE_PRIVATE)
+        val saved = prefs.getString(PREF_KEY_LANG, null)
+        if (!saved.isNullOrBlank()) return saved
+        return Locale.getDefault().language.let { if (it in listOf("bn", "hi")) it else "en" }
     }
 
-    override fun applyOverrideConfiguration(overrideConfiguration: Configuration?) {
-        if (overrideConfiguration != null) {
-            val lang = LocaleHelper.getCurrentLanguageCode(this)
-            val locale = Locale(lang)
-            overrideConfiguration.setLocale(locale)
-            overrideConfiguration.setLayoutDirection(locale)
-        }
-        super.applyOverrideConfiguration(overrideConfiguration)
+    fun applyLanguageContext(context: Context): Context {
+        val languageCode = getCurrentLanguageCode(context)
+        val locale = Locale(languageCode)
+        Locale.setDefault(locale)
+
+        val config = Configuration(context.resources.configuration)
+        config.setLocale(locale)
+        config.setLayoutDirection(locale)
+
+        return context.createConfigurationContext(config)
     }
 
-    override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
+    fun setAppLanguage(context: Context, languageCode: String) {
+        val prefs = context.getSharedPreferences("dailypay_prefs", Context.MODE_PRIVATE)
+        prefs.edit().putString(PREF_KEY_LANG, languageCode).commit()
 
-        val sessionManager = SessionManager(this)
-        val initialDestination = determineStartDestination(sessionManager)
+        val locale = Locale(languageCode)
+        Locale.setDefault(locale)
 
-        val langCode = LocaleHelper.getCurrentLanguageCode(this)
-        val targetLocale = Locale(langCode)
-        val localizedContext = LocaleHelper.applyLanguageContext(this)
-
-        val localizedConfig = Configuration(resources.configuration).apply {
-            setLocale(targetLocale)
-            setLayoutDirection(targetLocale)
-        }
-
-        setContent {
-            CompositionLocalProvider(
-                LocalConfiguration provides localizedConfig,
-                LocalContext provides localizedContext
-            ) {
-                DailyPayTheme {
-                    Surface(
-                        modifier = Modifier.fillMaxSize(),
-                        color = MaterialTheme.colorScheme.background
-                    ) {
-                        val navController = rememberNavController()
-                        AppNavHost(
-                            navController = navController,
-                            startDestination = initialDestination
-                        )
-                    }
-                }
-            }
-        }
-    }
-
-    private fun determineStartDestination(sessionManager: SessionManager): String {
-        if (!sessionManager.isLoggedIn()) {
-            return Screen.Login.route
-        }
-
-        val role = sessionManager.getUserRole()
-        val userId = sessionManager.getUserId() ?: ""
-
-        return when (role) {
-            UserRole.ADMIN -> Screen.AdminDashboard.route
-            UserRole.LENDER -> {
-                if (userId.isNotBlank()) Screen.LenderHome.createRoute(userId)
-                else Screen.Login.route
-            }
-            UserRole.BORROWER -> {
-                if (userId.isNotBlank()) Screen.BorrowerDashboard.createRoute(userId)
-                else Screen.Login.route
-            }
-            null -> Screen.Login.route
-        }
+        (context as? Activity)?.recreate()
     }
 }
+
+data class LanguageOption(
+    val code: String,
+    val nativeName: String,
+    val englishName: String
+)
