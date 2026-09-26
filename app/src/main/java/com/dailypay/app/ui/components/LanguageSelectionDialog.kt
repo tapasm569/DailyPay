@@ -1,5 +1,6 @@
 package com.dailypay.app.ui.components
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -46,12 +47,12 @@ fun LanguageSelectionDialog(
                 modifier = Modifier.fillMaxWidth(),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                LocaleHelper.supportedLanguages.forEach { lang ->
+                for (lang in LocaleHelper.supportedLanguages) {
                     val isSelected = selectedCode == lang.code
                     Surface(
                         shape = RoundedCornerShape(10.dp),
                         color = if (isSelected) BrandPrimary.copy(alpha = 0.12f) else MaterialTheme.colorScheme.surface,
-                        border = if (isSelected) androidx.compose.foundation.BorderStroke(1.5.dp, BrandPrimary) else null,
+                        border = if (isSelected) BorderStroke(1.5.dp, BrandPrimary) else null,
                         modifier = Modifier
                             .fillMaxWidth()
                             .clickable {
