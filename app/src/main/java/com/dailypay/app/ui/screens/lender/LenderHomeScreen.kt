@@ -61,6 +61,7 @@ fun LenderHomeScreen(
     val lenderRepo = remember { LenderRepository(context) }
     val sessionManager = remember { SessionManager(context) }
 
+    // Fallback: if argument was empty, grab from SessionManager
     val resolvedLenderId = remember(lenderId) {
         if (lenderId.isNotBlank() && lenderId != "{lenderId}") {
             lenderId
@@ -718,10 +719,11 @@ private fun PendingListTab(
                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                 IconButton(
                                     onClick = {
+                                        val messageText = "Hello " + item.borrowerName + ", your daily installment for " + currentDateStr + " of ₹" + item.todayDueBalance + " is due today."
                                         CommunicationUtils.openWhatsAppChat(
                                             context = context,
                                             rawMobileNumber = item.borrowerMobile,
-                                            message = "Hello \({item.borrowerName}, your daily installment for\)currentDateStr of ₹${item.todayDueBalance} is due today."
+                                            message = messageText
                                         )
                                     },
                                     modifier = Modifier
@@ -861,7 +863,7 @@ private fun PaidTodayListTab(
                                         )
                                         Spacer(modifier = Modifier.width(4.dp))
                                         Text(
-                                            text = "\({stringResource(R.string.lbl_paid_today)}:\)currentDateStr",
+                                            text = stringResource(R.string.lbl_paid_today) + ": " + currentDateStr,
                                             style = MaterialTheme.typography.labelSmall,
                                             color = MoneyGreen,
                                             fontWeight = FontWeight.Medium
@@ -874,10 +876,79 @@ private fun PaidTodayListTab(
                                 IconButton(
                                     onClick = {
                                         val currentDateTime = SimpleDateFormat("dd MMMM yyyy, hh:mm a", Locale.getDefault()).format(Date())
-                                        val receiptText = """
-*PAYMENT RECEIPT*
-*${businessName.uppercase(Locale.getDefault())}*
-Date: $currentDateTime
+                                        val businessHeader = businessName.uppercase(Locale.getDefault())
+                                        val receiptText = 
+                                            "*PAYMENT RECEIPT*\n" +
+                                            "*" + businessHeader + "*\n" +
+                                            "Date: " + currentDateTime + "\n\n" +
+                                            "Customer: " + item.borrowerName + "\n" +
+                                            "Mobile: +91 " + item.borrowerMobile + "\n\n" +
+                                            "-----------------------------------\n" +
+                                            "Amount Paid Today: ₹" + item.todayPaidAmount + "\n" +
+                                            "Total Recovered: ₹" + item.totalPaid + "\n" +
+                                            "Remaining Balance: ₹" + maxOf(0.0, item.remainingBalance) + "\n" +
+                                            "-----------------------------------\n\n" +
+                                            "Status: VERIFIED & CLEARED\n" +
+                                            "Thank you for your timely repayment!"
 
-Customer: ${item.borrowerName}
-Mobile: +91 ${item.borrowerMobile}
+                                        CommunicationUtils.openWhatsAppChat(
+                                            context = context,
+                                            rawMobileNumber = item.borrowerMobile,
+                                            message = receiptText
+                                        )
+                                    },
+                                    modifier = Modifier
+                                        .size(36.dp)
+                                        .clip(CircleShape)
+                                        .border(1.dp, WhatsAppGreen.copy(alpha = 0.3f), CircleShape)
+                                ) {
+                                    Icon(painter = painterResource(id = R.drawable.ic_whatsapp), contentDescription = "Send WhatsApp Receipt", tint = WhatsAppGreen, modifier = Modifier.size(18.dp))
+                                }
+
+                                IconButton(
+                                    onClick = { CommunicationUtils.openPhoneDialer(context, item.borrowerMobile) },
+                                    modifier = Modifier
+                                        .size(36.dp)
+                                        .clip(CircleShape)
+                                        .border(1.dp, CallBlue.copy(alpha = 0.3f), CircleShape)
+                                ) {
+                                    Icon(painter = painterResource(id = R.drawable.ic_call), contentDescription = "Call", tint = CallBlue, modifier = Modifier.size(18.dp))
+                                }
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(10.dp))
+                        HorizontalDivider(color = BorderSubtleLight.copy(alpha = 0.6f))
+                        Spacer(modifier = Modifier.height(10.dp))
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column {
+                                Text(stringResource(R.string.lbl_paid_today), style = MaterialTheme.typography.labelSmall, color = MoneyGreen)
+                                Text("₹${item.todayPaidAmount}", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MoneyGreen)
+                            }
+
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text(stringResource(R.string.lbl_total_recovered), style = MaterialTheme.typography.labelSmall, color = TextSecondaryLight)
+                                Text("₹${item.totalPaid}", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+                            }
+
+                            Column(horizontalAlignment = Alignment.End) {
+                                Text(stringResource(R.string.lbl_remaining_bal), style = MaterialTheme.typography.labelSmall, color = TextSecondaryLight)
+                                Text(
+                                    text = "₹${maxOf(0.0, item.remainingBalance)}",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = if (item.remainingBalance > 0.0) DangerRed else MoneyGreen
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
