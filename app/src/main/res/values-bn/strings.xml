@@ -1,0 +1,98 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">ডেইলি পে</string>
+
+    <!-- Role Titles -->
+    <string name="role_admin">অ্যাডমিন</string>
+    <string name="role_lender">মহাজন</string>
+    <string name="role_borrower">গ্রাহক</string>
+
+    <!-- Common Actions -->
+    <string name="action_login">লগইন</string>
+    <string name="action_logout">লগআউট</string>
+    <string name="action_submit">জমা দিন</string>
+    <string name="action_save">সংরক্ষণ করুন</string>
+    <string name="action_cancel">বাতিল</string>
+    <string name="action_close">বন্ধ করুন</string>
+    <string name="action_confirm">নিশ্চিত করুন</string>
+    <string name="action_download_pdf">পিডিএফ ডাউনলোড</string>
+    <string name="btn_collect">সংগ্রহ করুন</string>
+    <string name="btn_verify">যাচাই ও অনুমোদন</string>
+    <string name="btn_reject">প্রত্যাখ্যান</string>
+    <string name="search_hint">গ্রাহকের নাম বা মোবাইল নম্বর খুঁজুন...</string>
+
+    <!-- Navigation Drawer -->
+    <string name="menu_edit_profile">ঠিকানা পরিবর্তন করুন</string>
+    <string name="menu_reset_password">পাসওয়ার্ড পরিবর্তন</string>
+    <string name="menu_language">ভাষা পরিবর্তন (Language)</string>
+    <string name="menu_logout">লগআউট</string>
+
+    <!-- Financial Labels & Lender Home -->
+    <string name="currency_symbol">₹</string>
+    <string name="pending_due">মোট বাকি</string>
+    <string name="received_payment">প্রাপ্ত অর্থ</string>
+    <string name="total_disbursed">মোট প্রদত্ত ঋণ</string>
+    <string name="remaining_balance">অবশিষ্ট বাকি</string>
+    <string name="todays_due">আজকের বাকি</string>
+    <string name="todays_payment">আজকের জমা</string>
+    <string name="tab_pending">বাকি আছে</string>
+    <string name="tab_paid_today">আজ জমা হয়েছে</string>
+    <string name="lbl_today_due">আজকের বাকি</string>
+    <string name="lbl_daily_emi">দৈনিক কিস্তি</string>
+    <string name="lbl_balance_left">মোট বাকি</string>
+    <string name="lbl_paid_today">আজকে জমা</string>
+    <string name="lbl_total_recovered">মোট আদায়</string>
+    <string name="lbl_remaining_bal">অবশিষ্ট বাকি</string>
+    <string name="lbl_includes_overdue">বকেয়া অন্তর্ভুক্ত</string>
+    <string name="no_pending_dues">আজকের জন্য কোনো বাকি নেই!</string>
+    <string name="all_cleared">সকল কিস্তি সফলভাবে পরিশোধ হয়েছে।</string>
+    <string name="no_paid_today">আজকে এখনো কোনো পেমেন্ট ক্লিয়ার হয়নি।</string>
+    <string name="paid_today_subtext">অনুমোদিত পেমেন্ট এখানে দেখতে পাবেন।</string>
+
+    <!-- Admin Options -->
+    <string name="admin_create_lender">মহাজন অ্যাকাউন্ট তৈরি</string>
+    <string name="admin_manage_lender">মহাজন ব্যবস্থাপনা</string>
+    <string name="admin_subscription">সাবস্ক্রিপশন</string>
+    <string name="admin_payment_history">পেমেন্টের ইতিহাস</string>
+    <string name="admin_reminder">রিমাইন্ডার</string>
+    <string name="admin_set_password">পাসওয়ার্ড রিসেট অনুরোধ</string>
+
+    <!-- Lender Options -->
+    <string name="lender_add_borrower">নতুন গ্রাহক যোগ করুন</string>
+    <string name="lender_new_loan_request">নতুন ঋণের আবেদন</string>
+    <string name="lender_set_interest">সুদের হার নির্ধারণ</string>
+    <string name="lender_give_loan_manually">ম্যানুয়াল ঋণ প্রদান</string>
+    <string name="lender_master_client">গ্রাহক তালিকা</string>
+    <string name="lender_ledger_book">খাতা বহি (লেজার)</string>
+
+    <!-- Borrower Options -->
+    <string name="borrower_apply_loan">ঋণের আবেদন করুন</string>
+    <string name="borrower_approved_loan">অনুমোদিত ঋণ</string>
+    <string name="borrower_pay_now">কিস্তি দিন (UPI)</string>
+
+    <!-- Dialogs -->
+    <string name="dialog_language_title">ভাষা নির্বাচন / Choose Language</string>
+    <string name="dialog_collect_title">কিস্তি সংগ্রহ করুন</string>
+    <string name="dialog_address_title">ব্যবসার ঠিকানা আপডেট করুন</string>
+    <string name="dialog_password_title">পাসওয়ার্ড পরিবর্তন করুন</string>
+
+    <!-- Payment & Verification Workflow -->
+    <string name="pay_emi_title">কিস্তি পরিশোধ</string>
+    <string name="todays_due_card">আজকের কিস্তির পরিমাণ</string>
+    <string name="payment_amount_hint">পরিশোধের পরিমাণ (₹) *</string>
+    <string name="payment_method">পেমেন্টের মাধ্যম</string>
+    <string name="method_upi">ইউপিআই (UPI)</string>
+    <string name="method_cash">নগদ টাকা (Cash)</string>
+    <string name="upi_instructions">ইউপিআই পেমেন্ট নির্দেশিকা</string>
+    <string name="lender_upi_id">মহাজনের UPI ID</string>
+    <string name="btn_open_upi">UPI অ্যাপ দিয়ে পে করুন</string>
+    <string name="lbl_utr_field">১২ ডিজিটের UPI UTR নম্বর *</string>
+    <string name="utr_placeholder">রসিদ থেকে ১২ ডিজিটের UTR লিখুন</string>
+    <string name="btn_submit_verification">যাচাইয়ের জন্য জমা দিন</string>
+    <string name="cash_instruction_note">মহাজনকে সরাসরি নগদ অর্থ প্রদান করুন। জমা দেওয়ার পর মহাজন যাচাই করে কিস্তি অনুমোদন করবেন।</string>
+
+    <!-- Statuses -->
+    <string name="status_pending">যাচাই পেন্ডিং</string>
+    <string name="status_verified">অনুমোদিত ও সম্পন্ন</string>
+    <string name="status_rejected">বাতিল করা হয়েছে</string>
+</resources>
