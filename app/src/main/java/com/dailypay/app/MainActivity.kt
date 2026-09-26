@@ -1,5 +1,6 @@
 package com.dailypay.app
 
+import android.content.Context
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -12,9 +13,15 @@ import com.dailypay.app.data.model.UserRole
 import com.dailypay.app.ui.navigation.AppNavHost
 import com.dailypay.app.ui.navigation.Screen
 import com.dailypay.app.ui.theme.DailyPayTheme
+import com.dailypay.app.util.LocaleHelper
 import com.dailypay.app.util.SessionManager
 
 class MainActivity : ComponentActivity() {
+
+    override fun attachBaseContext(newBase: Context) {
+        // Injects the saved locale (en, bn, or hi) into the Activity context
+        super.attachBaseContext(LocaleHelper.applyLanguageContext(newBase))
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
