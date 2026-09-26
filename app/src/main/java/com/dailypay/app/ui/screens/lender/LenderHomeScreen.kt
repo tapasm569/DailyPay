@@ -875,81 +875,9 @@ private fun PaidTodayListTab(
                                     onClick = {
                                         val currentDateTime = SimpleDateFormat("dd MMMM yyyy, hh:mm a", Locale.getDefault()).format(Date())
                                         val receiptText = """
-                                            🧾 *PAYMENT RECEIPT*
-                                            🏪 *${businessName.uppercase(Locale.getDefault())}*
-                                            📅 Date: $currentDateTime
+*PAYMENT RECEIPT*
+*${businessName.uppercase(Locale.getDefault())}*
+Date: $currentDateTime
 
-                                            👤 Customer: ${item.borrowerName}
-                                            📱 Mobile: +91 ${item.borrowerMobile}
-
-                                            ━━━━━━━━━━━━━━━━━━━
-                                            💵 *Amount Paid Today: ₹${item.todayPaidAmount}*
-                                            ✅ Total Recovered: ₹${item.totalPaid}
-                                            ⚠️ Remaining Balance: ₹${maxOf(0.0, item.remainingBalance)}
-                                            ━━━━━━━━━━━━━━━━━━━
-
-                                            Status: VERIFIED & CLEARED ✅
-                                            Thank you for your timely repayment!
-                                        """.trimIndent()
-
-                                        CommunicationUtils.openWhatsAppChat(
-                                            context = context,
-                                            rawMobileNumber = item.borrowerMobile,
-                                            message = receiptText
-                                        )
-                                    },
-                                    modifier = Modifier
-                                        .size(36.dp)
-                                        .clip(CircleShape)
-                                        .border(1.dp, WhatsAppGreen.copy(alpha = 0.3f), CircleShape)
-                                ) {
-                                    Icon(painter = painterResource(id = R.drawable.ic_whatsapp), contentDescription = "Send WhatsApp Receipt", tint = WhatsAppGreen, modifier = Modifier.size(18.dp))
-                                }
-
-                                IconButton(
-                                    onClick = { CommunicationUtils.openPhoneDialer(context, item.borrowerMobile) },
-                                    modifier = Modifier
-                                        .size(36.dp)
-                                        .clip(CircleShape)
-                                        .border(1.dp, CallBlue.copy(alpha = 0.3f), CircleShape)
-                                ) {
-                                    Icon(painter = painterResource(id = R.drawable.ic_call), contentDescription = "Call", tint = CallBlue, modifier = Modifier.size(18.dp))
-                                }
-                            }
-                        }
-
-                        Spacer(modifier = Modifier.height(10.dp))
-                        HorizontalDivider(color = BorderSubtleLight.copy(alpha = 0.6f))
-                        Spacer(modifier = Modifier.height(10.dp))
-
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Column {
-                                Text(stringResource(R.string.lbl_paid_today), style = MaterialTheme.typography.labelSmall, color = MoneyGreen)
-                                Text("₹${item.todayPaidAmount}", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MoneyGreen)
-                            }
-
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text(stringResource(R.string.lbl_total_recovered), style = MaterialTheme.typography.labelSmall, color = TextSecondaryLight)
-                                Text("₹${item.totalPaid}", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
-                            }
-
-                            Column(horizontalAlignment = Alignment.End) {
-                                Text(stringResource(R.string.lbl_remaining_bal), style = MaterialTheme.typography.labelSmall, color = TextSecondaryLight)
-                                Text(
-                                    text = "₹${maxOf(0.0, item.remainingBalance)}",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    fontWeight = FontWeight.Bold,
-                                    color = if (item.remainingBalance > 0.0) DangerRed else MoneyGreen
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
+Customer: ${item.borrowerName}
+Mobile: +91 ${item.borrowerMobile}
