@@ -150,7 +150,7 @@ fun LenderHomeScreen(
                     }
                 }
 
-Spacer(modifier = Modifier.height(12.dp))
+                Spacer(modifier = Modifier.height(12.dp))
 
                 NavigationDrawerItem(
                     icon = { Icon(Icons.Default.EditLocation, contentDescription = null, tint = BrandPrimary) },
@@ -280,7 +280,7 @@ Spacer(modifier = Modifier.height(12.dp))
                         singleLine = true
                     )
 
-TabRow(
+                    TabRow(
                         selectedTabIndex = pagerState.currentPage,
                         containerColor = MaterialTheme.colorScheme.surface,
                         contentColor = BrandPrimary
@@ -364,12 +364,14 @@ TabRow(
                 }
             }
 
+            // ================= LANGUAGE SELECTION DIALOG =================
             if (showLanguageDialog) {
                 LanguageSelectionDialog(
                     onDismissRequest = { showLanguageDialog = false }
                 )
             }
 
+            // ================= COLLECT PAYMENT DIALOG =================
             selectedItemForPayment?.let { item ->
                 AlertDialog(
                     onDismissRequest = { if (!isSubmittingPayment) selectedItemForPayment = null },
@@ -396,12 +398,6 @@ TabRow(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
-                                FilterChip(
-                                    selected = selectedPaymentMode == PaymentMode.CASH,
-                                    onClick = { selectedPaymentMode = PaymentMode.CASH },
-                                    label = { Text(stringResource(R.string.method_cash)) },
-                                    modifier = Modifier.weight(1f)
-                                )
                                 FilterChip(
                                     selected = selectedPaymentMode == PaymentMode.UPI,
                                     onClick = { selectedPaymentMode = PaymentMode.UPI },
@@ -457,7 +453,8 @@ TabRow(
                 )
             }
 
-if (showAddressDialog) {
+            // ================= EDIT ADDRESS DIALOG =================
+            if (showAddressDialog) {
                 var editVillage by remember { mutableStateOf(lenderProfile?.villageTown ?: "") }
                 var editPostOffice by remember { mutableStateOf(lenderProfile?.postOffice ?: "") }
                 var editDist by remember { mutableStateOf(lenderProfile?.dist ?: "") }
@@ -537,6 +534,7 @@ if (showAddressDialog) {
                 )
             }
 
+// ================= RESET PASSWORD DIALOG =================
             if (showResetPasswordDialog) {
                 var newPassword by remember { mutableStateOf("") }
                 var confirmPassword by remember { mutableStateOf("") }
@@ -666,6 +664,7 @@ private fun PendingListTab(
                                 Text(item.borrowerName, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                                 Text("+91 ${item.borrowerMobile}", style = MaterialTheme.typography.bodySmall, color = TextSecondaryLight)
 
+                                // Date badge & Overdue indicator arranged so neither gets squashed
                                 Row(
                                     verticalAlignment = Alignment.CenterVertically,
                                     modifier = Modifier.padding(top = 4.dp),
@@ -704,7 +703,8 @@ private fun PendingListTab(
                                                 modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
                                                 style = MaterialTheme.typography.labelSmall,
                                                 color = DangerRed,
-                                                fontWeight = FontWeight.Bold
+                                                fontWeight = FontWeight.Bold,
+                                                maxLines = 1
                                             )
                                         }
                                     }
@@ -946,4 +946,4 @@ private fun PaidTodayListTab(
             }
         }
     }
-}
+}                   
