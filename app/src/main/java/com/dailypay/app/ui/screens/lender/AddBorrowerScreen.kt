@@ -43,7 +43,7 @@ fun AddBorrowerScreen(
 
     var name by remember { mutableStateOf("") }
     var mobile by remember { mutableStateOf("") }
-    var villageTown by remember { mutableStateOf("") }
+    var villageCity by remember { mutableStateOf("") }
     var postOffice by remember { mutableStateOf("") }
     var dist by remember { mutableStateOf("") }
     var pinCode by remember { mutableStateOf("") }
@@ -90,9 +90,9 @@ fun AddBorrowerScreen(
             )
 
             OutlinedTextField(
-                value = villageTown,
-                onValueChange = { villageTown = it },
-                label = { Text("Village / Town") },
+                value = villageCity,
+                onValueChange = { villageCity = it },
+                label = { Text("Village / City") },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth()
             )
@@ -145,10 +145,9 @@ fun AddBorrowerScreen(
                             lenderId = resolvedLenderId,
                             name = name.trim(),
                             mobileNumber = mobile.trim(),
-                            villageTown = villageTown.trim().ifBlank { null },
+                            villageCity = villageCity.trim().ifBlank { null },
                             postOffice = postOffice.trim().ifBlank { null },
-                            dist = dist.trim().ifBlank { null },
-                            pinCode = pinCode.trim().ifBlank { null }
+                            dist = dist.trim().ifBlank { null }
                         )
 
                         lenderRepo.addBorrower(
