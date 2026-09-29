@@ -5,6 +5,7 @@ package com.dailypay.app.ui.screens.lender
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.CircleShape
@@ -34,6 +35,11 @@ private data class DashboardItem(
     val onClick: () -> Unit
 )
 
+private data class DashboardCategory(
+    val title: String,
+    val items: List<DashboardItem>
+)
+
 @Composable
 fun LenderDashboardScreen(
     lenderId: String,
@@ -57,17 +63,32 @@ fun LenderDashboardScreen(
         else sessionManager.getUserId() ?: ""
     }
 
-    val dashboardItems = listOf(
-        DashboardItem(R.string.lender_add_borrower, Icons.Default.PersonAdd, BrandPrimary, onNavigateToAddBorrower),
-        DashboardItem(R.string.lender_master_client, Icons.Default.People, CallBlue, onNavigateToMasterClient),
-        DashboardItem(R.string.lender_give_loan_manually, Icons.Default.MonetizationOn, AlertOrange, onNavigateToGiveLoan),
-        DashboardItem(R.string.lender_new_loan_request, Icons.Default.PostAdd, BrandPrimary, onNavigateToNewLoanRequest),
-        DashboardItem(R.string.lender_ledger_book, Icons.Default.MenuBook, MoneyGreen, onNavigateToLedger),
-        DashboardItem(R.string.borrower_approved_loan, Icons.Default.CheckCircle, MoneyGreen, onNavigateToApprovedLoans),
-        DashboardItem(R.string.admin_payment_history, Icons.Default.History, CallBlue, onNavigateToTrackPayments),
-        DashboardItem(R.string.todays_due, Icons.Default.Schedule, AlertOrange, onNavigateToTodaysDue),
-        DashboardItem(R.string.todays_payment, Icons.Default.Payment, MoneyGreen, onNavigateToTodaysPayment),
-        DashboardItem(R.string.btn_verify, Icons.Default.FactCheck, BrandPrimary, onNavigateToVerifyPayment)
+    val categories = listOf(
+        DashboardCategory(
+            title = "Borrower Management",
+            items = listOf(
+                DashboardItem(R.string.lender_add_borrower, Icons.Default.PersonAdd, BrandPrimary, onNavigateToAddBorrower),
+                DashboardItem(R.string.lender_master_client, Icons.Default.People, CallBlue, onNavigateToMasterClient)
+            )
+        ),
+        DashboardCategory(
+            title = "Loan Processing",
+            items = listOf(
+                DashboardItem(R.string.lender_give_loan_manually, Icons.Default.MonetizationOn, AlertOrange, onNavigateToGiveLoan),
+                DashboardItem(R.string.lender_new_loan_request, Icons.Default.PostAdd, BrandPrimary, onNavigateToNewLoanRequest),
+                DashboardItem(R.string.borrower_approved_loan, Icons.Default.CheckCircle, MoneyGreen, onNavigateToApprovedLoans)
+            )
+        ),
+        DashboardCategory(
+            title = "Financial Tracking & Collections",
+            items = listOf(
+                DashboardItem(R.string.lender_ledger_book, Icons.Default.MenuBook, MoneyGreen, onNavigateToLedger),
+                DashboardItem(R.string.todays_due, Icons.Default.Schedule, AlertOrange, onNavigateToTodaysDue),
+                DashboardItem(R.string.todays_payment, Icons.Default.Payment, MoneyGreen, onNavigateToTodaysPayment),
+                DashboardItem(R.string.btn_verify, Icons.Default.FactCheck, BrandPrimary, onNavigateToVerifyPayment),
+                DashboardItem(R.string.admin_payment_history, Icons.Default.History, CallBlue, onNavigateToTrackPayments)
+            )
+        )
     )
 
     Scaffold(
@@ -94,45 +115,56 @@ fun LenderDashboardScreen(
             horizontalArrangement = Arrangement.spacedBy(14.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
-            items(dashboardItems) { item ->
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(130.dp)
-                        .clickable { item.onClick() },
-                    shape = RoundedCornerShape(16.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-                ) {
-                    Column(
+            categories.forEach { category ->
+                item(span = { GridItemSpan(2) }) {
+                    Text(
+                        text = category.title,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = BrandPrimary,
+                        modifier = Modifier.padding(top = 8.dp, bottom = 4.dp)
+                    )
+                }
+                items(category.items) { item ->
+                    Card(
                         modifier = Modifier
-                            .fillMaxSize()
-                            .padding(14.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Center
+                            .fillMaxWidth()
+                            .height(130.dp)
+                            .clickable { item.onClick() },
+                        shape = RoundedCornerShape(16.dp),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
                     ) {
-                        Surface(
-                            modifier = Modifier.size(50.dp),
-                            shape = CircleShape,
-                            color = item.iconColor.copy(alpha = 0.12f)
+                        Column(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(14.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.Center
                         ) {
-                            Box(contentAlignment = Alignment.Center) {
-                                Icon(
-                                    imageVector = item.icon,
-                                    contentDescription = null,
-                                    tint = item.iconColor,
-                                    modifier = Modifier.size(26.dp)
-                                )
+                            Surface(
+                                modifier = Modifier.size(50.dp),
+                                shape = CircleShape,
+                                color = item.iconColor.copy(alpha = 0.12f)
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(
+                                        imageVector = item.icon,
+                                        contentDescription = null,
+                                        tint = item.iconColor,
+                                        modifier = Modifier.size(26.dp)
+                                    )
+                                }
                             }
+                            Spacer(modifier = Modifier.height(10.dp))
+                            Text(
+                                text = stringResource(item.titleRes),
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.SemiBold,
+                                textAlign = TextAlign.Center,
+                                maxLines = 2
+                            )
                         }
-                        Spacer(modifier = Modifier.height(10.dp))
-                        Text(
-                            text = stringResource(item.titleRes),
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = FontWeight.SemiBold,
-                            textAlign = TextAlign.Center,
-                            maxLines = 2
-                        )
                     }
                 }
             }
