@@ -13,16 +13,19 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.dailypay.app.R
 import com.dailypay.app.ui.theme.*
+import com.dailypay.app.util.SessionManager
 
 private data class DashboardItem(
     val titleRes: Int,
@@ -47,6 +50,13 @@ fun LenderDashboardScreen(
     onNavigateToLedger: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
+    val sessionManager = remember { SessionManager(context) }
+    val resolvedLenderId = remember(lenderId) {
+        if (lenderId.isNotBlank() && lenderId != "{lenderId}") lenderId
+        else sessionManager.getUserId() ?: ""
+    }
+
     val dashboardItems = listOf(
         DashboardItem(R.string.lender_add_borrower, Icons.Default.PersonAdd, BrandPrimary, onNavigateToAddBorrower),
         DashboardItem(R.string.lender_master_client, Icons.Default.People, CallBlue, onNavigateToMasterClient),
