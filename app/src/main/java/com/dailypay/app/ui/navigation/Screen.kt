@@ -13,12 +13,8 @@ sealed class Screen(val route: String) {
     object LenderDashboard : Screen("lender_dashboard/{lenderId}") {
         fun createRoute(lenderId: String) = "lender_dashboard/$lenderId"
     }
-    object AddBorrower : Screen("add_borrower/{lenderId}") {
-        fun createRoute(lenderId: String) = "add_borrower/$lenderId"
-    }
-    object MasterClient : Screen("master_client/{lenderId}") {
-        fun createRoute(lenderId: String) = "master_client/$lenderId"
-    }
+    object AddBorrower : Screen("add_borrower")
+    object MasterClient : Screen("master_client")
     object GiveLoanManual : Screen("give_loan_manual/{lenderId}") {
         fun createRoute(lenderId: String) = "give_loan_manual/$lenderId"
     }
