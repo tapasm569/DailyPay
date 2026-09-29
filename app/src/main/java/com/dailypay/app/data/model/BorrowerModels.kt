@@ -30,7 +30,7 @@ data class Borrower(
     val dist: String? = null,
 
     @SerialName("password_hash")
-    val passwordHash: String? = null,
+    val passwordHash: String = "",
 
     @SerialName("profile_pic_url")
     val profilePicUrl: String? = null,
