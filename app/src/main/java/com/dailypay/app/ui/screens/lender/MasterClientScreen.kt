@@ -59,18 +59,22 @@ fun MasterClientScreen(
     var selectedBorrowerForDetail by remember { mutableStateOf<Borrower?>(null) }
     var selectedBorrowerForEdit by remember { mutableStateOf<Borrower?>(null) }
     var borrowerToDelete by remember { mutableStateOf<Borrower?>(null) }
-    var previewDocUrl by remember { mutableStateOf<Pair<String, String>?>(null) } // Pair(Title, Url)
+    var previewDocUrl by remember { mutableStateOf<Pair<String, String>?>(null) }
     var isUploadingDoc by remember { mutableStateOf(false) }
 
-    // Pending upload target: "avatar", "aadhaar", or "pan"
     var pendingUploadType by remember { mutableStateOf<String?>(null) }
 
     fun loadData() {
+        if (lenderId.isBlank() || lenderId == "unknown") {
+            isLoading = false
+            Toast.makeText(context, "Invalid lender session identifier.", Toast.LENGTH_SHORT).show()
+            return
+        }
+
         scope.launch {
             lenderRepo.getBorrowers(lenderId)
                 .onSuccess {
                     borrowersList = it
-                    // Also refresh currently open details dialog if active
                     selectedBorrowerForDetail?.let { current ->
                         selectedBorrowerForDetail = it.find { b -> b.id == current.id }
                     }
@@ -199,7 +203,6 @@ fun MasterClientScreen(
                         verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
                         itemsIndexed(filteredBorrowers, key = { index, item -> item.id ?: "borrower_$index" }) { _, borrower ->
-                            // Clean Card View: Clicking opens the full detail profile dialog
                             Card(
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -311,7 +314,7 @@ fun MasterClientScreen(
             }
         }
 
-        // ================= 1. STYLISH BORROWER PROFILE DETAILS DIALOG =================
+        // ================= PROFILE DETAILS DIALOG =================
         selectedBorrowerForDetail?.let { borrower ->
             Dialog(
                 onDismissRequest = { selectedBorrowerForDetail = null },
@@ -330,7 +333,6 @@ fun MasterClientScreen(
                             .fillMaxSize()
                             .padding(20.dp)
                     ) {
-                        // Header with Close
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween,
@@ -352,7 +354,6 @@ fun MasterClientScreen(
                         ) {
                             Spacer(modifier = Modifier.height(4.dp))
 
-                            // Profile Avatar & Update Button
                             Box(modifier = Modifier.align(Alignment.CenterHorizontally)) {
                                 if (!borrower.profilePicUrl.isNullOrBlank()) {
                                     AsyncImage(
@@ -395,408 +396,4 @@ fun MasterClientScreen(
                                     color = BrandPrimary,
                                     shape = CircleShape
                                 ) {
-                                    Box(contentAlignment = Alignment.Center) {
-                                        if (isUploadingDoc && pendingUploadType == "avatar") {
-                                            CircularProgressIndicator(color = Color.White, strokeWidth = 2.dp, modifier = Modifier.size(16.dp))
-                                        } else {
-                                            Icon(Icons.Default.CameraAlt, contentDescription = "Change Photo", tint = Color.White, modifier = Modifier.size(16.dp))
-                                        }
-                                    }
-                                }
-                            }
-
-                            // Details Table
-                            Card(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .border(1.dp, BorderSubtleLight, RoundedCornerShape(12.dp)),
-                                shape = RoundedCornerShape(12.dp),
-                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.background.copy(alpha = 0.5f))
-                            ) {
-                                Column(modifier = Modifier.padding(12.dp)) {
-                                    DetailTableRow("Full Name", borrower.name)
-                                    DetailTableRow("Mobile Number", "+91 ${borrower.mobileNumber}")
-                                    DetailTableRow("Village / City", borrower.villageCity ?: "Not Specified")
-                                    DetailTableRow("Post Office", borrower.postOffice ?: "Not Specified")
-                                    DetailTableRow("Police Station", borrower.policeStation ?: "Not Specified")
-                                    DetailTableRow("District", borrower.dist ?: "Not Specified")
-                                }
-                            }
-
-                            // KYC Documents Section
-                            Text("KYC Documents", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
-
-                            // Aadhaar Card Row
-                            Card(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .border(1.dp, BorderSubtleLight, RoundedCornerShape(12.dp)),
-                                shape = RoundedCornerShape(12.dp),
-                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
-                            ) {
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(12.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.SpaceBetween
-                                ) {
-                                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
-                                        Icon(Icons.Default.Badge, contentDescription = null, tint = BrandPrimary, modifier = Modifier.size(26.dp))
-                                        Spacer(modifier = Modifier.width(10.dp))
-                                        Column {
-                                            Text("Aadhaar Card", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
-                                            Text(
-                                                text = if (borrower.aadhaarCardUrl.isNullOrBlank()) "Not Uploaded" else "Document Uploaded",
-                                                style = MaterialTheme.typography.bodySmall,
-                                                color = if (borrower.aadhaarCardUrl.isNullOrBlank()) AlertOrange else MoneyGreen
-                                            )
-                                        }
-                                    }
-
-                                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                        if (!borrower.aadhaarCardUrl.isNullOrBlank()) {
-                                            FilledTonalButton(
-                                                onClick = { previewDocUrl = Pair("${borrower.name}'s Aadhaar Card", borrower.aadhaarCardUrl) },
-                                                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
-                                                shape = RoundedCornerShape(8.dp)
-                                            ) {
-                                                Icon(Icons.Default.Visibility, contentDescription = null, modifier = Modifier.size(16.dp))
-                                                Spacer(modifier = Modifier.width(4.dp))
-                                                Text("View")
-                                            }
-                                        }
-
-                                        OutlinedButton(
-                                            onClick = {
-                                                if (!isUploadingDoc) {
-                                                    pendingUploadType = "aadhaar"
-                                                    docImagePickerLauncher.launch("image/*")
-                                                }
-                                            },
-                                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
-                                            shape = RoundedCornerShape(8.dp)
-                                        ) {
-                                            Icon(Icons.Default.CloudUpload, contentDescription = null, modifier = Modifier.size(16.dp))
-                                            Spacer(modifier = Modifier.width(4.dp))
-                                            Text(if (borrower.aadhaarCardUrl.isNullOrBlank()) "Upload" else "Update")
-                                        }
-                                    }
-                                }
-                            }
-
-                            // PAN Card Row
-                            Card(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .border(1.dp, BorderSubtleLight, RoundedCornerShape(12.dp)),
-                                shape = RoundedCornerShape(12.dp),
-                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
-                            ) {
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(12.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.SpaceBetween
-                                ) {
-                                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
-                                        Icon(Icons.Default.CreditCard, contentDescription = null, tint = CallBlue, modifier = Modifier.size(26.dp))
-                                        Spacer(modifier = Modifier.width(10.dp))
-                                        Column {
-                                            Text("PAN Card", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
-                                            Text(
-                                                text = if (borrower.panCardUrl.isNullOrBlank()) "Not Uploaded" else "Document Uploaded",
-                                                style = MaterialTheme.typography.bodySmall,
-                                                color = if (borrower.panCardUrl.isNullOrBlank()) AlertOrange else MoneyGreen
-                                            )
-                                        }
-                                    }
-
-                                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                        if (!borrower.panCardUrl.isNullOrBlank()) {
-                                            FilledTonalButton(
-                                                onClick = { previewDocUrl = Pair("${borrower.name}'s PAN Card", borrower.panCardUrl) },
-                                                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
-                                                shape = RoundedCornerShape(8.dp)
-                                            ) {
-                                                Icon(Icons.Default.Visibility, contentDescription = null, modifier = Modifier.size(16.dp))
-                                                Spacer(modifier = Modifier.width(4.dp))
-                                                Text("View")
-                                            }
-                                        }
-
-                                        OutlinedButton(
-                                            onClick = {
-                                                if (!isUploadingDoc) {
-                                                    pendingUploadType = "pan"
-                                                    docImagePickerLauncher.launch("image/*")
-                                                }
-                                            },
-                                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
-                                            shape = RoundedCornerShape(8.dp)
-                                        ) {
-                                            Icon(Icons.Default.CloudUpload, contentDescription = null, modifier = Modifier.size(16.dp))
-                                            Spacer(modifier = Modifier.width(4.dp))
-                                            Text(if (borrower.panCardUrl.isNullOrBlank()) "Upload" else "Update")
-                                        }
-                                    }
-                                }
-                            }
-                        }
-
-                        Spacer(modifier = Modifier.height(12.dp))
-                        HorizontalDivider(color = BorderSubtleLight)
-                        Spacer(modifier = Modifier.height(10.dp))
-
-                        // Bottom Actions: Edit and Delete
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(10.dp)
-                        ) {
-                            OutlinedButton(
-                                onClick = {
-                                    selectedBorrowerForEdit = borrower
-                                    selectedBorrowerForDetail = null
-                                },
-                                modifier = Modifier.weight(1f),
-                                shape = RoundedCornerShape(10.dp)
-                            ) {
-                                Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(16.dp))
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text("Edit Profile")
-                            }
-
-                            Button(
-                                onClick = {
-                                    borrowerToDelete = borrower
-                                    selectedBorrowerForDetail = null
-                                },
-                                modifier = Modifier.weight(1f),
-                                colors = ButtonDefaults.buttonColors(containerColor = DangerRed),
-                                shape = RoundedCornerShape(10.dp)
-                            ) {
-                                Icon(Icons.Default.Delete, contentDescription = null, modifier = Modifier.size(16.dp))
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text("Delete Profile")
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        // ================= 2. FULLSCREEN KYC DOCUMENT PREVIEW DIALOG =================
-        previewDocUrl?.let { (title, url) ->
-            Dialog(
-                onDismissRequest = { previewDocUrl = null },
-                properties = DialogProperties(usePlatformDefaultWidth = false)
-            ) {
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth(0.96f)
-                        .fillMaxHeight(0.90f),
-                    shape = RoundedCornerShape(16.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
-                ) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(16.dp)
-                    ) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(text = title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                            IconButton(onClick = { previewDocUrl = null }) {
-                                Icon(Icons.Default.Close, contentDescription = "Close")
-                            }
-                        }
-
-                        HorizontalDivider(color = BorderSubtleLight)
-                        Spacer(modifier = Modifier.height(12.dp))
-
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .clip(RoundedCornerShape(12.dp))
-                                .background(Color.Black.copy(alpha = 0.05f)),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            AsyncImage(
-                                model = url,
-                                contentDescription = title,
-                                modifier = Modifier.fillMaxSize(),
-                                contentScale = ContentScale.Fit
-                            )
-                        }
-                    }
-                }
-            }
-        }
-
-        // ================= 3. EDIT PROFILE DIALOG =================
-        selectedBorrowerForEdit?.let { borrower ->
-            var editName by remember { mutableStateOf(borrower.name) }
-            var editMobile by remember { mutableStateOf(borrower.mobileNumber) }
-            var editVillageCity by remember { mutableStateOf(borrower.villageCity ?: "") }
-            var editPostOffice by remember { mutableStateOf(borrower.postOffice ?: "") }
-            var editPoliceStation by remember { mutableStateOf(borrower.policeStation ?: "") }
-            var editDist by remember { mutableStateOf(borrower.dist ?: "") }
-            var isSaving by remember { mutableStateOf(false) }
-
-            AlertDialog(
-                onDismissRequest = { if (!isSaving) selectedBorrowerForEdit = null },
-                title = { Text("Edit Client Details") },
-                text = {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .heightIn(max = 400.dp)
-                            .verticalScroll(rememberScrollState()),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        OutlinedTextField(
-                            value = editName,
-                            onValueChange = { editName = it },
-                            label = { Text("Full Name *") },
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                        OutlinedTextField(
-                            value = editMobile,
-                            onValueChange = { editMobile = it.filter { ch -> ch.isDigit() }.take(10) },
-                            label = { Text("Mobile Number (10 Digits) *") },
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                        OutlinedTextField(
-                            value = editVillageCity,
-                            onValueChange = { editVillageCity = it },
-                            label = { Text("Village / City") },
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                        OutlinedTextField(
-                            value = editPostOffice,
-                            onValueChange = { editPostOffice = it },
-                            label = { Text("Post Office") },
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                        OutlinedTextField(
-                            value = editPoliceStation,
-                            onValueChange = { editPoliceStation = it },
-                            label = { Text("Police Station") },
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                        OutlinedTextField(
-                            value = editDist,
-                            onValueChange = { editDist = it },
-                            label = { Text("District") },
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                    }
-                },
-                confirmButton = {
-                    Button(
-                        onClick = {
-                            if (editName.isBlank() || editMobile.length != 10) {
-                                Toast.makeText(context, "Enter a valid name and 10-digit mobile number.", Toast.LENGTH_SHORT).show()
-                                return@Button
-                            }
-                            isSaving = true
-                            scope.launch {
-                                val updated = borrower.copy(
-                                    name = editName.trim(),
-                                    mobileNumber = editMobile.trim(),
-                                    villageCity = editVillageCity.trim().ifBlank { null },
-                                    postOffice = editPostOffice.trim().ifBlank { null },
-                                    policeStation = editPoliceStation.trim().ifBlank { null },
-                                    dist = editDist.trim().ifBlank { null }
-                                )
-                                lenderRepo.updateBorrower(updated)
-                                    .onSuccess {
-                                        isSaving = false
-                                        selectedBorrowerForEdit = null
-                                        Toast.makeText(context, "Client updated successfully!", Toast.LENGTH_SHORT).show()
-                                        loadData()
-                                    }
-                                    .onFailure {
-                                        isSaving = false
-                                        Toast.makeText(context, "Update failed: ${it.message}", Toast.LENGTH_SHORT).show()
-                                    }
-                            }
-                        },
-                        enabled = !isSaving,
-                        colors = ButtonDefaults.buttonColors(containerColor = BrandPrimary)
-                    ) {
-                        Text(if (isSaving) "Saving..." else "Save Changes")
-                    }
-                },
-                dismissButton = {
-                    TextButton(onClick = { selectedBorrowerForEdit = null }, enabled = !isSaving) {
-                        Text("Cancel")
-                    }
-                }
-            )
-        }
-
-        // ================= 4. DELETE PROFILE DIALOG =================
-        borrowerToDelete?.let { borrower ->
-            var isDeleting by remember { mutableStateOf(false) }
-
-            AlertDialog(
-                onDismissRequest = { if (!isDeleting) borrowerToDelete = null },
-                title = { Text("Delete Client Account?") },
-                text = {
-                    Text("Are you sure you want to delete ${borrower.name}? This will remove all their records.")
-                },
-                confirmButton = {
-                    Button(
-                        onClick = {
-                            val id = borrower.id ?: return@Button
-                            isDeleting = true
-                            scope.launch {
-                                lenderRepo.deleteBorrower(id)
-                                    .onSuccess {
-                                        isDeleting = false
-                                        borrowerToDelete = null
-                                        Toast.makeText(context, "Client deleted successfully.", Toast.LENGTH_SHORT).show()
-                                        loadData()
-                                    }
-                                    .onFailure {
-                                        isDeleting = false
-                                        Toast.makeText(context, "Delete failed: ${it.message}", Toast.LENGTH_SHORT).show()
-                                    }
-                            }
-                        },
-                        enabled = !isDeleting,
-                        colors = ButtonDefaults.buttonColors(containerColor = DangerRed)
-                    ) {
-                        Text(if (isDeleting) "Deleting..." else "Confirm Delete")
-                    }
-                },
-                dismissButton = {
-                    TextButton(onClick = { borrowerToDelete = null }, enabled = !isDeleting) {
-                        Text("Cancel")
-                    }
-                }
-            )
-        }
-    }
-}
-
-@Composable
-private fun DetailTableRow(label: String, value: String) {
-    Column(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(text = label, style = MaterialTheme.typography.bodySmall, color = TextSecondaryLight)
-            Text(text = value, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
-        }
-        HorizontalDivider(color = BorderSubtleLight.copy(alpha = 0.5f), modifier = Modifier.padding(top = 4.dp))
-    }
-}
+                                   
