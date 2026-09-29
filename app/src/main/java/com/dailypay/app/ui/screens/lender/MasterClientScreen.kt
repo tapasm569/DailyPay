@@ -49,7 +49,7 @@ fun MasterClientScreen(
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val lenderRepo = remember { LenderRepository() }
+    val lenderRepo = remember(context) { LenderRepository(context.applicationContext) }
 
     var borrowersList by remember { mutableStateOf<List<Borrower>>(emptyList()) }
     var searchQuery by remember { mutableStateOf("") }
@@ -59,22 +59,18 @@ fun MasterClientScreen(
     var selectedBorrowerForDetail by remember { mutableStateOf<Borrower?>(null) }
     var selectedBorrowerForEdit by remember { mutableStateOf<Borrower?>(null) }
     var borrowerToDelete by remember { mutableStateOf<Borrower?>(null) }
-    var previewDocUrl by remember { mutableStateOf<Pair<String, String>?>(null) }
+    var previewDocUrl by remember { mutableStateOf<Pair<String, String>?>(null) } // Pair(Title, Url)
     var isUploadingDoc by remember { mutableStateOf(false) }
 
+    // Pending upload target: "avatar", "aadhaar", or "pan"
     var pendingUploadType by remember { mutableStateOf<String?>(null) }
 
     fun loadData() {
-        if (lenderId.isBlank() || lenderId == "unknown") {
-            isLoading = false
-            Toast.makeText(context, "Invalid lender session identifier.", Toast.LENGTH_SHORT).show()
-            return
-        }
-
         scope.launch {
             lenderRepo.getBorrowers(lenderId)
                 .onSuccess {
                     borrowersList = it
+                    // Also refresh currently open details dialog if active
                     selectedBorrowerForDetail?.let { current ->
                         selectedBorrowerForDetail = it.find { b -> b.id == current.id }
                     }
@@ -203,6 +199,7 @@ fun MasterClientScreen(
                         verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
                         itemsIndexed(filteredBorrowers, key = { index, item -> item.id ?: "borrower_$index" }) { _, borrower ->
+                            // Clean Card View: Clicking opens the full detail profile dialog
                             Card(
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -314,7 +311,7 @@ fun MasterClientScreen(
             }
         }
 
-        // ================= PROFILE DETAILS DIALOG =================
+        // ================= 1. STYLISH BORROWER PROFILE DETAILS DIALOG =================
         selectedBorrowerForDetail?.let { borrower ->
             Dialog(
                 onDismissRequest = { selectedBorrowerForDetail = null },
@@ -333,6 +330,7 @@ fun MasterClientScreen(
                             .fillMaxSize()
                             .padding(20.dp)
                     ) {
+                        // Header with Close
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween,
@@ -354,6 +352,7 @@ fun MasterClientScreen(
                         ) {
                             Spacer(modifier = Modifier.height(4.dp))
 
+                            // Profile Avatar & Update Button
                             Box(modifier = Modifier.align(Alignment.CenterHorizontally)) {
                                 if (!borrower.profilePicUrl.isNullOrBlank()) {
                                     AsyncImage(
@@ -406,6 +405,7 @@ fun MasterClientScreen(
                                 }
                             }
 
+                            // Details Table
                             Card(
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -423,8 +423,10 @@ fun MasterClientScreen(
                                 }
                             }
 
+                            // KYC Documents Section
                             Text("KYC Documents", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
 
+                            // Aadhaar Card Row
                             Card(
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -483,6 +485,7 @@ fun MasterClientScreen(
                                 }
                             }
 
+                            // PAN Card Row
                             Card(
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -546,6 +549,7 @@ fun MasterClientScreen(
                         HorizontalDivider(color = BorderSubtleLight)
                         Spacer(modifier = Modifier.height(10.dp))
 
+                        // Bottom Actions: Edit and Delete
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.spacedBy(10.dp)
@@ -582,6 +586,7 @@ fun MasterClientScreen(
             }
         }
 
+        // ================= 2. FULLSCREEN KYC DOCUMENT PREVIEW DIALOG =================
         previewDocUrl?.let { (title, url) ->
             Dialog(
                 onDismissRequest = { previewDocUrl = null },
@@ -632,6 +637,7 @@ fun MasterClientScreen(
             }
         }
 
+        // ================= 3. EDIT PROFILE DIALOG =================
         selectedBorrowerForEdit?.let { borrower ->
             var editName by remember { mutableStateOf(borrower.name) }
             var editMobile by remember { mutableStateOf(borrower.mobileNumber) }
@@ -735,6 +741,7 @@ fun MasterClientScreen(
             )
         }
 
+        // ================= 4. DELETE PROFILE DIALOG =================
         borrowerToDelete?.let { borrower ->
             var isDeleting by remember { mutableStateOf(false) }
 

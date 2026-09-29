@@ -39,7 +39,7 @@ fun AddBorrowerScreen(
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val lenderRepo = remember { LenderRepository() }
+    val lenderRepo = remember(context) { LenderRepository(context.applicationContext) }
 
     var name by remember { mutableStateOf("") }
     var mobileNumber by remember { mutableStateOf("") }
