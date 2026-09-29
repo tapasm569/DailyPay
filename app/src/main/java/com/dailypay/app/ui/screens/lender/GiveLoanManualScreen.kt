@@ -30,7 +30,6 @@ import com.dailypay.app.ui.theme.*
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.*
-import kotlin.math.roundToLong
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -50,12 +49,11 @@ fun GiveLoanManualScreen(
     var isLoadingBorrowers by remember { mutableStateOf(true) }
 
     var principalInput by remember { mutableStateOf("") }
-    var interestRateInput by remember { mutableStateOf("10") } // Default 10%
-    var tenureDaysInput by remember { mutableStateOf("100") }   // Default 100 days
+    var interestRateInput by remember { mutableStateOf("10") }
+    var tenureDaysInput by remember { mutableStateOf("100") }
 
     var isSubmitting by remember { mutableStateOf(false) }
 
-    // Load available borrowers for dropdown selection
     LaunchedEffect(lenderId) {
         val cleanLenderId = lenderId.trim()
         if (cleanLenderId.isNotBlank() && cleanLenderId != "unknown") {
@@ -74,7 +72,6 @@ fun GiveLoanManualScreen(
         }
     }
 
-    // Safe mathematical calculations
     val principal = principalInput.toDoubleOrNull() ?: 0.0
     val interestRate = interestRateInput.toDoubleOrNull() ?: 0.0
     val tenureDays = tenureDaysInput.toIntOrNull() ?: 0
@@ -105,13 +102,19 @@ fun GiveLoanManualScreen(
                 .padding(20.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
-            // ================= 1. BORROWER SELECTOR =================
             Text("Select Borrower *", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
             Surface(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .border(1.dp, if (selectedBorrower != null) BrandPrimary else BorderSubtleLight, RoundedCornerShape(12.dp))
-                    .clickable { showBorrowerDialog = true },
+                    .border(
+                        1.dp,
+                        if (selectedBorrower != null) BrandPrimary else BorderSubtleLight,
+                        RoundedCornerShape(12.dp)
+                    )
+                    .clickable {
+                        borrowerSearchQuery = ""
+                        showBorrowerDialog = true
+                    },
                 shape = RoundedCornerShape(12.dp),
                 color = MaterialTheme.colorScheme.surface
             ) {
@@ -143,11 +146,9 @@ fun GiveLoanManualScreen(
 
             Spacer(modifier = Modifier.height(4.dp))
 
-            // ================= 2. LOAN TERMS INPUTS =================
             OutlinedTextField(
                 value = principalInput,
                 onValueChange = { input ->
-                    // Permit numbers with optional single decimal point
                     if (input.isEmpty() || input.matches(Regex("^\\d*\\.?\\d{0,2}\$"))) {
                         principalInput = input
                     }
@@ -188,7 +189,6 @@ fun GiveLoanManualScreen(
 
             Spacer(modifier = Modifier.height(4.dp))
 
-            // ================= 3. CALCULATION SUMMARY CARD =================
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -219,24 +219,29 @@ fun GiveLoanManualScreen(
 
             Spacer(modifier = Modifier.height(10.dp))
 
-            // ================= 4. DISBURSE SUBMIT BUTTON =================
             Button(
                 onClick = {
                     val cleanLenderId = lenderId.trim()
                     val borrower = selectedBorrower
+                    val borrowerId = borrower?.id?.trim()
 
                     if (cleanLenderId.isBlank() || cleanLenderId == "unknown") {
-                        Toast.makeText(context, "Invalid session. Please re-login.", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(context, "Invalid lender session. Please re-login.", Toast.LENGTH_SHORT).show()
                         return@Button
                     }
 
-                    if (borrower == null || borrower.id.isNullOrBlank()) {
+                    if (borrower == null || borrowerId.isNullOrBlank()) {
                         Toast.makeText(context, "Please select a borrower.", Toast.LENGTH_SHORT).show()
                         return@Button
                     }
 
-                    if (principal <= 0.0 || tenureDays <= 0) {
-                        Toast.makeText(context, "Please enter a valid principal and tenure.", Toast.LENGTH_SHORT).show()
+                    if (principal <= 0.0) {
+                        Toast.makeText(context, "Please enter a valid principal amount.", Toast.LENGTH_SHORT).show()
+                        return@Button
+                    }
+
+                    if (tenureDays <= 0) {
+                        Toast.makeText(context, "Please enter a tenure greater than 0 days.", Toast.LENGTH_SHORT).show()
                         return@Button
                     }
 
@@ -245,7 +250,7 @@ fun GiveLoanManualScreen(
                         val currentDate = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
                         val loanRequest = CreateLoanRequest(
                             lenderId = cleanLenderId,
-                            borrowerId = borrower.id,
+                            borrowerId = borrowerId,
                             principalAmount = principal,
                             interestRate = interestRate,
                             totalAmount = totalRepayable,
@@ -271,7 +276,7 @@ fun GiveLoanManualScreen(
                     .height(52.dp),
                 shape = RoundedCornerShape(14.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = BrandPrimary),
-                enabled = !isSubmitting && selectedBorrower != null && principal > 0 && tenureDays > 0
+                enabled = !isSubmitting
             ) {
                 if (isSubmitting) {
                     CircularProgressIndicator(color = Color.White, modifier = Modifier.size(24.dp))
@@ -281,7 +286,6 @@ fun GiveLoanManualScreen(
             }
         }
 
-        // ================= SEARCHABLE BORROWER PICKER DIALOG =================
         if (showBorrowerDialog) {
             val filteredBorrowers = borrowersList.filter {
                 it.name.contains(borrowerSearchQuery, ignoreCase = true) ||
