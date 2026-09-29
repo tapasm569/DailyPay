@@ -144,11 +144,11 @@ fun AddBorrowerScreen(
                         val newBorrower = Borrower(
                             lenderId = resolvedLenderId,
                             name = name.trim(),
-                            phone = mobile.trim(),
-                            village = villageTown.trim().ifBlank { null },
+                            mobileNumber = mobile.trim(),
+                            villageTown = villageTown.trim().ifBlank { null },
                             postOffice = postOffice.trim().ifBlank { null },
                             dist = dist.trim().ifBlank { null },
-                            pin = pinCode.trim().ifBlank { null }
+                            pinCode = pinCode.trim().ifBlank { null }
                         )
 
                         lenderRepo.addBorrower(
