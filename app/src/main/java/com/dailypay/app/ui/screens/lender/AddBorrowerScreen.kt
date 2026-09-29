@@ -46,7 +46,6 @@ fun AddBorrowerScreen(
     var villageTown by remember { mutableStateOf("") }
     var postOffice by remember { mutableStateOf("") }
     var dist by remember { mutableStateOf("") }
-    var address by remember { mutableStateOf("") }
     var pinCode by remember { mutableStateOf("") }
     var isSubmitting by remember { mutableStateOf(false) }
 
@@ -123,14 +122,6 @@ fun AddBorrowerScreen(
                 modifier = Modifier.fillMaxWidth()
             )
 
-            OutlinedTextField(
-                value = address,
-                onValueChange = { address = it },
-                label = { Text("Complete Address") },
-                maxLines = 3,
-                modifier = Modifier.fillMaxWidth()
-            )
-
             Spacer(modifier = Modifier.height(10.dp))
 
             Button(
@@ -153,24 +144,26 @@ fun AddBorrowerScreen(
                         val newBorrower = Borrower(
                             lenderId = resolvedLenderId,
                             name = name.trim(),
-                            mobile = mobile.trim(),
-                            address = address.trim().ifBlank { null },
-                            villageTown = villageTown.trim().ifBlank { null },
+                            phone = mobile.trim(),
+                            village = villageTown.trim().ifBlank { null },
                             postOffice = postOffice.trim().ifBlank { null },
                             dist = dist.trim().ifBlank { null },
-                            pinCode = pinCode.trim().ifBlank { null }
+                            pin = pinCode.trim().ifBlank { null }
                         )
 
-                        lenderRepo.addBorrower(newBorrower)
-                            .onSuccess {
-                                isSubmitting = false
-                                Toast.makeText(context, "Borrower added successfully!", Toast.LENGTH_SHORT).show()
-                                onNavigateBack()
-                            }
-                            .onFailure {
-                                isSubmitting = false
-                                Toast.makeText(context, "Failed: ${it.message}", Toast.LENGTH_LONG).show()
-                            }
+                        lenderRepo.addBorrower(
+                            borrower = newBorrower,
+                            aadhaarBytes = null,
+                            panBytes = null,
+                            avatarBytes = null
+                        ).onSuccess {
+                            isSubmitting = false
+                            Toast.makeText(context, "Borrower added successfully!", Toast.LENGTH_SHORT).show()
+                            onNavigateBack()
+                        }.onFailure { error ->
+                            isSubmitting = false
+                            Toast.makeText(context, "Failed: ${error.message}", Toast.LENGTH_LONG).show()
+                        }
                     }
                 },
                 enabled = !isSubmitting,
