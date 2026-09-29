@@ -1,18 +1,37 @@
 package com.dailypay.app.data.remote
 
+import com.dailypay.app.BuildConfig
+import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.createSupabaseClient
-import io.github.jan.supabase.gotrue.Auth
 import io.github.jan.supabase.postgrest.Postgrest
+import io.github.jan.supabase.postgrest.postgrest
+import io.github.jan.supabase.realtime.Realtime
 import io.github.jan.supabase.storage.Storage
+import io.github.jan.supabase.storage.storage
 
-// IMPORTANT: Do NOT replace these with fake placeholders. Keep your project's actual URL and anon key.
-val supabase = createSupabaseClient(
-    supabaseUrl = "https://your-project-id.supabase.co", // <-- YOUR REAL SUPABASE URL
-    supabaseKey = "your-actual-anon-key"                 // <-- YOUR REAL ANON KEY
-) {
-    install(Postgrest) {
-        defaultSchema = "public"
+object SupabaseClientProvider {
+
+    /**
+     * Singleton Supabase client configured with Postgrest (Database),
+     * Storage (KYC/Avatars), and Realtime modules.
+     */
+    val client: SupabaseClient by lazy {
+        createSupabaseClient(
+            supabaseUrl = BuildConfig.SUPABASE_URL,
+            supabaseKey = BuildConfig.SUPABASE_ANON_KEY
+        ) {
+            install(Postgrest)
+            install(Storage)
+            install(Realtime)
+        }
     }
-    install(Auth)
-    install(Storage)
+
+    /**
+     * Quick direct accessors for database and storage operations
+     */
+    val db: Postgrest
+        get() = client.postgrest
+
+    val storage: Storage
+        get() = client.storage
 }
