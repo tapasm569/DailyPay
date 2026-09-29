@@ -10,38 +10,27 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.dailypay.app.R
-import com.dailypay.app.data.remote.SupabaseClient
+import com.dailypay.app.data.model.Borrower
+import com.dailypay.app.data.repository.LenderRepository
 import com.dailypay.app.ui.theme.*
 import com.dailypay.app.util.CommunicationUtils
 import com.dailypay.app.util.SessionManager
-import io.github.jan.supabase.postgrest.from
-import io.github.jan.supabase.postgrest.query.Columns
 import kotlinx.coroutines.launch
-import kotlinx.serialization.Serializable
-
-@Serializable
-data class MasterClientItem(
-    val id: String = "",
-    val name: String = "",
-    val mobile: String = "",
-    val address: String? = null,
-    val village_town: String? = null,
-    val post_office: String? = null,
-    val dist: String? = null
-)
 
 @Composable
 fun MasterClientScreen(
@@ -52,12 +41,14 @@ fun MasterClientScreen(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val sessionManager = remember { SessionManager(context) }
+    val lenderRepo = remember { LenderRepository(context) }
+
     val resolvedLenderId = remember(lenderId) {
         if (lenderId.isNotBlank() && lenderId != "{lenderId}") lenderId
         else sessionManager.getUserId() ?: ""
     }
 
-    var clientList by remember { mutableStateOf<List<MasterClientItem>>(emptyList()) }
+    var clientList by remember { mutableStateOf<List<Borrower>>(emptyList()) }
     var searchQuery by remember { mutableStateOf("") }
     var isLoading by remember { mutableStateOf(true) }
 
@@ -69,21 +60,15 @@ fun MasterClientScreen(
 
         isLoading = true
         scope.launch {
-            try {
-                val data = SupabaseClient.client.from("borrowers")
-                    .select(Columns.list("id", "name", "mobile", "address", "village_town", "post_office", "dist")) {
-                        filter {
-                            eq("lender_id", resolvedLenderId)
-                        }
-                    }
-                    .decodeList<MasterClientItem>()
-
-                clientList = data
-            } catch (e: Exception) {
-                Toast.makeText(context, "Error: ${e.message}", Toast.LENGTH_SHORT).show()
-            } finally {
-                isLoading = false
-            }
+            lenderRepo.getBorrowers(resolvedLenderId)
+                .onSuccess { list ->
+                    clientList = list
+                    isLoading = false
+                }
+                .onFailure { error ->
+                    isLoading = false
+                    Toast.makeText(context, "Error: ${error.message}", Toast.LENGTH_SHORT).show()
+                }
         }
     }
 
@@ -146,7 +131,7 @@ fun MasterClientScreen(
                     contentAlignment = Alignment.Center
                 ) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Icon(Icons.Default.People, contentDescription = null, tint = TextSecondaryLight, modifier = Modifier.size(54.dp))
+                        Icon(Icons.Default.Person, contentDescription = null, tint = TextSecondaryLight, modifier = Modifier.size(54.dp))
                         Spacer(modifier = Modifier.height(10.dp))
                         Text("No clients found.", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                         Text("Add borrowers to manage them here.", style = MaterialTheme.typography.bodySmall, color = TextSecondaryLight)
@@ -187,9 +172,9 @@ fun MasterClientScreen(
                                         Text(client.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                                         Text("+91 ${client.mobile}", style = MaterialTheme.typography.bodySmall, color = TextSecondaryLight)
 
-                                        val location = listOfNotNull(client.village_town, client.dist).filter { it.isNotBlank() }.joinToString(", ")
+                                        val location = listOfNotNull(client.villageTown, client.dist).filter { it.isNotBlank() }.joinToString(", ")
                                         if (location.isNotBlank()) {
-                                            Text(location, style = MaterialTheme.typography.labelSmall, color = BrandSecondary)
+                                            Text(location, style = MaterialTheme.typography.labelSmall, color = TextSecondaryLight)
                                         }
                                     }
 
