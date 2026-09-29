@@ -1,173 +1,235 @@
-@file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
-
 package com.dailypay.app.ui.screens.lender
 
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.GridItemSpan
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
-import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.dailypay.app.R
 import com.dailypay.app.ui.theme.*
-import com.dailypay.app.util.SessionManager
 
-private data class DashboardItem(
-    val titleRes: Int,
-    val icon: ImageVector,
-    val iconColor: Color,
-    val onClick: () -> Unit
-)
-
-private data class DashboardCategory(
-    val title: String,
-    val items: List<DashboardItem>
-)
-
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LenderDashboardScreen(
-    lenderId: String,
+    @Suppress("UNUSED_PARAMETER") lenderId: String,
     onNavigateBack: () -> Unit,
-    onNavigateToAddBorrower: () -> Unit,
-    onNavigateToMasterClient: () -> Unit,
-    onNavigateToGiveLoan: () -> Unit,
-    onNavigateToNewLoanRequest: () -> Unit,
-    onNavigateToApprovedLoans: () -> Unit,
-    onNavigateToTrackPayments: () -> Unit,
-    onNavigateToTodaysDue: () -> Unit,
-    onNavigateToTodaysPayment: () -> Unit,
-    onNavigateToVerifyPayment: () -> Unit,
-    onNavigateToLedger: () -> Unit,
+    onAddBorrowerClick: () -> Unit,
+    onGiveLoanManualClick: () -> Unit,
+    onNewLoanRequestClick: () -> Unit,
+    onApprovedLoansClick: () -> Unit,
+    onTodaysDueClick: () -> Unit,
+    onTodaysPaymentClick: () -> Unit,
+    onVerifyPaymentClick: () -> Unit,
+    onTrackPaymentsClick: () -> Unit,
+    onMasterClientClick: () -> Unit,
+    onLenderLedgerClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val context = LocalContext.current
-    val sessionManager = remember { SessionManager(context) }
-    val resolvedLenderId = remember(lenderId) {
-        if (lenderId.isNotBlank() && lenderId != "{lenderId}") lenderId
-        else sessionManager.getUserId() ?: ""
-    }
-
-    val categories = listOf(
-        DashboardCategory(
-            title = "Borrower Management",
-            items = listOf(
-                DashboardItem(R.string.lender_add_borrower, Icons.Default.PersonAdd, BrandPrimary, onNavigateToAddBorrower),
-                DashboardItem(R.string.lender_master_client, Icons.Default.People, CallBlue, onNavigateToMasterClient)
-            )
-        ),
-        DashboardCategory(
-            title = "Loan Processing",
-            items = listOf(
-                DashboardItem(R.string.lender_give_loan_manually, Icons.Default.MonetizationOn, AlertOrange, onNavigateToGiveLoan),
-                DashboardItem(R.string.lender_new_loan_request, Icons.Default.PostAdd, BrandPrimary, onNavigateToNewLoanRequest),
-                DashboardItem(R.string.borrower_approved_loan, Icons.Default.CheckCircle, MoneyGreen, onNavigateToApprovedLoans)
-            )
-        ),
-        DashboardCategory(
-            title = "Financial Tracking & Collections",
-            items = listOf(
-                DashboardItem(R.string.lender_ledger_book, Icons.Default.MenuBook, MoneyGreen, onNavigateToLedger),
-                DashboardItem(R.string.todays_due, Icons.Default.Schedule, AlertOrange, onNavigateToTodaysDue),
-                DashboardItem(R.string.todays_payment, Icons.Default.Payment, MoneyGreen, onNavigateToTodaysPayment),
-                DashboardItem(R.string.btn_verify, Icons.Default.FactCheck, BrandPrimary, onNavigateToVerifyPayment),
-                DashboardItem(R.string.admin_payment_history, Icons.Default.History, CallBlue, onNavigateToTrackPayments)
-            )
-        )
-    )
-
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Lender Dashboard", fontWeight = FontWeight.Bold) },
+                title = {
+                    Text(
+                        text = "Dashboard",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold
+                    )
+                },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = BrandPrimary)
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface)
             )
         },
-        containerColor = MaterialTheme.colorScheme.background,
-        modifier = modifier
+        containerColor = MaterialTheme.colorScheme.background
     ) { paddingValues ->
-        LazyVerticalGrid(
-            columns = GridCells.Fixed(2),
-            modifier = Modifier
+        Column(
+            modifier = modifier
                 .fillMaxSize()
-                .padding(paddingValues),
-            contentPadding = PaddingValues(16.dp),
-            horizontalArrangement = Arrangement.spacedBy(14.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp)
+                .padding(paddingValues)
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 16.dp, vertical = 14.dp),
+            verticalArrangement = Arrangement.spacedBy(20.dp)
         ) {
-            categories.forEach { category ->
-                item(span = { GridItemSpan(2) }) {
-                    Text(
-                        text = category.title,
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = BrandPrimary,
-                        modifier = Modifier.padding(top = 8.dp, bottom = 4.dp)
+            // ================= 1. COLLECTIONS =================
+            DashboardSectionHeader(title = "Collections")
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    DashboardTile(
+                        title = "Today's Due",
+                        icon = Icons.Default.Schedule,
+                        tint = AlertOrange,
+                        onClick = onTodaysDueClick,
+                        modifier = Modifier.weight(1f)
+                    )
+                    DashboardTile(
+                        title = "Paid Today",
+                        icon = Icons.Default.CheckCircle,
+                        tint = MoneyGreen,
+                        onClick = onTodaysPaymentClick,
+                        modifier = Modifier.weight(1f)
                     )
                 }
-                items(category.items) { item ->
-                    Card(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(130.dp)
-                            .clickable { item.onClick() },
-                        shape = RoundedCornerShape(16.dp),
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-                    ) {
-                        Column(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .padding(14.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.Center
-                        ) {
-                            Surface(
-                                modifier = Modifier.size(50.dp),
-                                shape = CircleShape,
-                                color = item.iconColor.copy(alpha = 0.12f)
-                            ) {
-                                Box(contentAlignment = Alignment.Center) {
-                                    Icon(
-                                        imageVector = item.icon,
-                                        contentDescription = null,
-                                        tint = item.iconColor,
-                                        modifier = Modifier.size(26.dp)
-                                    )
-                                }
-                            }
-                            Spacer(modifier = Modifier.height(10.dp))
-                            Text(
-                                text = stringResource(item.titleRes),
-                                style = MaterialTheme.typography.bodyMedium,
-                                fontWeight = FontWeight.SemiBold,
-                                textAlign = TextAlign.Center,
-                                maxLines = 2
-                            )
-                        }
-                    }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    DashboardTile(
+                        title = "Verify Payment",
+                        icon = Icons.Default.Verified,
+                        tint = BrandPrimary,
+                        onClick = onVerifyPaymentClick,
+                        modifier = Modifier.weight(1f)
+                    )
+                    DashboardTile(
+                        title = "Track Records",
+                        icon = Icons.Default.History,
+                        tint = CallBlue,
+                        onClick = onTrackPaymentsClick,
+                        modifier = Modifier.weight(1f)
+                    )
                 }
             }
+
+            // ================= 2. LOAN OPERATIONS =================
+            DashboardSectionHeader(title = "Loan Operations")
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    DashboardTile(
+                        title = "New Requests",
+                        icon = Icons.Default.NotificationsActive,
+                        tint = AlertOrange,
+                        onClick = onNewLoanRequestClick,
+                        modifier = Modifier.weight(1f)
+                    )
+                    DashboardTile(
+                        title = "Disburse Loan",
+                        icon = Icons.Default.AddCard,
+                        tint = MoneyGreen,
+                        onClick = onGiveLoanManualClick,
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    DashboardTile(
+                        title = "Approved Loans",
+                        icon = Icons.Default.AssignmentTurnedIn,
+                        tint = BrandPrimary,
+                        onClick = onApprovedLoansClick,
+                        modifier = Modifier.weight(1f)
+                    )
+                    DashboardTile(
+                        title = "Add Borrower",
+                        icon = Icons.Default.PersonAdd,
+                        tint = CallBlue,
+                        onClick = onAddBorrowerClick,
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+            }
+
+            // ================= 3. LEDGER & RECORDS =================
+            DashboardSectionHeader(title = "Ledger & Records")
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                DashboardTile(
+                    title = "Master Client",
+                    icon = Icons.Default.People,
+                    tint = BrandPrimary,
+                    onClick = onMasterClientClick,
+                    modifier = Modifier.weight(1f)
+                )
+                DashboardTile(
+                    title = "Lender Ledger",
+                    icon = Icons.Default.AccountBalanceWallet,
+                    tint = MoneyGreen,
+                    onClick = onLenderLedgerClick,
+                    modifier = Modifier.weight(1f)
+                )
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+        }
+    }
+}
+
+@Composable
+private fun DashboardSectionHeader(title: String) {
+    Text(
+        text = title,
+        style = MaterialTheme.typography.titleMedium,
+        fontWeight = FontWeight.Bold,
+        color = MaterialTheme.colorScheme.onBackground
+    )
+}
+
+@Composable
+private fun DashboardTile(
+    title: String,
+    icon: ImageVector,
+    tint: Color,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Card(
+        onClick = onClick,
+        modifier = modifier
+            .height(72.dp)
+            .border(
+                width = 1.dp,
+                color = BorderSubtleLight.copy(alpha = 0.7f),
+                shape = RoundedCornerShape(18.dp)
+            ),
+        shape = RoundedCornerShape(18.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+        )
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 14.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = tint,
+                modifier = Modifier.size(24.dp)
+            )
+            Spacer(modifier = Modifier.width(12.dp))
+            Text(
+                text = title,
+                style = MaterialTheme.typography.bodyLarge,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
         }
     }
 }
