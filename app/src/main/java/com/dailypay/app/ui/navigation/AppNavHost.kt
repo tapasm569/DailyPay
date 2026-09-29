@@ -11,7 +11,6 @@ import com.dailypay.app.ui.screens.admin.*
 import com.dailypay.app.ui.screens.auth.LoginScreen
 import com.dailypay.app.ui.screens.borrower.*
 import com.dailypay.app.ui.screens.lender.*
-import com.dailypay.app.util.SessionManager
 
 @Composable
 fun AppNavHost(
@@ -27,9 +26,15 @@ fun AppNavHost(
         // ================= AUTH =================
         composable(Screen.Login.route) {
             LoginScreen(
-                onNavigateToAdmin = { navController.navigate(Screen.AdminDashboard.route) { popUpTo(0) { inclusive = true } } },
-                onNavigateToLender = { lenderId -> navController.navigate(Screen.LenderHome.createRoute(lenderId)) { popUpTo(0) { inclusive = true } } },
-                onNavigateToBorrower = { borrowerId -> navController.navigate(Screen.BorrowerDashboard.createRoute(borrowerId)) { popUpTo(0) { inclusive = true } } }
+                onAdminLoginSuccess = {
+                    navController.navigate(Screen.AdminDashboard.route) { popUpTo(0) { inclusive = true } }
+                },
+                onLenderLoginSuccess = { lenderId ->
+                    navController.navigate(Screen.LenderHome.createRoute(lenderId)) { popUpTo(0) { inclusive = true } }
+                },
+                onBorrowerLoginSuccess = { borrowerId ->
+                    navController.navigate(Screen.BorrowerDashboard.createRoute(borrowerId)) { popUpTo(0) { inclusive = true } }
+                }
             )
         }
 
@@ -37,9 +42,7 @@ fun AppNavHost(
         composable(Screen.AdminDashboard.route) {
             AdminDashboardScreen(
                 onNavigateToCreateLender = { navController.navigate(Screen.CreateLender.route) },
-                onNavigateToManageLender = { navController.navigate(Screen.ManageLender.route) },
-                onNavigateToLenderStatus = { navController.navigate(Screen.LenderStatus.route) },
-                onLogout = { navController.navigate(Screen.Login.route) { popUpTo(0) { inclusive = true } } }
+                onNavigateToManageLender = { navController.navigate(Screen.ManageLender.route) }
             )
         }
         composable(Screen.CreateLender.route) { CreateLenderScreen(onNavigateBack = { navController.popBackStack() }) }
@@ -176,11 +179,13 @@ fun AppNavHost(
             val borrowerId = backStackEntry.arguments?.getString("borrowerId") ?: ""
             BorrowerDashboardScreen(
                 borrowerId = borrowerId,
-                onNavigateToPayEmi = { navController.navigate(Screen.BorrowerPayEmi.createRoute(borrowerId)) },
-                onNavigateToApplyLoan = { navController.navigate(Screen.ApplyLoan.createRoute(borrowerId)) },
-                onNavigateToApprovedLoans = { navController.navigate(Screen.CustomerApprovedLoans.createRoute(borrowerId)) },
-                onNavigateToLedger = { navController.navigate(Screen.BorrowerLedger.createRoute(borrowerId)) },
-                onLogout = { navController.navigate(Screen.Login.route) { popUpTo(0) { inclusive = true } } }
+                onPayEmiClick = { navController.navigate(Screen.BorrowerPayEmi.createRoute(borrowerId)) },
+                onApplyLoanClick = { navController.navigate(Screen.ApplyLoan.createRoute(borrowerId)) },
+                onApprovedLoansClick = { navController.navigate(Screen.CustomerApprovedLoans.createRoute(borrowerId)) },
+                onViewLedgerClick = { navController.navigate(Screen.BorrowerLedger.createRoute(borrowerId)) },
+                onLogoutClick = {
+                    navController.navigate(Screen.Login.route) { popUpTo(0) { inclusive = true } }
+                }
             )
         }
 
