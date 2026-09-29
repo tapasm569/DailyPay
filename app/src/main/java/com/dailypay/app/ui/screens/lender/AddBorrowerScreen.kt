@@ -19,13 +19,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.dailypay.app.R
-import com.dailypay.app.data.remote.SupabaseClient
+import com.dailypay.app.data.model.Borrower
+import com.dailypay.app.data.repository.LenderRepository
 import com.dailypay.app.ui.theme.BrandPrimary
 import com.dailypay.app.util.SessionManager
-import io.github.jan.supabase.postgrest.from
 import kotlinx.coroutines.launch
-import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.put
 
 @Composable
 fun AddBorrowerScreen(
@@ -36,6 +34,8 @@ fun AddBorrowerScreen(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val sessionManager = remember { SessionManager(context) }
+    val lenderRepo = remember { LenderRepository(context) }
+
     val resolvedLenderId = remember(lenderId) {
         if (lenderId.isNotBlank() && lenderId != "{lenderId}") lenderId
         else sessionManager.getUserId() ?: ""
@@ -150,26 +150,27 @@ fun AddBorrowerScreen(
 
                     isSubmitting = true
                     scope.launch {
-                        try {
-                            val borrowerObject = buildJsonObject {
-                                put("lender_id", resolvedLenderId)
-                                put("name", name.trim())
-                                put("mobile", mobile.trim())
-                                put("address", address.trim())
-                                put("village_town", villageTown.trim())
-                                put("post_office", postOffice.trim())
-                                put("dist", dist.trim())
-                                put("pin_code", pinCode.trim())
-                            }
+                        val newBorrower = Borrower(
+                            lenderId = resolvedLenderId,
+                            name = name.trim(),
+                            mobile = mobile.trim(),
+                            address = address.trim().ifBlank { null },
+                            villageTown = villageTown.trim().ifBlank { null },
+                            postOffice = postOffice.trim().ifBlank { null },
+                            dist = dist.trim().ifBlank { null },
+                            pinCode = pinCode.trim().ifBlank { null }
+                        )
 
-                            SupabaseClient.client.from("borrowers").insert(borrowerObject)
-                            Toast.makeText(context, "Borrower added successfully!", Toast.LENGTH_SHORT).show()
-                            onNavigateBack()
-                        } catch (e: Exception) {
-                            Toast.makeText(context, "Failed: ${e.message}", Toast.LENGTH_LONG).show()
-                        } finally {
-                            isSubmitting = false
-                        }
+                        lenderRepo.addBorrower(newBorrower)
+                            .onSuccess {
+                                isSubmitting = false
+                                Toast.makeText(context, "Borrower added successfully!", Toast.LENGTH_SHORT).show()
+                                onNavigateBack()
+                            }
+                            .onFailure {
+                                isSubmitting = false
+                                Toast.makeText(context, "Failed: ${it.message}", Toast.LENGTH_LONG).show()
+                            }
                     }
                 },
                 enabled = !isSubmitting,
