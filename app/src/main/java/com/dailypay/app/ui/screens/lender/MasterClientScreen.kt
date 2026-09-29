@@ -77,7 +77,7 @@ fun MasterClientScreen(
     }
 
     val filteredList = clientList.filter {
-        it.name.contains(searchQuery, ignoreCase = true) || it.phone.contains(searchQuery)
+        it.name.contains(searchQuery, ignoreCase = true) || it.mobileNumber.contains(searchQuery)
     }
 
     Scaffold(
@@ -143,7 +143,7 @@ fun MasterClientScreen(
                     contentPadding = PaddingValues(16.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    items(filteredList, key = { it.id ?: it.phone }) { client ->
+                    items(filteredList, key = { it.id ?: it.mobileNumber }) { client ->
                         Card(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -170,9 +170,9 @@ fun MasterClientScreen(
 
                                     Column(modifier = Modifier.weight(1f)) {
                                         Text(client.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                                        Text("+91 ${client.phone}", style = MaterialTheme.typography.bodySmall, color = TextSecondaryLight)
+                                        Text("+91 ${client.mobileNumber}", style = MaterialTheme.typography.bodySmall, color = TextSecondaryLight)
 
-                                        val location = listOfNotNull(client.village, client.dist).filter { it.isNotBlank() }.joinToString(", ")
+                                        val location = listOfNotNull(client.villageTown, client.dist).filter { it.isNotBlank() }.joinToString(", ")
                                         if (location.isNotBlank()) {
                                             Text(location, style = MaterialTheme.typography.labelSmall, color = TextSecondaryLight)
                                         }
@@ -183,7 +183,7 @@ fun MasterClientScreen(
                                             onClick = {
                                                 CommunicationUtils.openWhatsAppChat(
                                                     context = context,
-                                                    rawMobileNumber = client.phone,
+                                                    rawMobileNumber = client.mobileNumber,
                                                     message = "Hello ${client.name},"
                                                 )
                                             },
@@ -196,7 +196,7 @@ fun MasterClientScreen(
                                         }
 
                                         IconButton(
-                                            onClick = { CommunicationUtils.openPhoneDialer(context, client.phone) },
+                                            onClick = { CommunicationUtils.openPhoneDialer(context, client.mobileNumber) },
                                             modifier = Modifier
                                                 .size(36.dp)
                                                 .clip(CircleShape)
