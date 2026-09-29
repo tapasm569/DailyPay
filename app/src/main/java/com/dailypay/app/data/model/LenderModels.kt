@@ -5,50 +5,39 @@ import kotlinx.serialization.Serializable
 
 @Serializable
 data class Lender(
+    @SerialName("id")
     val id: String? = null,
-    val name: String,
-    @SerialName("owner_name")
-    val ownerName: String? = null,
-    @SerialName("business_name")
-    val businessName: String? = null,
+
+    @SerialName("name")
+    val name: String = "",
+
     @SerialName("mobile_number")
-    val mobileNumber: String,
-    @SerialName("upi_id")
-    val upiId: String? = null,
-    @SerialName("village_town")
-    val villageTown: String? = null,
-    @SerialName("post_office")
-    val postOffice: String? = null,
-    val dist: String? = null,
-    val address: String? = null,
+    val mobileNumber: String = "",
+
     @SerialName("password_hash")
-    val passwordHash: String? = null,
-    val status: String = "RUN", // "RUN" or "STOP"
+    val passwordHash: String = "",
+
+    @SerialName("is_active")
+    val isActive: Boolean = true,
+
     @SerialName("created_at")
     val createdAt: String? = null
 )
 
 @Serializable
-data class Subscription(
-    val id: String? = null,
-    @SerialName("lender_id")
-    val lenderId: String = "",
-    val plan: String = "MONTHLY",
-    @SerialName("start_date")
-    val startDate: String? = null,
-    @SerialName("end_date")
-    val endDate: String? = null,
-    val status: String = "ACTIVE",
-    val amount: Double = 0.0,
-    @SerialName("created_at")
-    val createdAt: String? = null
-)
+data class LenderDashboardSummary(
+    @SerialName("total_borrowers")
+    val totalBorrowers: Int = 0,
 
-@Serializable
-data class LenderLedgerSummary(
-    val lenderId: String,
-    val totalDisbursed: Double,
-    val totalDueBalance: Double,
-    val totalPaid: Double,
-    val totalRemainingBalance: Double
+    @SerialName("total_loans_disbursed")
+    val totalLoansDisbursed: Double = 0.0,
+
+    @SerialName("todays_due_amount")
+    val todaysDueAmount: Double = 0.0,
+
+    @SerialName("todays_collected_amount")
+    val todaysCollectedAmount: Double = 0.0,
+
+    @SerialName("pending_verifications_count")
+    val pendingVerificationsCount: Int = 0
 )
