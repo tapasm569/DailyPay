@@ -1,6 +1,5 @@
 package com.dailypay.app.ui.navigation
 
-import android.os.Bundle
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
@@ -25,16 +24,6 @@ fun AppNavHost(
 ) {
     val context = LocalContext.current
     val sessionManager = remember { SessionManager(context) }
-
-    // Helper to safely resolve lenderId and prevent passing "unknown" or blank IDs to screens
-    val resolveLenderId: (Bundle?) -> String = { args ->
-        val argId = args?.getString("lenderId")
-        if (!argId.isNullOrBlank() && argId != "{lenderId}" && argId != "unknown") {
-            argId
-        } else {
-            sessionManager.getUserId() ?: ""
-        }
-    }
 
     NavHost(
         navController = navController,
@@ -75,7 +64,12 @@ fun AppNavHost(
                 }
             )
         ) { backStackEntry ->
-            val effectiveLenderId = resolveLenderId(backStackEntry.arguments)
+            val argId = backStackEntry.arguments?.getString("lenderId")
+            val effectiveLenderId = if (!argId.isNullOrBlank() && argId != "{lenderId}") {
+                argId
+            } else {
+                sessionManager.getUserId() ?: ""
+            }
 
             LenderHomeScreen(
                 lenderId = effectiveLenderId,
@@ -93,14 +87,9 @@ fun AppNavHost(
 
         composable(
             route = Screen.LenderDashboard.route,
-            arguments = listOf(
-                navArgument("lenderId") {
-                    type = NavType.StringType
-                    defaultValue = ""
-                }
-            )
+            arguments = listOf(navArgument("lenderId") { type = NavType.StringType })
         ) { backStackEntry ->
-            val lenderId = resolveLenderId(backStackEntry.arguments)
+            val lenderId = backStackEntry.arguments?.getString("lenderId")?.takeIf { it.isNotBlank() && it != "{lenderId}" } ?: sessionManager.getUserId().orEmpty()
             LenderDashboardScreen(
                 lenderId = lenderId,
                 onNavigateBack = { navController.popBackStack() },
@@ -119,14 +108,9 @@ fun AppNavHost(
 
         composable(
             route = Screen.AddBorrower.route,
-            arguments = listOf(
-                navArgument("lenderId") {
-                    type = NavType.StringType
-                    defaultValue = ""
-                }
-            )
+            arguments = listOf(navArgument("lenderId") { type = NavType.StringType })
         ) { backStackEntry ->
-            val lenderId = resolveLenderId(backStackEntry.arguments)
+            val lenderId = backStackEntry.arguments?.getString("lenderId")?.takeIf { it.isNotBlank() && it != "{lenderId}" } ?: sessionManager.getUserId().orEmpty()
             AddBorrowerScreen(
                 lenderId = lenderId,
                 onNavigateBack = { navController.popBackStack() }
@@ -135,14 +119,9 @@ fun AppNavHost(
 
         composable(
             route = Screen.GiveLoanManual.route,
-            arguments = listOf(
-                navArgument("lenderId") {
-                    type = NavType.StringType
-                    defaultValue = ""
-                }
-            )
+            arguments = listOf(navArgument("lenderId") { type = NavType.StringType })
         ) { backStackEntry ->
-            val lenderId = resolveLenderId(backStackEntry.arguments)
+            val lenderId = backStackEntry.arguments?.getString("lenderId")?.takeIf { it.isNotBlank() && it != "{lenderId}" } ?: sessionManager.getUserId().orEmpty()
             GiveLoanManualScreen(
                 lenderId = lenderId,
                 onNavigateBack = { navController.popBackStack() }
@@ -151,14 +130,9 @@ fun AppNavHost(
 
         composable(
             route = Screen.NewLoanRequest.route,
-            arguments = listOf(
-                navArgument("lenderId") {
-                    type = NavType.StringType
-                    defaultValue = ""
-                }
-            )
+            arguments = listOf(navArgument("lenderId") { type = NavType.StringType })
         ) { backStackEntry ->
-            val lenderId = resolveLenderId(backStackEntry.arguments)
+            val lenderId = backStackEntry.arguments?.getString("lenderId")?.takeIf { it.isNotBlank() && it != "{lenderId}" } ?: sessionManager.getUserId().orEmpty()
             NewLoanRequestScreen(
                 lenderId = lenderId,
                 onNavigateBack = { navController.popBackStack() }
@@ -167,14 +141,9 @@ fun AppNavHost(
 
         composable(
             route = Screen.LenderApprovedLoans.route,
-            arguments = listOf(
-                navArgument("lenderId") {
-                    type = NavType.StringType
-                    defaultValue = ""
-                }
-            )
+            arguments = listOf(navArgument("lenderId") { type = NavType.StringType })
         ) { backStackEntry ->
-            val lenderId = resolveLenderId(backStackEntry.arguments)
+            val lenderId = backStackEntry.arguments?.getString("lenderId")?.takeIf { it.isNotBlank() && it != "{lenderId}" } ?: sessionManager.getUserId().orEmpty()
             ApprovedLoansScreen(
                 lenderId = lenderId,
                 onNavigateBack = { navController.popBackStack() }
@@ -183,14 +152,9 @@ fun AppNavHost(
 
         composable(
             route = Screen.TodaysDue.route,
-            arguments = listOf(
-                navArgument("lenderId") {
-                    type = NavType.StringType
-                    defaultValue = ""
-                }
-            )
+            arguments = listOf(navArgument("lenderId") { type = NavType.StringType })
         ) { backStackEntry ->
-            val lenderId = resolveLenderId(backStackEntry.arguments)
+            val lenderId = backStackEntry.arguments?.getString("lenderId")?.takeIf { it.isNotBlank() && it != "{lenderId}" } ?: sessionManager.getUserId().orEmpty()
             TodaysDueScreen(
                 lenderId = lenderId,
                 onNavigateBack = { navController.popBackStack() }
@@ -199,14 +163,9 @@ fun AppNavHost(
 
         composable(
             route = Screen.TodaysPayment.route,
-            arguments = listOf(
-                navArgument("lenderId") {
-                    type = NavType.StringType
-                    defaultValue = ""
-                }
-            )
+            arguments = listOf(navArgument("lenderId") { type = NavType.StringType })
         ) { backStackEntry ->
-            val lenderId = resolveLenderId(backStackEntry.arguments)
+            val lenderId = backStackEntry.arguments?.getString("lenderId")?.takeIf { it.isNotBlank() && it != "{lenderId}" } ?: sessionManager.getUserId().orEmpty()
             TodaysPaymentScreen(
                 lenderId = lenderId,
                 onNavigateBack = { navController.popBackStack() }
@@ -215,14 +174,9 @@ fun AppNavHost(
 
         composable(
             route = Screen.VerifyPayment.route,
-            arguments = listOf(
-                navArgument("lenderId") {
-                    type = NavType.StringType
-                    defaultValue = ""
-                }
-            )
+            arguments = listOf(navArgument("lenderId") { type = NavType.StringType })
         ) { backStackEntry ->
-            val lenderId = resolveLenderId(backStackEntry.arguments)
+            val lenderId = backStackEntry.arguments?.getString("lenderId")?.takeIf { it.isNotBlank() && it != "{lenderId}" } ?: sessionManager.getUserId().orEmpty()
             VerifyPaymentScreen(
                 lenderId = lenderId,
                 onNavigateBack = { navController.popBackStack() }
@@ -231,14 +185,9 @@ fun AppNavHost(
 
         composable(
             route = Screen.TrackPayments.route,
-            arguments = listOf(
-                navArgument("lenderId") {
-                    type = NavType.StringType
-                    defaultValue = ""
-                }
-            )
+            arguments = listOf(navArgument("lenderId") { type = NavType.StringType })
         ) { backStackEntry ->
-            val lenderId = resolveLenderId(backStackEntry.arguments)
+            val lenderId = backStackEntry.arguments?.getString("lenderId")?.takeIf { it.isNotBlank() && it != "{lenderId}" } ?: sessionManager.getUserId().orEmpty()
             TrackPaymentsScreen(
                 lenderId = lenderId,
                 onNavigateBack = { navController.popBackStack() }
@@ -247,14 +196,9 @@ fun AppNavHost(
 
         composable(
             route = Screen.MasterClient.route,
-            arguments = listOf(
-                navArgument("lenderId") {
-                    type = NavType.StringType
-                    defaultValue = ""
-                }
-            )
+            arguments = listOf(navArgument("lenderId") { type = NavType.StringType })
         ) { backStackEntry ->
-            val lenderId = resolveLenderId(backStackEntry.arguments)
+            val lenderId = backStackEntry.arguments?.getString("lenderId")?.takeIf { it.isNotBlank() && it != "{lenderId}" } ?: sessionManager.getUserId().orEmpty()
             MasterClientScreen(
                 lenderId = lenderId,
                 onNavigateBack = { navController.popBackStack() },
@@ -264,14 +208,9 @@ fun AppNavHost(
 
         composable(
             route = Screen.LenderLedger.route,
-            arguments = listOf(
-                navArgument("lenderId") {
-                    type = NavType.StringType
-                    defaultValue = ""
-                }
-            )
+            arguments = listOf(navArgument("lenderId") { type = NavType.StringType })
         ) { backStackEntry ->
-            val lenderId = resolveLenderId(backStackEntry.arguments)
+            val lenderId = backStackEntry.arguments?.getString("lenderId")?.takeIf { it.isNotBlank() && it != "{lenderId}" } ?: sessionManager.getUserId().orEmpty()
             LenderLedgerScreen(
                 lenderId = lenderId,
                 onNavigateBack = { navController.popBackStack() }
