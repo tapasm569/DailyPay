@@ -10,14 +10,17 @@ import com.dailypay.app.data.local.entity.BorrowerEntity
 import com.dailypay.app.data.local.entity.DailyDueEntity
 
 @Database(
-    entities = [DailyDueEntity::class, BorrowerEntity::class],
-    version = 1,
+    entities = [
+        BorrowerEntity::class,
+        DailyDueEntity::class
+    ],
+    version = 2,
     exportSchema = false
 )
 abstract class DailyPayDatabase : RoomDatabase() {
 
-    abstract fun dailyDueDao(): DailyDueDao
     abstract fun borrowerDao(): BorrowerDao
+    abstract fun dailyDueDao(): DailyDueDao
 
     companion object {
         @Volatile
@@ -29,7 +32,9 @@ abstract class DailyPayDatabase : RoomDatabase() {
                     context.applicationContext,
                     DailyPayDatabase::class.java,
                     "dailypay_local.db"
-                ).fallbackToDestructiveMigration().build()
+                )
+                    .fallbackToDestructiveMigration()
+                    .build()
                 INSTANCE = instance
                 instance
             }
