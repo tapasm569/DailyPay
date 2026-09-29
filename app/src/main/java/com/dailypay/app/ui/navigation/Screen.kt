@@ -1,6 +1,6 @@
-
 package com.dailypay.app.ui.navigation
 
+// Ensures route path parameters are never empty or malformed
 private fun sanitizeParam(id: String): String {
     val clean = id.trim()
     return if (clean.isNotBlank() && clean != "unknown" && !clean.startsWith("{")) clean else "me"
@@ -17,6 +17,7 @@ sealed class Screen(val route: String) {
     data object ManageLender : Screen("manage_lender")
     data object LenderStatus : Screen("lender_status")
 
+    // Backward-compatibility fallbacks
     @Deprecated("Replaced by LenderStatus", ReplaceWith("LenderStatus"))
     data object AdminPasswordRequests : Screen("admin_password_requests")
     @Deprecated("Replaced by LenderStatus", ReplaceWith("LenderStatus"))
