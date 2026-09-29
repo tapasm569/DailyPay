@@ -147,7 +147,8 @@ fun AddBorrowerScreen(
                             mobileNumber = mobile.trim(),
                             villageCity = villageCity.trim().ifBlank { null },
                             postOffice = postOffice.trim().ifBlank { null },
-                            dist = dist.trim().ifBlank { null }
+                            dist = dist.trim().ifBlank { null },
+                            pinCode = pinCode.trim().ifBlank { null }
                         )
 
                         lenderRepo.addBorrower(
