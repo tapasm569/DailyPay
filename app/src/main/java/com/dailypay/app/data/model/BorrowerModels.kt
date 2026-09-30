@@ -29,9 +29,6 @@ data class Borrower(
 
     val dist: String? = null,
 
-    @SerialName("pin_code")
-    val pinCode: String? = null,
-
     @SerialName("aadhaar_card_url")
     val aadhaarCardUrl: String? = null,
 
@@ -46,14 +43,7 @@ data class Borrower(
 
     @SerialName("created_at")
     val createdAt: String? = null
-) {
-    // Compatibility aliases so screens can use alternate property names safely
-    val mobile: String get() = mobileNumber
-    val phone: String get() = mobileNumber
-    val village: String? get() = villageCity
-    val villageTown: String? get() = villageCity
-    val pin: String? get() = pinCode
-}
+)
 
 @Serializable
 data class BorrowerKycDocs(
