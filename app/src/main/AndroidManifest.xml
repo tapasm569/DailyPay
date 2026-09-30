@@ -1,51 +1,55 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
-    <!-- Core Network Permissions -->
+    <!-- Network permissions for Supabase APIs -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
-    <!-- Storage & Photo Picker Permissions -->
-    <!-- Android 13+ (API 33+) -->
-    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
-    <!-- Android 12 and below -->
+    <!-- Storage / Media permissions for KYC image and profile photo uploads -->
     <uses-permission
         android:name="android.permission.READ_EXTERNAL_STORAGE"
         android:maxSdkVersion="32" />
-    <uses-permission
-        android:name="android.permission.WRITE_EXTERNAL_STORAGE"
-        android:maxSdkVersion="28" />
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
 
-    <!-- Package Visibility Queries for Android 11+ (API 30+) -->
+    <!-- Package visibility declarations for Android 11+ (API 30+) -->
     <queries>
-        <!-- UPI Apps (GPay, PhonePe, Paytm, BHIM, etc.) -->
+        <!-- Native UPI apps (GPay, PhonePe, Paytm, BHIM) -->
         <intent>
             <action android:name="android.intent.action.VIEW" />
             <data android:scheme="upi" />
         </intent>
+
         <!-- Phone Dialer -->
         <intent>
             <action android:name="android.intent.action.DIAL" />
             <data android:scheme="tel" />
         </intent>
-        <!-- WhatsApp Packages -->
+
+        <!-- WhatsApp & WhatsApp Business -->
         <package android:name="com.whatsapp" />
         <package android:name="com.whatsapp.w4b" />
+
+        <!-- PDF Viewers -->
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:mimeType="application/pdf" />
+        </intent>
     </queries>
 
     <application
         android:name=".DailyPayApp"
         android:allowBackup="true"
         android:icon="@drawable/ic_launcher"
-        android:label="@string/app_name"
         android:roundIcon="@drawable/ic_launcher"
+        android:label="DailyPay"
         android:supportsRtl="true"
         android:theme="@style/Theme.DailyPay">
 
+        <!-- Launch Activity configured with the cold-start Splash Theme -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
-            android:theme="@style/Theme.DailyPay"
+            android:theme="@style/Theme.DailyPay.Splash"
             android:windowSoftInputMode="adjustResize">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
@@ -53,7 +57,7 @@
             </intent-filter>
         </activity>
 
-        <!-- FileProvider for Sharing Exported PDF Reports -->
+        <!-- FileProvider configured to match PdfExporter.kt -->
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.fileprovider"
@@ -63,6 +67,16 @@
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/file_paths" />
         </provider>
+
+        <!-- Service for backward-compatible in-app language persistence (AndroidX AppLocales) -->
+        <service
+            android:name="androidx.appcompat.app.AppLocalesMetadataHolderService"
+            android:enabled="true"
+            android:exported="false">
+            <meta-data
+                android:name="autoStoreLocales"
+                android:value="true" />
+        </service>
 
     </application>
 
