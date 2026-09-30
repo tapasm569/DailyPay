@@ -5,15 +5,22 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.filled.AccountCircle
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.LockReset
+import androidx.compose.material.icons.filled.Logout
+import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.PopupProperties
 import com.dailypay.app.ui.theme.*
+import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -29,6 +36,23 @@ fun DailyPayTopBar(
 ) {
     var menuExpanded by remember { mutableStateOf(false) }
 
+    // Safe formatting using Locale.US to prevent decimal crashes
+    val formattedPendingDue = remember(pendingDue) {
+        try {
+            String.format(Locale.US, "%.2f", pendingDue)
+        } catch (e: Exception) {
+            "0.00"
+        }
+    }
+
+    val formattedReceived = remember(receivedPayment) {
+        try {
+            String.format(Locale.US, "%.2f", receivedPayment)
+        } catch (e: Exception) {
+            "0.00"
+        }
+    }
+
     Surface(
         color = MaterialTheme.colorScheme.surface,
         shadowElevation = 4.dp
@@ -36,7 +60,6 @@ fun DailyPayTopBar(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .statusBarsPadding()
                 .padding(horizontal = 16.dp, vertical = 12.dp)
         ) {
             // Top Row: Hamburger, Business Name, Search & Account Icons
@@ -47,7 +70,9 @@ fun DailyPayTopBar(
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Box {
-                        IconButton(onClick = { menuExpanded = true }) {
+                        IconButton(
+                            onClick = { menuExpanded = !menuExpanded }
+                        ) {
                             Icon(
                                 imageVector = Icons.Default.Menu,
                                 contentDescription = "Menu",
@@ -59,20 +84,28 @@ fun DailyPayTopBar(
                         DropdownMenu(
                             expanded = menuExpanded,
                             onDismissRequest = { menuExpanded = false },
-                            modifier = Modifier
-                                .width(240.dp)
-                                .background(MaterialTheme.colorScheme.surface)
+                            offset = DpOffset(x = 0.dp, y = 8.dp),
+                            properties = PopupProperties(
+                                focusable = true,
+                                dismissOnBackPress = true,
+                                dismissOnClickOutside = true
+                            ),
+                            shape = RoundedCornerShape(12.dp),
+                            containerColor = MaterialTheme.colorScheme.surface,
+                            tonalElevation = 6.dp,
+                            shadowElevation = 8.dp,
+                            modifier = Modifier.width(240.dp)
                         ) {
                             Column(modifier = Modifier.padding(16.dp)) {
                                 Text(
-                                    text = businessName,
+                                    text = businessName.ifBlank { "DailyPay" },
                                     style = MaterialTheme.typography.titleMedium,
                                     color = BrandPrimary
                                 )
                                 Text(
                                     text = "Lender Account",
                                     style = MaterialTheme.typography.bodyMedium,
-                                    color = TextSecondaryLight
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             }
                             HorizontalDivider()
@@ -167,7 +200,7 @@ fun DailyPayTopBar(
                                 color = AlertOrange
                             )
                             Text(
-                                text = "₹${String.format("%.2f", pendingDue)}",
+                                text = "₹$formattedPendingDue",
                                 style = MaterialTheme.typography.titleMedium,
                                 color = TextPrimaryLight
                             )
@@ -199,7 +232,7 @@ fun DailyPayTopBar(
                                 color = MoneyGreen
                             )
                             Text(
-                                text = "₹${String.format("%.2f", receivedPayment)}",
+                                text = "₹$formattedReceived",
                                 style = MaterialTheme.typography.titleMedium,
                                 color = TextPrimaryLight
                             )
