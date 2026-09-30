@@ -1,5 +1,6 @@
 package com.dailypay.app.ui.screens.borrower
 
+import android.net.Uri
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -23,13 +24,17 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Logout
+import androidx.compose.material.icons.filled.AccountBalanceWallet
 import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.OpenInNew
 import androidx.compose.material.icons.filled.Payment
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Phone
 import androidx.compose.material.icons.filled.PostAdd
+import androidx.compose.material.icons.filled.QrCode
 import androidx.compose.material.icons.filled.ReceiptLong
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material3.AlertDialog
@@ -39,6 +44,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -64,7 +70,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
@@ -104,6 +112,7 @@ fun BorrowerDashboardScreen(
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    val clipboardManager = LocalClipboardManager.current
     val borrowerRepo = remember { BorrowerRepository() }
 
     var borrowerProfile by remember { mutableStateOf<Borrower?>(null) }
@@ -113,11 +122,14 @@ fun BorrowerDashboardScreen(
     var isLoading by remember { mutableStateOf(true) }
     var isUploadingAvatar by remember { mutableStateOf(false) }
 
-    // Direct UPI payment dialog states
+    // Payment Dialog States
     var showPayDialog by remember { mutableStateOf(false) }
     var selectedLoan by remember { mutableStateOf<ApprovedLoanDetail?>(null) }
+    var selectedPaymentMode by remember { mutableStateOf(PaymentMode.UPI) }
     var emiAmountInput by remember { mutableStateOf("") }
     var utrInput by remember { mutableStateOf("") }
+    var cashNoteInput by remember { mutableStateOf("") }
+    var showQrCode by remember { mutableStateOf(false) }
     var isSubmittingPayment by remember { mutableStateOf(false) }
 
     fun loadData() {
@@ -161,6 +173,9 @@ fun BorrowerDashboardScreen(
         val defaultAmount = if (loanToPay.todayDue > 0.0) loanToPay.todayDue else loanToPay.dailyInstallment
         emiAmountInput = String.format(Locale.US, "%.2f", maxOf(0.0, defaultAmount))
         utrInput = ""
+        cashNoteInput = ""
+        selectedPaymentMode = PaymentMode.UPI
+        showQrCode = false
         showPayDialog = true
     }
 
@@ -433,8 +448,8 @@ fun BorrowerDashboardScreen(
                 Text("Quick Actions", style = MaterialTheme.typography.titleMedium)
 
                 CustomerActionCard(
-                    title = "Pay EMI Online",
-                    subtitle = "Pay daily installment via UPI app and submit 12-digit UTR",
+                    title = "Pay EMI (UPI / Cash)",
+                    subtitle = "Pay daily installment via UPI app, QR code, or submit cash request",
                     icon = Icons.Default.Payment,
                     accentColor = MoneyGreen,
                     onClick = { openPaymentDialog() }
@@ -466,25 +481,50 @@ fun BorrowerDashboardScreen(
             }
         }
 
-        // ================= DIRECT UPI & UTR REPAYMENT DIALOG =================
+        // ================= REPAYMENT DIALOG (UPI + CASH) =================
         if (showPayDialog) {
             val lenderUpiId = lenderProfile?.upiId?.trim().orEmpty()
-            val lenderDisplayName = lenderProfile?.businessName?.ifBlank { lenderProfile?.name } ?: "Lender"
+            val lenderMobile = lenderProfile?.mobileNumber?.trim().orEmpty()
+            val lenderDisplayName = lenderProfile?.businessName?.ifBlank { lenderProfile?.name } ?: "DailyPay Lender"
+            val parsedAmount = emiAmountInput.toDoubleOrNull() ?: 0.0
+            val formattedAmount = String.format(Locale.US, "%.2f", maxOf(0.0, parsedAmount))
+
+            // Build dynamic UPI QR Code Image URL
+            val upiPayload = "upi://pay?pa=$lenderUpiId&pn=${Uri.encode(lenderDisplayName)}&am=$formattedAmount&cu=INR"
+            val qrCodeUrl = "https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=${Uri.encode(upiPayload)}"
 
             AlertDialog(
                 onDismissRequest = { if (!isSubmittingPayment) showPayDialog = false },
-                title = { Text("Pay Daily EMI Online") },
+                title = { Text("Repay Daily EMI") },
                 text = {
                     Column(
                         verticalArrangement = Arrangement.spacedBy(10.dp),
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .verticalScroll(rememberScrollState())
                     ) {
-                        Text(
-                            text = "Lender: $lenderDisplayName\nUPI ID: ${if (lenderUpiId.isNotBlank()) lenderUpiId else "Not configured by lender"}",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = TextSecondaryLight
-                        )
+                        // 1. Payment Method Switcher (UPI vs Cash)
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            FilterChip(
+                                selected = selectedPaymentMode == PaymentMode.UPI,
+                                onClick = { if (!isSubmittingPayment) selectedPaymentMode = PaymentMode.UPI },
+                                label = { Text("Pay via UPI") },
+                                leadingIcon = { Icon(Icons.Default.Payment, contentDescription = null, modifier = Modifier.size(16.dp)) },
+                                modifier = Modifier.weight(1f)
+                            )
+                            FilterChip(
+                                selected = selectedPaymentMode == PaymentMode.CASH,
+                                onClick = { if (!isSubmittingPayment) selectedPaymentMode = PaymentMode.CASH },
+                                label = { Text("Pay in Cash") },
+                                leadingIcon = { Icon(Icons.Default.AccountBalanceWallet, contentDescription = null, modifier = Modifier.size(16.dp)) },
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
 
+                        // Amount Input
                         OutlinedTextField(
                             value = emiAmountInput,
                             onValueChange = { input ->
@@ -500,72 +540,210 @@ fun BorrowerDashboardScreen(
                             enabled = !isSubmittingPayment
                         )
 
-                        // STEP 1: Launch UPI Intent
-                        OutlinedButton(
-                            onClick = {
-                                val parsedAmount = emiAmountInput.toDoubleOrNull() ?: 0.0
-                                if (lenderUpiId.isBlank()) {
-                                    Toast.makeText(context, "Lender has not set up a UPI ID yet. Please contact them.", Toast.LENGTH_LONG).show()
-                                } else if (parsedAmount <= 0.0) {
-                                    Toast.makeText(context, "Enter a valid installment amount first.", Toast.LENGTH_SHORT).show()
-                                } else {
-                                    val currentLoanId = selectedLoan?.loanId.orEmpty().take(8)
-                                    UpiIntentLauncher.initiateUpiPayment(
-                                        context = context,
-                                        payeeUpiId = lenderUpiId,
-                                        payeeName = lenderDisplayName,
-                                        amount = parsedAmount,
-                                        transactionNote = "DailyPay EMI Loan #$currentLoanId"
+                        // ================= MODE A: UPI FLOW =================
+                        if (selectedPaymentMode == PaymentMode.UPI) {
+                            Surface(
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(10.dp),
+                                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                            ) {
+                                Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                    Text(
+                                        text = "Pay using Lender Details:",
+                                        style = MaterialTheme.typography.labelMedium,
+                                        fontWeight = FontWeight.Bold
+                                    )
+
+                                    // Option 1: Mobile Number for PhonePe/GPay/Paytm (Bypasses NPCI Risk Error)
+                                    if (lenderMobile.isNotBlank()) {
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.SpaceBetween
+                                        ) {
+                                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                                Icon(Icons.Default.Phone, contentDescription = null, tint = CallBlue, modifier = Modifier.size(16.dp))
+                                                Spacer(modifier = Modifier.width(6.dp))
+                                                Text("Mobile: +91 $lenderMobile", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.SemiBold)
+                                            }
+                                            IconButton(
+                                                onClick = {
+                                                    clipboardManager.setText(AnnotatedString(lenderMobile))
+                                                    Toast.makeText(context, "Mobile number copied: $lenderMobile", Toast.LENGTH_SHORT).show()
+                                                },
+                                                modifier = Modifier.size(28.dp)
+                                            ) {
+                                                Icon(Icons.Default.ContentCopy, contentDescription = "Copy", tint = BrandPrimary, modifier = Modifier.size(16.dp))
+                                            }
+                                        }
+                                    }
+
+                                    // Option 2: UPI ID / VPA
+                                    if (lenderUpiId.isNotBlank()) {
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.SpaceBetween
+                                        ) {
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                modifier = Modifier.weight(1f)
+                                            ) {
+                                                Icon(Icons.Default.Payment, contentDescription = null, tint = MoneyGreen, modifier = Modifier.size(16.dp))
+                                                Spacer(modifier = Modifier.width(6.dp))
+                                                Text("UPI ID: $lenderUpiId", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.SemiBold)
+                                            }
+                                            IconButton(
+                                                onClick = {
+                                                    clipboardManager.setText(AnnotatedString(lenderUpiId))
+                                                    Toast.makeText(context, "UPI ID copied: $lenderUpiId", Toast.LENGTH_SHORT).show()
+                                                },
+                                                modifier = Modifier.size(28.dp)
+                                            ) {
+                                                Icon(Icons.Default.ContentCopy, contentDescription = "Copy", tint = BrandPrimary, modifier = Modifier.size(16.dp))
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
+                            // QR Code / Intent Row
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                OutlinedButton(
+                                    onClick = { showQrCode = !showQrCode },
+                                    modifier = Modifier.weight(1f),
+                                    shape = RoundedCornerShape(10.dp),
+                                    enabled = lenderUpiId.isNotBlank() && parsedAmount > 0.0
+                                ) {
+                                    Icon(Icons.Default.QrCode, contentDescription = null, modifier = Modifier.size(16.dp))
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text(if (showQrCode) "Hide QR" else "Show QR")
+                                }
+
+                                OutlinedButton(
+                                    onClick = {
+                                        if (lenderUpiId.isBlank()) {
+                                            Toast.makeText(context, "Lender has not configured a UPI ID.", Toast.LENGTH_SHORT).show()
+                                        } else if (parsedAmount <= 0.0) {
+                                            Toast.makeText(context, "Enter amount first.", Toast.LENGTH_SHORT).show()
+                                        } else {
+                                            val currentLoanId = selectedLoan?.loanId.orEmpty().take(8)
+                                            UpiIntentLauncher.initiateUpiPayment(
+                                                context = context,
+                                                payeeUpiId = lenderUpiId,
+                                                payeeName = lenderDisplayName,
+                                                amount = parsedAmount,
+                                                transactionNote = "DailyPay EMI Loan #$currentLoanId"
+                                            )
+                                        }
+                                    },
+                                    modifier = Modifier.weight(1f),
+                                    shape = RoundedCornerShape(10.dp),
+                                    enabled = lenderUpiId.isNotBlank() && parsedAmount > 0.0
+                                ) {
+                                    Icon(Icons.Default.OpenInNew, contentDescription = null, modifier = Modifier.size(16.dp))
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text("Open UPI")
+                                }
+                            }
+
+                            // Dynamic QR Code Display
+                            if (showQrCode && lenderUpiId.isNotBlank() && parsedAmount > 0.0) {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(vertical = 4.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                        AsyncImage(
+                                            model = qrCodeUrl,
+                                            contentDescription = "Scan to Pay UPI QR",
+                                            modifier = Modifier
+                                                .size(180.dp)
+                                                .border(2.dp, BorderSubtleLight, RoundedCornerShape(12.dp))
+                                                .clip(RoundedCornerShape(12.dp))
+                                        )
+                                        Spacer(modifier = Modifier.height(4.dp))
+                                        Text("Scan using GPay, PhonePe or Paytm", style = MaterialTheme.typography.labelSmall, color = TextSecondaryLight)
+                                    }
+                                }
+                            }
+
+                            // NPCI Advisory Hint
+                            Surface(
+                                shape = RoundedCornerShape(8.dp),
+                                color = AlertOrangeSubtle
+                            ) {
+                                Text(
+                                    text = "💡 Tip: If your UPI app shows 'NPCI Risk Policy', copy the Lender's Mobile Number above and pay directly inside GPay / PhonePe.",
+                                    modifier = Modifier.padding(8.dp),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = AlertOrange
+                                )
+                            }
+
+                            // 12-Digit UTR Input
+                            OutlinedTextField(
+                                value = utrInput,
+                                onValueChange = { input ->
+                                    val digitsOnly = input.filter { it.isDigit() }
+                                    if (digitsOnly.length <= 12) {
+                                        utrInput = digitsOnly
+                                    }
+                                },
+                                label = { Text("12-Digit UPI Ref / UTR *") },
+                                supportingText = { Text("${utrInput.length}/12 digits from receipt") },
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(12.dp),
+                                singleLine = true,
+                                enabled = !isSubmittingPayment
+                            )
+                        } else {
+                            // ================= MODE B: CASH FLOW =================
+                            Surface(
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(10.dp),
+                                color = MoneyGreenSubtle
+                            ) {
+                                Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                    Text("Cash Handover Verification", fontWeight = FontWeight.Bold, color = MoneyGreen)
+                                    Text(
+                                        text = "Please physically hand over ₹$formattedAmount in cash to the lender or collection agent. Once the lender confirms receipt, your loan balance will be deducted.",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = TextSecondaryLight
                                     )
                                 }
-                            },
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(12.dp),
-                            enabled = !isSubmittingPayment && lenderUpiId.isNotBlank()
-                        ) {
-                            Icon(Icons.Default.OpenInNew, contentDescription = null, modifier = Modifier.size(18.dp))
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text("1. Pay in GPay / PhonePe / Paytm")
+                            }
+
+                            OutlinedTextField(
+                                value = cashNoteInput,
+                                onValueChange = { cashNoteInput = it },
+                                label = { Text("Handover Note (Optional)") },
+                                placeholder = { Text("e.g. Paid cash at shop / handed to agent") },
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(12.dp),
+                                maxLines = 2,
+                                enabled = !isSubmittingPayment
+                            )
                         }
-
-                        HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
-
-                        // STEP 2: Enter 12-digit UTR
-                        Text(
-                            text = "2. Enter 12-Digit UPI Ref / UTR Number:",
-                            style = MaterialTheme.typography.labelMedium,
-                            fontWeight = FontWeight.Bold
-                        )
-
-                        OutlinedTextField(
-                            value = utrInput,
-                            onValueChange = { input ->
-                                val digitsOnly = input.filter { it.isDigit() }
-                                if (digitsOnly.length <= 12) {
-                                    utrInput = digitsOnly
-                                }
-                            },
-                            label = { Text("12-Digit UTR Number *") },
-                            supportingText = { Text("${utrInput.length}/12 digits") },
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(12.dp),
-                            singleLine = true,
-                            enabled = !isSubmittingPayment
-                        )
                     }
                 },
                 confirmButton = {
                     Button(
                         onClick = {
-                            val parsedAmount = emiAmountInput.toDoubleOrNull() ?: 0.0
                             if (parsedAmount <= 0.0) {
                                 Toast.makeText(context, "Please enter a valid amount.", Toast.LENGTH_SHORT).show()
                                 return@Button
                             }
+
                             val cleanUtr = utrInput.trim()
-                            if (cleanUtr.length != 12) {
-                                Toast.makeText(context, "Please enter a valid 12-digit UTR number from your bank receipt.", Toast.LENGTH_SHORT).show()
+                            if (selectedPaymentMode == PaymentMode.UPI && cleanUtr.length != 12) {
+                                Toast.makeText(context, "Please enter the 12-digit UTR from your UPI payment receipt.", Toast.LENGTH_SHORT).show()
                                 return@Button
                             }
 
@@ -575,32 +753,39 @@ fun BorrowerDashboardScreen(
                                 val loanId = currentLoan?.loanId.orEmpty()
                                 val cleanLenderId = borrowerProfile?.lenderId?.trim().orEmpty()
 
+                                val paymentNotes = if (selectedPaymentMode == PaymentMode.UPI) {
+                                    "Online UPI Payment. UTR: $cleanUtr"
+                                } else {
+                                    cashNoteInput.trim().ifBlank { "Cash handed over directly by borrower" }
+                                }
+
                                 val repayment = Repayment(
                                     loanId = loanId,
                                     borrowerId = borrowerId.trim(),
                                     lenderId = cleanLenderId,
                                     paymentDate = DateUtils.getTodaySqlFormat(),
                                     amountPaid = parsedAmount,
-                                    paymentMode = PaymentMode.UPI,
+                                    paymentMode = selectedPaymentMode,
                                     status = RepaymentStatus.PENDING,
-                                    utrReference = cleanUtr,
-                                    notes = "Online UPI payment submitted by customer. UTR: $cleanUtr"
+                                    utrReference = if (selectedPaymentMode == PaymentMode.UPI) cleanUtr else null,
+                                    notes = paymentNotes
                                 )
 
                                 borrowerRepo.submitEmiPayment(repayment)
                                     .onSuccess {
                                         isSubmittingPayment = false
                                         showPayDialog = false
-                                        Toast.makeText(
-                                            context,
-                                            "Payment submitted! Pending lender verification.",
-                                            Toast.LENGTH_LONG
-                                        ).show()
+                                        val message = if (selectedPaymentMode == PaymentMode.UPI) {
+                                            "UPI payment submitted with UTR! Awaiting lender approval."
+                                        } else {
+                                            "Cash payment request submitted! Lender will verify upon receiving cash."
+                                        }
+                                        Toast.makeText(context, message, Toast.LENGTH_LONG).show()
                                         loadData()
                                     }
                                     .onFailure { error ->
                                         isSubmittingPayment = false
-                                        Toast.makeText(context, "Submission failed: ${error.message}", Toast.LENGTH_LONG).show()
+                                        Toast.makeText(context, "Failed: ${error.message}", Toast.LENGTH_LONG).show()
                                     }
                             }
                         },
@@ -616,7 +801,7 @@ fun BorrowerDashboardScreen(
                             Spacer(modifier = Modifier.width(8.dp))
                             Text("Submitting...")
                         } else {
-                            Text("Confirm & Submit")
+                            Text(if (selectedPaymentMode == PaymentMode.UPI) "Submit UPI & UTR" else "Submit Cash Payment")
                         }
                     }
                 },
