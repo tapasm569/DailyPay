@@ -1,16 +1,44 @@
 package com.dailypay.app.ui.screens.lender
 
 import androidx.compose.foundation.border
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Event
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -18,10 +46,14 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.dailypay.app.data.model.DailyDueItem
 import com.dailypay.app.data.repository.LenderRepository
-import com.dailypay.app.ui.theme.*
+import com.dailypay.app.ui.theme.BorderSubtleLight
+import com.dailypay.app.ui.theme.BrandPrimary
+import com.dailypay.app.ui.theme.DangerRed
+import com.dailypay.app.ui.theme.MoneyGreen
+import com.dailypay.app.ui.theme.MoneyGreenSubtle
+import com.dailypay.app.ui.theme.TextSecondaryLight
+import com.dailypay.app.util.DateUtils
 import kotlinx.coroutines.launch
-import java.text.SimpleDateFormat
-import java.util.Date
 import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -33,27 +65,37 @@ fun TodaysPaymentScreen(
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val lenderRepo = remember { LenderRepository(context) }
+    val lenderRepo = remember { LenderRepository(context.applicationContext) }
 
     var paidItems by remember { mutableStateOf<List<DailyDueItem>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
 
-    val currentDateText = remember {
-        SimpleDateFormat("dd MMM yyyy", Locale.getDefault()).format(Date())
-    }
+    val currentDateText = remember { DateUtils.getTodayDisplayFormat() }
+    val cleanLenderId = remember(lenderId) { lenderId.trim() }
 
-    LaunchedEffect(lenderId) {
+    LaunchedEffect(cleanLenderId) {
+        if (cleanLenderId.isBlank() || cleanLenderId == "{lenderId}") {
+            isLoading = false
+            return@LaunchedEffect
+        }
         scope.launch {
-            lenderRepo.getDailyDues(lenderId)
+            lenderRepo.getDailyDues(cleanLenderId)
                 .onSuccess { allDues ->
-                    paidItems = allDues.filter { it.todayPaidAmount > 0 }
+                    paidItems = allDues.filter { it.todayPaidAmount > 0.0 }
                     isLoading = false
                 }
-                .onFailure { isLoading = false }
+                .onFailure {
+                    isLoading = false
+                }
         }
     }
 
-    val totalCollected = paidItems.sumOf { it.todayPaidAmount }
+    val totalCollected = remember(paidItems) {
+        paidItems.sumOf { it.todayPaidAmount }
+    }
+    val formattedTotalCollected = remember(totalCollected) {
+        String.format(Locale.US, "%.2f", totalCollected)
+    }
 
     Scaffold(
         topBar = {
@@ -112,8 +154,16 @@ fun TodaysPaymentScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Column {
-                            Text("Total Collected Today", style = MaterialTheme.typography.bodyMedium, color = TextSecondaryLight)
-                            Text("₹${String.format(Locale.getDefault(), "%.2f", totalCollected)}", style = MaterialTheme.typography.displayMedium, color = MoneyGreen)
+                            Text(
+                                text = "Total Collected Today",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = TextSecondaryLight
+                            )
+                            Text(
+                                text = "₹$formattedTotalCollected",
+                                style = MaterialTheme.typography.displayMedium,
+                                color = MoneyGreen
+                            )
                             Spacer(modifier = Modifier.height(4.dp))
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Icon(
@@ -130,17 +180,41 @@ fun TodaysPaymentScreen(
                                 )
                             }
                         }
-                        Icon(Icons.Default.CheckCircle, contentDescription = null, tint = MoneyGreen, modifier = Modifier.size(32.dp))
+                        Icon(
+                            imageVector = Icons.Default.CheckCircle,
+                            contentDescription = null,
+                            tint = MoneyGreen,
+                            modifier = Modifier.size(32.dp)
+                        )
                     }
                 }
 
                 if (paidItems.isEmpty()) {
                     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Text("No collections recorded yet today ($currentDateText).", color = TextSecondaryLight)
+                        Text(
+                            text = "No collections recorded yet today ($currentDateText).",
+                            color = TextSecondaryLight
+                        )
                     }
                 } else {
                     LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                        items(paidItems, key = { it.loanId }) { item ->
+                        itemsIndexed(
+                            items = paidItems,
+                            key = { index, item -> "${item.loanId}_${item.borrowerId}_$index" }
+                        ) { _, item ->
+                            val formattedTodayPaid = remember(item.todayPaidAmount) {
+                                String.format(Locale.US, "%.2f", item.todayPaidAmount)
+                            }
+                            val formattedInstallment = remember(item.dailyInstallment) {
+                                String.format(Locale.US, "%.2f", item.dailyInstallment)
+                            }
+                            val formattedTotalPaid = remember(item.totalPaid) {
+                                String.format(Locale.US, "%.2f", item.totalPaid)
+                            }
+                            val formattedRemaining = remember(item.remainingBalance) {
+                                String.format(Locale.US, "%.2f", maxOf(0.0, item.remainingBalance))
+                            }
+
                             Card(
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -160,7 +234,7 @@ fun TodaysPaymentScreen(
                                     ) {
                                         Column(modifier = Modifier.weight(1f)) {
                                             Text(
-                                                text = item.borrowerName,
+                                                text = item.borrowerName.ifBlank { "Borrower" },
                                                 style = MaterialTheme.typography.titleMedium,
                                                 fontWeight = FontWeight.Bold
                                             )
@@ -199,13 +273,13 @@ fun TodaysPaymentScreen(
 
                                         Column(horizontalAlignment = Alignment.End) {
                                             Text(
-                                                text = "₹${item.todayPaidAmount}",
+                                                text = "₹$formattedTodayPaid",
                                                 style = MaterialTheme.typography.titleMedium,
                                                 fontWeight = FontWeight.Bold,
                                                 color = MoneyGreen
                                             )
                                             Text(
-                                                text = "Daily: ₹${item.dailyInstallment}",
+                                                text = "Daily: ₹$formattedInstallment",
                                                 style = MaterialTheme.typography.bodySmall,
                                                 color = TextSecondaryLight
                                             )
@@ -221,12 +295,12 @@ fun TodaysPaymentScreen(
                                         horizontalArrangement = Arrangement.SpaceBetween
                                     ) {
                                         Text(
-                                            text = "Total Paid: ₹${item.totalPaid}",
+                                            text = "Total Paid: ₹$formattedTotalPaid",
                                             style = MaterialTheme.typography.bodySmall,
                                             color = TextSecondaryLight
                                         )
                                         Text(
-                                            text = "Remaining: ₹${maxOf(0.0, item.remainingBalance)}",
+                                            text = "Remaining: ₹$formattedRemaining",
                                             style = MaterialTheme.typography.bodySmall,
                                             fontWeight = FontWeight.SemiBold,
                                             color = if (item.remainingBalance > 0.0) DangerRed else MoneyGreen
