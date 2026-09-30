@@ -4,7 +4,17 @@ import android.content.Context
 import com.dailypay.app.data.local.DailyPayDatabase
 import com.dailypay.app.data.local.entity.BorrowerEntity
 import com.dailypay.app.data.local.entity.DailyDueEntity
-import com.dailypay.app.data.model.*
+import com.dailypay.app.data.model.ApprovedLoanDetail
+import com.dailypay.app.data.model.Borrower
+import com.dailypay.app.data.model.DailyDueItem
+import com.dailypay.app.data.model.Lender
+import com.dailypay.app.data.model.LenderLedgerSummary
+import com.dailypay.app.data.model.Loan
+import com.dailypay.app.data.model.LoanStatus
+import com.dailypay.app.data.model.PaymentMode
+import com.dailypay.app.data.model.PendingPaymentItem
+import com.dailypay.app.data.model.Repayment
+import com.dailypay.app.data.model.RepaymentStatus
 import com.dailypay.app.data.remote.SupabaseClientProvider
 import com.dailypay.app.util.DateUtils
 import io.github.jan.supabase.postgrest.from
@@ -19,13 +29,17 @@ import kotlinx.serialization.json.put
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
+import java.util.UUID
 import kotlin.math.round
 
 class LenderRepository(context: Context? = null) {
 
     private val db = SupabaseClientProvider.db
     private val storage = SupabaseClientProvider.storage
-    private val localDb = context?.applicationContext?.let { DailyPayDatabase.getDatabase(it) }
+    private val localDb = context?.let {
+        val appContext = it.applicationContext ?: it
+        DailyPayDatabase.getDatabase(appContext)
+    }
 
     // ================= 1. LENDER PROFILE & ACCOUNT =================
     suspend fun getLenderProfile(lenderId: String): Result<Lender> = withContext(Dispatchers.IO) {
@@ -90,7 +104,11 @@ class LenderRepository(context: Context? = null) {
                     .select { filter { eq("lender_id", cleanLenderId) } }
                     .decodeList<Borrower>()
 
-                localDb?.borrowerDao()?.insertAll(remoteBorrowers.map { BorrowerEntity.fromModel(it) })
+                try {
+                    localDb?.borrowerDao()?.insertAll(remoteBorrowers.map { BorrowerEntity.fromModel(it) })
+                } catch (cacheError: Exception) {
+                    // Suppress local SQLite cache write error to allow remote data return
+                }
                 remoteBorrowers
             } catch (e: Exception) {
                 if (!cached.isNullOrEmpty()) {
@@ -112,9 +130,9 @@ class LenderRepository(context: Context? = null) {
             val timestamp = System.currentTimeMillis()
             val mobile = borrower.mobileNumber.trim()
 
-            var aadhaarUrl: String? = null
-            var panUrl: String? = null
-            var avatarUrl: String? = null
+            var aadhaarUrl: String? = borrower.aadhaarCardUrl
+            var panUrl: String? = borrower.panCardUrl
+            var avatarUrl: String? = borrower.profilePicUrl
 
             if (aadhaarBytes != null && aadhaarBytes.isNotEmpty()) {
                 val path = "aadhaar_${mobile}_$timestamp.jpg"
@@ -134,8 +152,14 @@ class LenderRepository(context: Context? = null) {
                 avatarUrl = storage.from("profile-avatars").publicUrl(path)
             }
 
+            val validId = if (!borrower.id.isNullOrBlank()) {
+                borrower.id.trim()
+            } else {
+                UUID.randomUUID().toString()
+            }
+
             val updatedBorrower = borrower.copy(
-                id = if (borrower.id.isNullOrBlank()) null else borrower.id.trim(),
+                id = validId,
                 lenderId = borrower.lenderId.trim(),
                 mobileNumber = mobile,
                 aadhaarCardUrl = aadhaarUrl,
@@ -144,14 +168,16 @@ class LenderRepository(context: Context? = null) {
             )
 
             db.from("borrowers").insert(updatedBorrower)
-            // Refresh local cache
+            // Re-fetch and sync local Room cache
             getBorrowers(borrower.lenderId)
         }
     }
 
     suspend fun updateBorrower(borrower: Borrower): Result<Unit> = withContext(Dispatchers.IO) {
         runCatching {
-            val id = borrower.id?.trim() ?: throw IllegalArgumentException("Borrower ID cannot be null")
+            val id = borrower.id?.trim()?.takeIf { it.isNotBlank() }
+                ?: throw IllegalArgumentException("Borrower ID cannot be null or blank")
+
             db.from("borrowers").update(
                 buildJsonObject {
                     put("name", borrower.name.trim())
@@ -183,6 +209,7 @@ class LenderRepository(context: Context? = null) {
         runCatching {
             val timestamp = System.currentTimeMillis()
             val cleanMobile = mobileNumber.trim()
+            val cleanId = borrowerId.trim()
             val bucket = if (docType == "avatar") "profile-avatars" else "kyc-documents"
             val path = "${docType}_${cleanMobile}_$timestamp.jpg"
 
@@ -200,7 +227,7 @@ class LenderRepository(context: Context? = null) {
                     put(columnKey, publicUrl)
                 }
             ) {
-                filter { eq("id", borrowerId.trim()) }
+                filter { eq("id", cleanId) }
             }
 
             publicUrl
@@ -220,13 +247,27 @@ class LenderRepository(context: Context? = null) {
         runCatching {
             val tenure = if (loan.tenureDays > 0) loan.tenureDays else 30
             val totalInterest = loan.principalAmount * (loan.monthlyInterestRate / 100.0) * (tenure / 30.0)
-            val calculatedTotalPayable = if (loan.totalPayable > 0.0) loan.totalPayable else round((loan.principalAmount + totalInterest) * 100.0) / 100.0
-            val calculatedInstallment = if (loan.dailyInstallment > 0.0) loan.dailyInstallment else round((calculatedTotalPayable / tenure) * 100.0) / 100.0
+            val calculatedTotalPayable = if (loan.totalPayable > 0.0) {
+                loan.totalPayable
+            } else {
+                round((loan.principalAmount + totalInterest) * 100.0) / 100.0
+            }
+            val calculatedInstallment = if (loan.dailyInstallment > 0.0) {
+                loan.dailyInstallment
+            } else {
+                round((calculatedTotalPayable / tenure) * 100.0) / 100.0
+            }
             val startDate = if (!loan.startDate.isNullOrBlank()) loan.startDate else DateUtils.getTodaySqlFormat()
             val endDate = if (!loan.endDate.isNullOrBlank()) loan.endDate else calculateEndDate(startDate, tenure)
 
+            val validLoanId = if (!loan.id.isNullOrBlank()) {
+                loan.id.trim()
+            } else {
+                UUID.randomUUID().toString()
+            }
+
             val preparedLoan = loan.copy(
-                id = if (loan.id.isNullOrBlank()) null else loan.id.trim(),
+                id = validLoanId,
                 lenderId = loan.lenderId.trim(),
                 borrowerId = loan.borrowerId.trim(),
                 totalPayable = calculatedTotalPayable,
@@ -321,8 +362,8 @@ class LenderRepository(context: Context? = null) {
             loans.map { loan ->
                 val borrower = borrowers[loan.borrowerId]
                 val dueItem = duesMap[loan.id]
-                val sDate = loan.startDate ?: "Not Set"
-                val eDate = loan.endDate ?: calculateEndDate(loan.startDate, loan.tenureDays)
+                val sDate = if (!loan.startDate.isNullOrBlank()) loan.startDate else "Not Set"
+                val eDate = if (!loan.endDate.isNullOrBlank()) loan.endDate else calculateEndDate(loan.startDate, loan.tenureDays)
                 val todayPaid = dueItem?.todayPaidAmount ?: 0.0
                 val todayDue = dueItem?.todayDueBalance ?: maxOf(0.0, loan.dailyInstallment - todayPaid)
 
@@ -364,7 +405,11 @@ class LenderRepository(context: Context? = null) {
                     .select { filter { eq("lender_id", cleanLenderId) } }
                     .decodeList<DailyDueItem>()
 
-                localDb?.dailyDueDao()?.insertAll(remoteDues.map { DailyDueEntity.fromModel(cleanLenderId, it) })
+                try {
+                    localDb?.dailyDueDao()?.insertAll(remoteDues.map { DailyDueEntity.fromModel(cleanLenderId, it) })
+                } catch (cacheError: Exception) {
+                    // Suppress local SQLite cache write error to allow remote data return
+                }
                 remoteDues
             } catch (e: Exception) {
                 if (!cached.isNullOrEmpty()) {
@@ -376,10 +421,6 @@ class LenderRepository(context: Context? = null) {
         }
     }
 
-    /**
-     * Atomically records a borrower payment, ensures valid UUID handling, sets date in standard format,
-     * and refreshes the local cache and dues view immediately.
-     */
     suspend fun recordRepayment(repayment: Repayment): Result<Unit> = withContext(Dispatchers.IO) {
         runCatching {
             val cleanPaymentDate = if (repayment.paymentDate.isNotBlank()) {
@@ -388,27 +429,35 @@ class LenderRepository(context: Context? = null) {
                 DateUtils.getTodaySqlFormat()
             }
 
+            val validId = if (!repayment.id.isNullOrBlank()) {
+                repayment.id.trim()
+            } else {
+                UUID.randomUUID().toString()
+            }
+
+            val cleanLenderId = repayment.lenderId.trim()
+
             val sanitizedRepayment = repayment.copy(
-                id = if (repayment.id.isNullOrBlank()) null else repayment.id.trim(),
+                id = validId,
                 loanId = repayment.loanId.trim(),
                 borrowerId = repayment.borrowerId.trim(),
-                lenderId = repayment.lenderId.trim(),
+                lenderId = cleanLenderId,
                 paymentDate = cleanPaymentDate,
                 status = RepaymentStatus.VERIFIED
             )
 
-            // Insert into Supabase
+            // Insert verified repayment record into Supabase
             db.from("repayments").insert(sanitizedRepayment)
 
             // Refresh dues immediately so Room & UI reflect the updated paid amount
-            if (sanitizedRepayment.lenderId.isNotBlank()) {
+            if (cleanLenderId.isNotBlank() && cleanLenderId != "{lenderId}") {
                 try {
                     val remoteDues = db.from("v_lender_daily_dues")
-                        .select { filter { eq("lender_id", sanitizedRepayment.lenderId) } }
+                        .select { filter { eq("lender_id", cleanLenderId) } }
                         .decodeList<DailyDueItem>()
-                    localDb?.dailyDueDao()?.insertAll(remoteDues.map { DailyDueEntity.fromModel(sanitizedRepayment.lenderId, it) })
-                } catch (_: Exception) {
-                    // Suppress secondary sync failure so recorded payment returns success
+                    localDb?.dailyDueDao()?.insertAll(remoteDues.map { DailyDueEntity.fromModel(cleanLenderId, it) })
+                } catch (cacheSyncError: Exception) {
+                    // Cache sync failure does not fail the primary payment recording
                 }
             }
         }
@@ -447,8 +496,8 @@ class LenderRepository(context: Context? = null) {
                 filter { eq("id", repaymentId.trim()) }
             }
 
-            if (!lenderId.isNullOrBlank()) {
-                getDailyDues(lenderId)
+            if (!lenderId.isNullOrBlank() && lenderId != "{lenderId}") {
+                getDailyDues(lenderId.trim())
             }
         }
     }
@@ -508,4 +557,3 @@ class LenderRepository(context: Context? = null) {
         }
     }
 }
-                
