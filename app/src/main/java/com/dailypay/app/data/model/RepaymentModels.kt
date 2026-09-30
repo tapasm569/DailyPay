@@ -8,19 +8,19 @@ data class Repayment(
     val id: String? = null,
 
     @SerialName("loan_id")
-    val loanId: String,
+    val loanId: String = "",
 
     @SerialName("borrower_id")
-    val borrowerId: String,
+    val borrowerId: String = "",
 
     @SerialName("lender_id")
-    val lenderId: String,
+    val lenderId: String = "",
 
     @SerialName("payment_date")
     val paymentDate: String? = null,
 
     @SerialName("amount_paid")
-    val amountPaid: Double,
+    val amountPaid: Double = 0.0,
 
     @SerialName("payment_mode")
     val paymentMode: PaymentMode = PaymentMode.CASH,
@@ -39,6 +39,6 @@ data class Repayment(
 @Serializable
 data class PendingPaymentItem(
     val repayment: Repayment,
-    val borrowerName: String,
-    val borrowerMobile: String
+    val borrowerName: String = "",
+    val borrowerMobile: String = ""
 )
