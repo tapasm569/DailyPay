@@ -190,7 +190,7 @@ class LenderRepository(context: Context? = null) {
                     borrower.profilePicUrl?.let { put("profile_pic_url", it) }
                     borrower.aadhaarCardUrl?.let { put("aadhaar_card_url", it) }
                     borrower.panCardUrl?.let { put("pan_card_url", it) }
-                    if (borrower.passwordHash.isNotBlank()) {
+                    if (!borrower.passwordHash.isNullOrBlank()) {
                         put("password_hash", borrower.passwordHash)
                     }
                 }
@@ -434,7 +434,7 @@ class LenderRepository(context: Context? = null) {
 
     suspend fun recordRepayment(repayment: Repayment): Result<Unit> = withContext(Dispatchers.IO) {
         runCatching {
-            val cleanPaymentDate = repayment.paymentDate.trim().takeIf { it.isNotBlank() } ?: DateUtils.getTodaySqlFormat()
+            val cleanPaymentDate = repayment.paymentDate?.trim()?.takeIf { it.isNotBlank() } ?: DateUtils.getTodaySqlFormat()
             val validId = repayment.id?.trim()?.takeIf { it.isNotBlank() } ?: UUID.randomUUID().toString()
             val cleanLenderId = repayment.lenderId.trim()
 
