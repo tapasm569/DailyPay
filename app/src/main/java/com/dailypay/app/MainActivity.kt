@@ -3,12 +3,9 @@ package com.dailypay.app
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.navigation.compose.rememberNavController
 import com.dailypay.app.data.model.UserRole
@@ -21,7 +18,6 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        enableEdgeToEdge()
 
         val sessionManager = SessionManager(applicationContext)
         val initialDestination = determineStartDestination(sessionManager)
@@ -29,18 +25,13 @@ class MainActivity : ComponentActivity() {
         setContent {
             DailyPayTheme {
                 Surface(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .safeDrawingPadding(),
+                    modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
                     val navController = rememberNavController()
-                    val session = remember { sessionManager }
-
                     AppNavHost(
                         navController = navController,
-                        startDestination = initialDestination,
-                        sessionManager = session
+                        startDestination = initialDestination
                     )
                 }
             }
@@ -54,7 +45,7 @@ class MainActivity : ComponentActivity() {
             }
 
             val role = sessionManager.getUserRole()
-            val userId = sessionManager.getUserId().orEmpty()
+            val userId = sessionManager.getUserId() ?: ""
 
             when (role) {
                 UserRole.ADMIN -> Screen.AdminDashboard.route
@@ -69,7 +60,6 @@ class MainActivity : ComponentActivity() {
                 null -> Screen.Login.route
             }
         } catch (e: Exception) {
-            // Fallback safely to login if shared preferences or session fails
             Screen.Login.route
         }
     }
