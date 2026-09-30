@@ -107,7 +107,6 @@ fun TodaysDueScreen(
         scope.launch {
             lenderRepo.getDailyDues(cleanLenderId)
                 .onSuccess { list ->
-                    // Show only borrowers who have an unpaid balance today and active remaining balance
                     duesList = list.filter { it.todayDueBalance > 0.0 && it.remainingBalance > 0.0 }
                     isLoading = false
                 }
@@ -203,6 +202,7 @@ fun TodaysDueScreen(
                     key = { index, item -> "${item.loanId}_${item.borrowerId}_$index" }
                 ) { _, item ->
                     val hasOverdue = item.todayDueBalance > item.dailyInstallment
+                    val borrowerName = if (item.borrowerName.isNotBlank()) item.borrowerName.trim() else "Borrower"
                     val formattedTodayDue = remember(item.todayDueBalance) {
                         String.format(Locale.US, "%.2f", maxOf(0.0, item.todayDueBalance))
                     }
@@ -244,7 +244,7 @@ fun TodaysDueScreen(
 
                                 Column(modifier = Modifier.weight(1f)) {
                                     Text(
-                                        text = item.borrowerName.ifBlank { "Borrower" },
+                                        text = borrowerName,
                                         style = MaterialTheme.typography.titleMedium,
                                         fontWeight = FontWeight.Bold
                                     )
@@ -303,10 +303,11 @@ fun TodaysDueScreen(
                                     IconButton(
                                         onClick = {
                                             try {
+                                                val whatsAppMessage = "Hello $borrowerName, your daily due of ₹$formattedTodayDue for $currentDateText is pending."
                                                 CommunicationUtils.openWhatsAppChat(
                                                     context = context,
                                                     rawMobileNumber = item.borrowerMobile,
-                                                    message = "Hello ${item.borrowerName}, your daily due of ₹$formattedTodayDue for $currentDateText is pending."
+                                                    message = whatsAppMessage
                                                 )
                                             } catch (e: Exception) {
                                                 Toast.makeText(context, "Could not open WhatsApp", Toast.LENGTH_SHORT).show()
@@ -390,4 +391,130 @@ fun TodaysDueScreen(
                                         selectedDueItem = item
                                         collectAmount = String.format(Locale.US, "%.2f", item.todayDueBalance)
                                         selectedPaymentMode = PaymentMode.CASH
-                                
+                                    },
+                                    enabled = !isSubmittingPayment,
+                                    shape = RoundedCornerShape(10.dp),
+                                    colors = ButtonDefaults.buttonColors(containerColor = BrandPrimary),
+                                    contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp)
+                                ) {
+                                    Icon(Icons.Default.Payment, contentDescription = null, modifier = Modifier.size(16.dp))
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text("Collect")
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // ================= COLLECT DUE DIALOG =================
+        selectedDueItem?.let { dueItem ->
+            val borrowerDisplayName = if (dueItem.borrowerName.isNotBlank()) dueItem.borrowerName.trim() else "Borrower"
+            val dueDailyText = String.format(Locale.US, "%.2f", dueItem.dailyInstallment)
+            val dueTotalText = String.format(Locale.US, "%.2f", dueItem.todayDueBalance)
+            val overdueNotice = if (dueItem.todayDueBalance > dueItem.dailyInstallment) " (Includes Overdue)" else ""
+            val dialogDetailsText = "Date: $currentDateText\nDaily Due: ₹$dueDailyText | Total Due for Today: ₹$dueTotalText$overdueNotice"
+
+            AlertDialog(
+                onDismissRequest = { if (!isSubmittingPayment) selectedDueItem = null },
+                title = { Text("Collect Due - $borrowerDisplayName") },
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Text(
+                            text = dialogDetailsText,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = TextSecondaryLight
+                        )
+
+                        OutlinedTextField(
+                            value = collectAmount,
+                            onValueChange = { input ->
+                                if (input.isEmpty() || input.matches(Regex("^\\d*\\.?\\d{0,2}$"))) {
+                                    collectAmount = input
+                                }
+                            },
+                            label = { Text("Amount Received (₹) *") },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(12.dp),
+                            singleLine = true,
+                            enabled = !isSubmittingPayment
+                        )
+
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            FilterChip(
+                                selected = selectedPaymentMode == PaymentMode.CASH,
+                                onClick = { if (!isSubmittingPayment) selectedPaymentMode = PaymentMode.CASH },
+                                label = { Text("Cash") }
+                            )
+                            FilterChip(
+                                selected = selectedPaymentMode == PaymentMode.UPI,
+                                onClick = { if (!isSubmittingPayment) selectedPaymentMode = PaymentMode.UPI },
+                                label = { Text("UPI Received") }
+                            )
+                        }
+                    }
+                },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            val parsedAmount = collectAmount.toDoubleOrNull() ?: 0.0
+                            if (parsedAmount <= 0.0) {
+                                Toast.makeText(context, "Enter a valid amount", Toast.LENGTH_SHORT).show()
+                                return@Button
+                            }
+
+                            isSubmittingPayment = true
+                            scope.launch {
+                                val repayment = Repayment(
+                                    loanId = dueItem.loanId.trim(),
+                                    borrowerId = dueItem.borrowerId.trim(),
+                                    lenderId = cleanLenderId,
+                                    paymentDate = DateUtils.getTodaySqlFormat(),
+                                    amountPaid = parsedAmount,
+                                    paymentMode = selectedPaymentMode,
+                                    notes = "Daily installment collected on $currentDateText (${selectedPaymentMode.name})"
+                                )
+
+                                lenderRepo.recordRepayment(repayment)
+                                    .onSuccess {
+                                        isSubmittingPayment = false
+                                        selectedDueItem = null
+                                        Toast.makeText(context, "Payment recorded successfully!", Toast.LENGTH_SHORT).show()
+                                        loadData()
+                                    }
+                                    .onFailure { error ->
+                                        isSubmittingPayment = false
+                                        Toast.makeText(context, "Failed: ${error.message}", Toast.LENGTH_LONG).show()
+                                    }
+                            }
+                        },
+                        enabled = !isSubmittingPayment,
+                        colors = ButtonDefaults.buttonColors(containerColor = BrandPrimary)
+                    ) {
+                        if (isSubmittingPayment) {
+                            CircularProgressIndicator(
+                                color = MaterialTheme.colorScheme.onPrimary,
+                                modifier = Modifier.size(16.dp),
+                                strokeWidth = 2.dp
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Saving...")
+                        } else {
+                            Text("Confirm Collection")
+                        }
+                    }
+                },
+                dismissButton = {
+                    TextButton(
+                        onClick = { selectedDueItem = null },
+                        enabled = !isSubmittingPayment
+                    ) {
+                        Text("Cancel")
+                    }
+                }
+            )
+        }
+    }
+}
