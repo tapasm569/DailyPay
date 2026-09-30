@@ -27,9 +27,7 @@ import androidx.compose.ui.unit.dp
 import com.dailypay.app.data.model.Borrower
 import com.dailypay.app.data.repository.LenderRepository
 import com.dailypay.app.ui.theme.*
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import java.io.ByteArrayOutputStream
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -66,15 +64,13 @@ fun AddBorrowerScreen(
     // 1. Aadhaar Card Launcher
     val aadhaarLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
         if (uri != null) {
-            scope.launch {
-                val result = processAndCompressImage(context, uri)
-                if (result != null) {
-                    aadhaarBytes = result.first
-                    aadhaarInfo = "Aadhaar Attached (${result.second})"
-                    Toast.makeText(context, "Aadhaar card loaded successfully!", Toast.LENGTH_SHORT).show()
-                } else {
-                    Toast.makeText(context, "Failed to read Aadhaar image. Try another photo.", Toast.LENGTH_LONG).show()
-                }
+            val result = processAndCompressImage(context, uri)
+            if (result != null) {
+                aadhaarBytes = result.first
+                aadhaarInfo = "Aadhaar Attached (${result.second})"
+                Toast.makeText(context, "Aadhaar card loaded successfully!", Toast.LENGTH_SHORT).show()
+            } else {
+                Toast.makeText(context, "Failed to read Aadhaar image. Try another photo.", Toast.LENGTH_LONG).show()
             }
         }
     }
@@ -82,15 +78,13 @@ fun AddBorrowerScreen(
     // 2. PAN Card Launcher
     val panLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
         if (uri != null) {
-            scope.launch {
-                val result = processAndCompressImage(context, uri)
-                if (result != null) {
-                    panBytes = result.first
-                    panInfo = "PAN Attached (${result.second})"
-                    Toast.makeText(context, "PAN card loaded successfully!", Toast.LENGTH_SHORT).show()
-                } else {
-                    Toast.makeText(context, "Failed to read PAN image. Try another photo.", Toast.LENGTH_LONG).show()
-                }
+            val result = processAndCompressImage(context, uri)
+            if (result != null) {
+                panBytes = result.first
+                panInfo = "PAN Attached (${result.second})"
+                Toast.makeText(context, "PAN card loaded successfully!", Toast.LENGTH_SHORT).show()
+            } else {
+                Toast.makeText(context, "Failed to read PAN image. Try another photo.", Toast.LENGTH_LONG).show()
             }
         }
     }
@@ -98,15 +92,13 @@ fun AddBorrowerScreen(
     // 3. Profile Avatar Launcher
     val avatarLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
         if (uri != null) {
-            scope.launch {
-                val result = processAndCompressImage(context, uri)
-                if (result != null) {
-                    avatarBytes = result.first
-                    avatarInfo = "Photo Attached (${result.second})"
-                    Toast.makeText(context, "Profile photo loaded successfully!", Toast.LENGTH_SHORT).show()
-                } else {
-                    Toast.makeText(context, "Failed to read profile photo. Try another photo.", Toast.LENGTH_LONG).show()
-                }
+            val result = processAndCompressImage(context, uri)
+            if (result != null) {
+                avatarBytes = result.first
+                avatarInfo = "Photo Attached (${result.second})"
+                Toast.makeText(context, "Profile photo loaded successfully!", Toast.LENGTH_SHORT).show()
+            } else {
+                Toast.makeText(context, "Failed to read profile photo. Try another photo.", Toast.LENGTH_LONG).show()
             }
         }
     }
@@ -143,11 +135,8 @@ fun AddBorrowerScreen(
 
             OutlinedTextField(
                 value = mobileNumber,
-                onValueChange = { input ->
-                    val digits = input.filter { it.isDigit() }
-                    if (digits.length <= 10) mobileNumber = digits
-                },
-                label = { Text("Mobile Number (10 Digits) *") },
+                onValueChange = { if (it.length <= 10) mobileNumber = it.filter { ch -> ch.isDigit() } },
+                label = { Text("Mobile Number *") },
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(12.dp)
@@ -254,12 +243,6 @@ fun AddBorrowerScreen(
 
             Button(
                 onClick = {
-                    val cleanLenderId = lenderId.trim()
-                    if (cleanLenderId.isBlank() || cleanLenderId == "unknown") {
-                        Toast.makeText(context, "Invalid lender session. Please log in again.", Toast.LENGTH_SHORT).show()
-                        return@Button
-                    }
-
                     if (name.isBlank() || mobileNumber.length != 10 || password.isBlank()) {
                         Toast.makeText(context, "Please fill in all required (*) fields.", Toast.LENGTH_SHORT).show()
                         return@Button
@@ -268,13 +251,13 @@ fun AddBorrowerScreen(
                     isSubmitting = true
                     scope.launch {
                         val borrower = Borrower(
-                            lenderId = cleanLenderId,
+                            lenderId = lenderId,
                             name = name.trim(),
                             mobileNumber = mobileNumber.trim(),
-                            villageCity = villageCity.trim().ifBlank { null },
-                            postOffice = postOffice.trim().ifBlank { null },
-                            policeStation = policeStation.trim().ifBlank { null },
-                            dist = dist.trim().ifBlank { null },
+                            villageCity = villageCity.trim(),
+                            postOffice = postOffice.trim(),
+                            policeStation = policeStation.trim(),
+                            dist = dist.trim(),
                             passwordHash = password.trim()
                         )
 
@@ -372,39 +355,40 @@ private fun DocumentAttachmentCard(
 }
 
 /**
- * Memory-safe image decoder. Decodes bounds via stream first (0 byte array allocation),
- * calculates inSampleSize, decodes sampled bitmap, and compresses on Dispatchers.IO.
+ * Safely reads raw bytes from any Android ContentResolver URI before decoding.
+ * Uses inSampleSize to protect against OutOfMemory on 50MP/108MP camera photos,
+ * then resizes and compresses to ~150-300 KB JPEG.
  */
-private suspend fun processAndCompressImage(context: Context, uri: Uri): Pair<ByteArray, String>? = withContext(Dispatchers.IO) {
-    try {
-        // Step 1: Decode bounds only using stream (uses negligible memory)
-        val boundsOptions = BitmapFactory.Options().apply {
+private fun processAndCompressImage(context: Context, uri: Uri): Pair<ByteArray, String>? {
+    return try {
+        val inputStream = context.contentResolver.openInputStream(uri) ?: return null
+        val rawBytes = inputStream.use { it.readBytes() }
+        if (rawBytes.isEmpty()) return null
+
+        // 1. Inspect dimensions without loading into memory
+        val options = BitmapFactory.Options().apply {
             inJustDecodeBounds = true
         }
-        context.contentResolver.openInputStream(uri)?.use { stream ->
-            BitmapFactory.decodeStream(stream, null, boundsOptions)
-        } ?: return@withContext null
+        BitmapFactory.decodeByteArray(rawBytes, 0, rawBytes.size, options)
 
-        val originalWidth = boundsOptions.outWidth
-        val originalHeight = boundsOptions.outHeight
-        if (originalWidth <= 0 || originalHeight <= 0) return@withContext null
+        val originalWidth = options.outWidth
+        val originalHeight = options.outHeight
+        if (originalWidth <= 0 || originalHeight <= 0) return null
 
-        // Step 2: Compute inSampleSize to prevent OutOfMemory on high-MP camera images
+        // 2. Compute sample size to avoid OutOfMemoryError on large camera shots
         val maxDimension = 1280
         var sampleSize = 1
         while (originalWidth / (sampleSize * 2) >= maxDimension && originalHeight / (sampleSize * 2) >= maxDimension) {
             sampleSize *= 2
         }
 
-        // Step 3: Decode sampled bitmap from a fresh stream
+        // 3. Decode scaled sample
         val decodeOptions = BitmapFactory.Options().apply {
             inSampleSize = sampleSize
         }
-        val sampledBitmap = context.contentResolver.openInputStream(uri)?.use { stream ->
-            BitmapFactory.decodeStream(stream, null, decodeOptions)
-        } ?: return@withContext null
+        val sampledBitmap = BitmapFactory.decodeByteArray(rawBytes, 0, rawBytes.size, decodeOptions) ?: return null
 
-        // Step 4: Scale accurately
+        // 4. Exact aspect ratio scaling
         val ratio = sampledBitmap.width.toFloat() / sampledBitmap.height.toFloat()
         val finalWidth: Int
         val finalHeight: Int
@@ -419,10 +403,8 @@ private suspend fun processAndCompressImage(context: Context, uri: Uri): Pair<By
         val resizedBitmap = Bitmap.createScaledBitmap(sampledBitmap, finalWidth, finalHeight, true)
         val outputStream = ByteArrayOutputStream()
         resizedBitmap.compress(Bitmap.CompressFormat.JPEG, 80, outputStream)
-        if (resizedBitmap != sampledBitmap) {
-            sampledBitmap.recycle()
-        }
         val compressedBytes = outputStream.toByteArray()
+
         val sizeKb = compressedBytes.size / 1024
         Pair(compressedBytes, "${sizeKb} KB")
     } catch (e: Exception) {
