@@ -69,6 +69,7 @@ class LenderRepository(context: Context? = null) {
             ) {
                 filter { eq("id", lenderId.trim()) }
             }
+            Unit
         }
     }
 
@@ -84,6 +85,7 @@ class LenderRepository(context: Context? = null) {
             ) {
                 filter { eq("id", lenderId.trim()) }
             }
+            Unit
         }
     }
 
@@ -164,7 +166,11 @@ class LenderRepository(context: Context? = null) {
             )
 
             db.from("borrowers").insert(updatedBorrower)
-            getBorrowers(borrower.lenderId)
+            try {
+                getBorrowers(borrower.lenderId)
+            } catch (ignored: Exception) {
+            }
+            Unit
         }
     }
 
@@ -191,7 +197,11 @@ class LenderRepository(context: Context? = null) {
             ) {
                 filter { eq("id", id) }
             }
-            getBorrowers(borrower.lenderId)
+            try {
+                getBorrowers(borrower.lenderId)
+            } catch (ignored: Exception) {
+            }
+            Unit
         }
     }
 
@@ -234,6 +244,7 @@ class LenderRepository(context: Context? = null) {
             val cleanId = borrowerId.trim()
             db.from("borrowers").delete { filter { eq("id", cleanId) } }
             localDb?.borrowerDao()?.deleteById(cleanId)
+            Unit
         }
     }
 
@@ -252,8 +263,8 @@ class LenderRepository(context: Context? = null) {
             } else {
                 round((calculatedTotalPayable / tenure) * 100.0) / 100.0
             }
-            val startDate = loan.startDate?.takeIf { it.isNotBlank() } ?: DateUtils.getTodaySqlFormat()
-            val endDate = loan.endDate?.takeIf { it.isNotBlank() } ?: calculateEndDate(startDate, tenure)
+            val startDate = loan.startDate?.trim()?.takeIf { it.isNotBlank() } ?: DateUtils.getTodaySqlFormat()
+            val endDate = loan.endDate?.trim()?.takeIf { it.isNotBlank() } ?: calculateEndDate(startDate, tenure)
 
             val validLoanId = loan.id?.trim()?.takeIf { it.isNotBlank() } ?: UUID.randomUUID().toString()
 
@@ -269,7 +280,11 @@ class LenderRepository(context: Context? = null) {
             )
 
             db.from("loans").insert(preparedLoan)
-            getDailyDues(loan.lenderId)
+            try {
+                getDailyDues(loan.lenderId)
+            } catch (ignored: Exception) {
+            }
+            Unit
         }
     }
 
@@ -320,7 +335,11 @@ class LenderRepository(context: Context? = null) {
                 filter { eq("id", cleanLoanId) }
             }
 
-            getDailyDues(existingLoan.lenderId)
+            try {
+                getDailyDues(existingLoan.lenderId)
+            } catch (ignored: Exception) {
+            }
+            Unit
         }
     }
 
@@ -333,6 +352,7 @@ class LenderRepository(context: Context? = null) {
             ) {
                 filter { eq("id", loanId.trim()) }
             }
+            Unit
         }
     }
 
@@ -353,8 +373,8 @@ class LenderRepository(context: Context? = null) {
             loans.map { loan ->
                 val borrower = borrowers[loan.borrowerId]
                 val dueItem = duesMap[loan.id]
-                val sDate = loan.startDate?.takeIf { it.isNotBlank() } ?: "Not Set"
-                val eDate = loan.endDate?.takeIf { it.isNotBlank() } ?: calculateEndDate(loan.startDate, loan.tenureDays)
+                val sDate = loan.startDate?.trim()?.takeIf { it.isNotBlank() } ?: "Not Set"
+                val eDate = loan.endDate?.trim()?.takeIf { it.isNotBlank() } ?: calculateEndDate(loan.startDate, loan.tenureDays)
                 val todayPaid = dueItem?.todayPaidAmount ?: 0.0
                 val todayDue = dueItem?.todayDueBalance ?: maxOf(0.0, loan.dailyInstallment - todayPaid)
 
@@ -441,6 +461,7 @@ class LenderRepository(context: Context? = null) {
                     // Cache sync failure does not fail the primary payment recording
                 }
             }
+            Unit
         }
     }
 
@@ -477,12 +498,14 @@ class LenderRepository(context: Context? = null) {
                 filter { eq("id", repaymentId.trim()) }
             }
 
-            if (lenderId != null) {
-                val clean = lenderId.trim()
-                if (clean.isNotBlank() && clean != "{lenderId}") {
-                    getDailyDues(clean)
+            val cleanLender = lenderId?.trim().orEmpty()
+            if (cleanLender.isNotBlank() && cleanLender != "{lenderId}") {
+                try {
+                    getDailyDues(cleanLender)
+                } catch (ignored: Exception) {
                 }
             }
+            Unit
         }
     }
 
@@ -527,8 +550,7 @@ class LenderRepository(context: Context? = null) {
     }
 
     private fun calculateEndDate(startDateStr: String?, tenureDays: Int): String {
-        if (startDateStr == null) return "Pending"
-        val cleanDate = startDateStr.trim()
+        val cleanDate = startDateStr?.trim().orEmpty()
         if (cleanDate.isEmpty()) return "Pending"
         return try {
             val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.US)
