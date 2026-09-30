@@ -37,7 +37,6 @@ import com.dailypay.app.data.model.Lender
 import com.dailypay.app.data.model.PaymentMode
 import com.dailypay.app.data.model.Repayment
 import com.dailypay.app.data.repository.LenderRepository
-import com.dailypay.app.ui.components.LanguageSelectionDialog
 import com.dailypay.app.ui.theme.*
 import com.dailypay.app.util.CommunicationUtils
 import com.dailypay.app.util.DateUtils
@@ -363,11 +362,6 @@ fun LenderHomeScreen(
                 }
             }
 
-            if (showLanguageDialog) {
-                LanguageSelectionDialog(
-                    onDismissRequest = { showLanguageDialog = false }
-                )
-            }
 
             selectedItemForPayment?.let { item ->
                 AlertDialog(
