@@ -37,9 +37,11 @@ import com.dailypay.app.data.model.Lender
 import com.dailypay.app.data.model.PaymentMode
 import com.dailypay.app.data.model.Repayment
 import com.dailypay.app.data.repository.LenderRepository
+import com.dailypay.app.ui.components.LanguageSelectionDialog
 import com.dailypay.app.ui.theme.*
 import com.dailypay.app.util.CommunicationUtils
 import com.dailypay.app.util.DateUtils
+import com.dailypay.app.util.LocaleHelper
 import com.dailypay.app.util.SessionManager
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
@@ -58,7 +60,6 @@ fun LenderHomeScreen(
     val lenderRepo = remember { LenderRepository(context) }
     val sessionManager = remember { SessionManager(context) }
 
-    // Fallback: if argument was empty, grab from SessionManager
     val resolvedLenderId = remember(lenderId) {
         if (lenderId.isNotBlank() && lenderId != "{lenderId}") {
             lenderId
@@ -75,6 +76,7 @@ fun LenderHomeScreen(
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     var showAddressDialog by remember { mutableStateOf(false) }
     var showResetPasswordDialog by remember { mutableStateOf(false) }
+    var showLanguageDialog by remember { mutableStateOf(false) }
 
     var selectedItemForPayment by remember { mutableStateOf<DailyDueItem?>(null) }
     var paymentAmountText by remember { mutableStateOf("") }
@@ -167,6 +169,31 @@ fun LenderHomeScreen(
                     onClick = {
                         scope.launch { drawerState.close() }
                         showResetPasswordDialog = true
+                    },
+                    modifier = Modifier.padding(horizontal = 12.dp)
+                )
+
+                NavigationDrawerItem(
+                    icon = { Icon(Icons.Default.Language, contentDescription = null, tint = BrandPrimary) },
+                    label = {
+                        Column {
+                            Text("Language / ভাষা / भाषा")
+                            Text(
+                                text = when (LocaleHelper.getCurrentLanguageCode(context)) {
+                                    "bn" -> "বাংলা (Bengali)"
+                                    "hi" -> "हिन्दी (Hindi)"
+                                    else -> "English"
+                                },
+                                style = MaterialTheme.typography.labelSmall,
+                                color = BrandPrimary,
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
+                    },
+                    selected = false,
+                    onClick = {
+                        scope.launch { drawerState.close() }
+                        showLanguageDialog = true
                     },
                     modifier = Modifier.padding(horizontal = 12.dp)
                 )
@@ -336,7 +363,12 @@ fun LenderHomeScreen(
                 }
             }
 
-            // ================= COLLECT PAYMENT DIALOG =================
+            if (showLanguageDialog) {
+                LanguageSelectionDialog(
+                    onDismissRequest = { showLanguageDialog = false }
+                )
+            }
+
             selectedItemForPayment?.let { item ->
                 AlertDialog(
                     onDismissRequest = { if (!isSubmittingPayment) selectedItemForPayment = null },
@@ -424,7 +456,6 @@ fun LenderHomeScreen(
                 )
             }
 
-            // ================= EDIT ADDRESS DIALOG =================
             if (showAddressDialog) {
                 var editVillage by remember { mutableStateOf(lenderProfile?.villageTown ?: "") }
                 var editPostOffice by remember { mutableStateOf(lenderProfile?.postOffice ?: "") }
@@ -505,7 +536,6 @@ fun LenderHomeScreen(
                 )
             }
 
-            // ================= RESET PASSWORD DIALOG =================
             if (showResetPasswordDialog) {
                 var newPassword by remember { mutableStateOf("") }
                 var confirmPassword by remember { mutableStateOf("") }
@@ -635,7 +665,6 @@ private fun PendingListTab(
                                 Text(item.borrowerName, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                                 Text("+91 ${item.borrowerMobile}", style = MaterialTheme.typography.bodySmall, color = TextSecondaryLight)
 
-                                // Current Date Badge & Overdue indicator
                                 Row(
                                     verticalAlignment = Alignment.CenterVertically,
                                     modifier = Modifier.padding(top = 4.dp),
@@ -810,7 +839,6 @@ private fun PaidTodayListTab(
                                 Text(item.borrowerName, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                                 Text("+91 ${item.borrowerMobile}", style = MaterialTheme.typography.bodySmall, color = TextSecondaryLight)
 
-                                // Current Date Badge for Paid Collections
                                 Surface(
                                     shape = RoundedCornerShape(6.dp),
                                     color = MoneyGreen.copy(alpha = 0.12f),
