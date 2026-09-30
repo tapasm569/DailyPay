@@ -114,10 +114,6 @@ fun DailyPayTopBar(
                                 dismissOnBackPress = true,
                                 dismissOnClickOutside = true
                             ),
-                            shape = RoundedCornerShape(12.dp),
-                            containerColor = MaterialTheme.colorScheme.surface,
-                            tonalElevation = 6.dp,
-                            shadowElevation = 8.dp,
                             modifier = Modifier.width(240.dp)
                         ) {
                             Column(modifier = Modifier.padding(16.dp)) {
