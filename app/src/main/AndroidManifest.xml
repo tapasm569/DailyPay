@@ -13,7 +13,13 @@
 
     <!-- Package visibility declarations for Android 11+ (API 30+) -->
     <queries>
-        <!-- Native UPI apps (GPay, PhonePe, Paytm, BHIM) -->
+        <!-- Native UPI application packages for direct intent resolution -->
+        <package android:name="com.google.android.apps.nbu.paisa.user" />
+        <package android:name="com.phonepe.app" />
+        <package android:name="net.one97.paytm" />
+        <package android:name="in.org.npci.upiapp" />
+
+        <!-- Generic UPI scheme intent handler -->
         <intent>
             <action android:name="android.intent.action.VIEW" />
             <data android:scheme="upi" />
@@ -57,7 +63,7 @@
             </intent-filter>
         </activity>
 
-        <!-- FileProvider configured to match PdfExporter.kt -->
+        <!-- FileProvider configured to match PdfExporter.kt authority -->
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.fileprovider"
