@@ -7,7 +7,18 @@ package com.dailypay.app.ui.screens.lender
 
 import android.widget.Toast
 import androidx.compose.foundation.border
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.pager.HorizontalPager
@@ -18,9 +29,50 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Dashboard
+import androidx.compose.material.icons.filled.EditLocation
+import androidx.compose.material.icons.filled.Event
+import androidx.compose.material.icons.filled.ExitToApp
+import androidx.compose.material.icons.filled.LockReset
+import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.filled.Payment
+import androidx.compose.material.icons.filled.Schedule
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Storefront
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DrawerValue
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalDrawerSheet
+import androidx.compose.material3.ModalNavigationDrawer
+import androidx.compose.material3.NavigationDrawerItem
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Tab
+import androidx.compose.material3.TabRow
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.rememberDrawerState
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -36,12 +88,25 @@ import com.dailypay.app.data.model.DailyDueItem
 import com.dailypay.app.data.model.Lender
 import com.dailypay.app.data.model.PaymentMode
 import com.dailypay.app.data.model.Repayment
+import com.dailypay.app.data.remote.SupabaseClientProvider
 import com.dailypay.app.data.repository.LenderRepository
-import com.dailypay.app.ui.theme.*
+import com.dailypay.app.ui.theme.AlertOrange
+import com.dailypay.app.ui.theme.BorderSubtleLight
+import com.dailypay.app.ui.theme.BrandPrimary
+import com.dailypay.app.ui.theme.CallBlue
+import com.dailypay.app.ui.theme.DangerRed
+import com.dailypay.app.ui.theme.MoneyGreen
+import com.dailypay.app.ui.theme.TextSecondaryLight
+import com.dailypay.app.ui.theme.WhatsAppGreen
 import com.dailypay.app.util.CommunicationUtils
 import com.dailypay.app.util.DateUtils
 import com.dailypay.app.util.SessionManager
+import io.github.jan.supabase.postgrest.from
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -55,15 +120,15 @@ fun LenderHomeScreen(
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val lenderRepo = remember { LenderRepository(context) }
+    val lenderRepo = remember { LenderRepository(context.applicationContext) }
     val sessionManager = remember { SessionManager(context) }
 
     // Fallback: if argument was empty, grab from SessionManager
     val resolvedLenderId = remember(lenderId) {
         if (lenderId.isNotBlank() && lenderId != "{lenderId}") {
-            lenderId
+            lenderId.trim()
         } else {
-            sessionManager.getUserId() ?: ""
+            sessionManager.getUserId()?.trim().orEmpty()
         }
     }
 
@@ -82,9 +147,7 @@ fun LenderHomeScreen(
     var isSubmittingPayment by remember { mutableStateOf(false) }
 
     val pagerState = rememberPagerState(initialPage = 0) { 2 }
-    val currentDateText = remember {
-        SimpleDateFormat("dd MMM yyyy", Locale.getDefault()).format(Date())
-    }
+    val currentDateText = remember { DateUtils.getTodayDisplayFormat() }
 
     fun loadData() {
         if (resolvedLenderId.isBlank() || resolvedLenderId == "{lenderId}") {
@@ -100,9 +163,9 @@ fun LenderHomeScreen(
                     duesList = it
                     isLoading = false
                 }
-                .onFailure {
+                .onFailure { error ->
                     isLoading = false
-                    Toast.makeText(context, "Error: ${it.message}", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(context, "Error: ${error.message}", Toast.LENGTH_SHORT).show()
                 }
         }
     }
@@ -121,6 +184,7 @@ fun LenderHomeScreen(
 
     val businessName = lenderProfile?.businessName?.ifBlank { lenderProfile?.name } ?: "DailyPay Finance"
     val ownerName = lenderProfile?.ownerName?.ifBlank { lenderProfile?.name } ?: "Lender"
+    val currentUpiId = lenderProfile?.upiId?.trim().orEmpty()
 
     ModalNavigationDrawer(
         drawerState = drawerState,
@@ -137,13 +201,47 @@ fun LenderHomeScreen(
                             color = Color.White.copy(alpha = 0.2f)
                         ) {
                             Box(contentAlignment = Alignment.Center) {
-                                Icon(Icons.Default.Storefront, contentDescription = null, tint = Color.White, modifier = Modifier.size(30.dp))
+                                Icon(
+                                    imageVector = Icons.Default.Storefront,
+                                    contentDescription = null,
+                                    tint = Color.White,
+                                    modifier = Modifier.size(30.dp)
+                                )
                             }
                         }
                         Spacer(modifier = Modifier.height(12.dp))
-                        Text(text = businessName, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = Color.White)
-                        Text(text = "Proprietor: $ownerName", style = MaterialTheme.typography.bodySmall, color = Color.White.copy(alpha = 0.85f))
-                        Text(text = "+91 ${lenderProfile?.mobileNumber ?: ""}", style = MaterialTheme.typography.bodySmall, color = Color.White.copy(alpha = 0.75f))
+                        Text(
+                            text = businessName,
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White
+                        )
+                        Text(
+                            text = "Proprietor: $ownerName",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = Color.White.copy(alpha = 0.85f)
+                        )
+                        Text(
+                            text = "+91 ${lenderProfile?.mobileNumber ?: ""}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = Color.White.copy(alpha = 0.75f)
+                        )
+
+                        Spacer(modifier = Modifier.height(6.dp))
+
+                        // Receiving UPI status badge
+                        Surface(
+                            shape = RoundedCornerShape(6.dp),
+                            color = Color.White.copy(alpha = 0.18f)
+                        ) {
+                            Text(
+                                text = if (currentUpiId.isNotBlank()) "UPI: $currentUpiId" else "UPI: Not Configured",
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = Color.White,
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
                     }
                 }
 
@@ -151,7 +249,7 @@ fun LenderHomeScreen(
 
                 NavigationDrawerItem(
                     icon = { Icon(Icons.Default.EditLocation, contentDescription = null, tint = BrandPrimary) },
-                    label = { Text("Edit Profile (Address)") },
+                    label = { Text("Edit Profile & UPI ID") },
                     selected = false,
                     onClick = {
                         scope.launch { drawerState.close() }
@@ -322,7 +420,7 @@ fun LenderHomeScreen(
                                 currentDateStr = currentDateText,
                                 onCollectClick = { item ->
                                     selectedItemForPayment = item
-                                    paymentAmountText = item.todayDueBalance.toString()
+                                    paymentAmountText = String.format(Locale.US, "%.2f", item.todayDueBalance)
                                     selectedPaymentMode = PaymentMode.CASH
                                 }
                             )
@@ -338,24 +436,32 @@ fun LenderHomeScreen(
 
             // ================= COLLECT PAYMENT DIALOG =================
             selectedItemForPayment?.let { item ->
+                val formattedDue = String.format(Locale.US, "%.2f", maxOf(0.0, item.todayDueBalance))
+
                 AlertDialog(
                     onDismissRequest = { if (!isSubmittingPayment) selectedItemForPayment = null },
                     title = { Text("Collect EMI Payment") },
                     text = {
                         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                            Text("Borrower: ${item.borrowerName}")
+                            Text("Borrower: ${item.borrowerName.ifBlank { "Customer" }}")
                             Text(
-                                text = "Today's Due: ₹${maxOf(0.0, item.todayDueBalance)}",
+                                text = "Today's Due: ₹$formattedDue",
                                 fontWeight = FontWeight.Bold,
                                 color = AlertOrange
                             )
 
                             OutlinedTextField(
                                 value = paymentAmountText,
-                                onValueChange = { paymentAmountText = it },
+                                onValueChange = { input ->
+                                    if (input.isEmpty() || input.matches(Regex("^\\d*\\.?\\d{0,2}$"))) {
+                                        paymentAmountText = input
+                                    }
+                                },
                                 label = { Text("Amount Collected (₹) *") },
                                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                                modifier = Modifier.fillMaxWidth()
+                                modifier = Modifier.fillMaxWidth(),
+                                singleLine = true,
+                                enabled = !isSubmittingPayment
                             )
 
                             Text("Payment Method:", style = MaterialTheme.typography.labelMedium)
@@ -365,14 +471,14 @@ fun LenderHomeScreen(
                             ) {
                                 FilterChip(
                                     selected = selectedPaymentMode == PaymentMode.CASH,
-                                    onClick = { selectedPaymentMode = PaymentMode.CASH },
+                                    onClick = { if (!isSubmittingPayment) selectedPaymentMode = PaymentMode.CASH },
                                     label = { Text("Cash") },
                                     modifier = Modifier.weight(1f)
                                 )
                                 FilterChip(
                                     selected = selectedPaymentMode == PaymentMode.UPI,
-                                    onClick = { selectedPaymentMode = PaymentMode.UPI },
-                                    label = { Text("UPI") },
+                                    onClick = { if (!isSubmittingPayment) selectedPaymentMode = PaymentMode.UPI },
+                                    label = { Text("UPI Received") },
                                     modifier = Modifier.weight(1f)
                                 )
                             }
@@ -390,12 +496,13 @@ fun LenderHomeScreen(
                                 isSubmittingPayment = true
                                 scope.launch {
                                     val repayment = Repayment(
-                                        loanId = item.loanId,
-                                        borrowerId = item.borrowerId,
+                                        loanId = item.loanId.trim(),
+                                        borrowerId = item.borrowerId.trim(),
                                         lenderId = resolvedLenderId,
                                         amountPaid = amount,
                                         paymentDate = DateUtils.getTodaySqlFormat(),
-                                        paymentMode = selectedPaymentMode
+                                        paymentMode = selectedPaymentMode,
+                                        notes = "Collected on $currentDateText (${selectedPaymentMode.name})"
                                     )
                                     lenderRepo.recordRepayment(repayment)
                                         .onSuccess {
@@ -404,16 +511,26 @@ fun LenderHomeScreen(
                                             Toast.makeText(context, "Payment recorded successfully!", Toast.LENGTH_SHORT).show()
                                             loadData()
                                         }
-                                        .onFailure {
+                                        .onFailure { error ->
                                             isSubmittingPayment = false
-                                            Toast.makeText(context, "Failed: ${it.message}", Toast.LENGTH_SHORT).show()
+                                            Toast.makeText(context, "Failed: ${error.message}", Toast.LENGTH_SHORT).show()
                                         }
                                 }
                             },
                             enabled = !isSubmittingPayment,
                             colors = ButtonDefaults.buttonColors(containerColor = BrandPrimary)
                         ) {
-                            Text(if (isSubmittingPayment) "Saving..." else "Confirm Payment")
+                            if (isSubmittingPayment) {
+                                CircularProgressIndicator(
+                                    color = MaterialTheme.colorScheme.onPrimary,
+                                    modifier = Modifier.size(16.dp),
+                                    strokeWidth = 2.dp
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Saving...")
+                            } else {
+                                Text("Confirm Payment")
+                            }
                         }
                     },
                     dismissButton = {
@@ -424,8 +541,9 @@ fun LenderHomeScreen(
                 )
             }
 
-            // ================= EDIT ADDRESS DIALOG =================
+            // ================= EDIT ADDRESS & UPI ID DIALOG =================
             if (showAddressDialog) {
+                var editUpiId by remember { mutableStateOf(lenderProfile?.upiId ?: "") }
                 var editVillage by remember { mutableStateOf(lenderProfile?.villageTown ?: "") }
                 var editPostOffice by remember { mutableStateOf(lenderProfile?.postOffice ?: "") }
                 var editDist by remember { mutableStateOf(lenderProfile?.dist ?: "") }
@@ -434,31 +552,46 @@ fun LenderHomeScreen(
 
                 AlertDialog(
                     onDismissRequest = { if (!isSavingAddr) showAddressDialog = false },
-                    title = { Text("Update Business Address") },
+                    title = { Text("Business Profile & Receiving UPI") },
                     text = {
                         Column(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .verticalScroll(rememberScrollState()),
-                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                            verticalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
+                            OutlinedTextField(
+                                value = editUpiId,
+                                onValueChange = { editUpiId = it },
+                                label = { Text("Receiving UPI ID / VPA *") },
+                                placeholder = { Text("e.g. mobile@upi, business@okhdfcbank") },
+                                supportingText = { Text("Borrowers will send online EMI payments to this UPI address") },
+                                modifier = Modifier.fillMaxWidth(),
+                                singleLine = true
+                            )
+
+                            HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+
                             OutlinedTextField(
                                 value = editVillage,
                                 onValueChange = { editVillage = it },
                                 label = { Text("Village / Town") },
-                                modifier = Modifier.fillMaxWidth()
+                                modifier = Modifier.fillMaxWidth(),
+                                singleLine = true
                             )
                             OutlinedTextField(
                                 value = editPostOffice,
                                 onValueChange = { editPostOffice = it },
                                 label = { Text("Post Office") },
-                                modifier = Modifier.fillMaxWidth()
+                                modifier = Modifier.fillMaxWidth(),
+                                singleLine = true
                             )
                             OutlinedTextField(
                                 value = editDist,
                                 onValueChange = { editDist = it },
                                 label = { Text("District") },
-                                modifier = Modifier.fillMaxWidth()
+                                modifier = Modifier.fillMaxWidth(),
+                                singleLine = true
                             )
                             OutlinedTextField(
                                 value = editAddress,
@@ -474,27 +607,54 @@ fun LenderHomeScreen(
                             onClick = {
                                 isSavingAddr = true
                                 scope.launch {
-                                    lenderRepo.updateLenderAddress(
-                                        lenderId = resolvedLenderId,
-                                        villageTown = editVillage.ifBlank { null },
-                                        postOffice = editPostOffice.ifBlank { null },
-                                        dist = editDist.ifBlank { null },
-                                        address = editAddress.ifBlank { null }
-                                    ).onSuccess {
+                                    try {
+                                        // 1. Update address fields via lenderRepo
+                                        lenderRepo.updateLenderAddress(
+                                            lenderId = resolvedLenderId,
+                                            villageTown = editVillage.trim().ifBlank { null },
+                                            postOffice = editPostOffice.trim().ifBlank { null },
+                                            dist = editDist.trim().ifBlank { null },
+                                            address = editAddress.trim().ifBlank { null }
+                                        ).getOrThrow()
+
+                                        // 2. Persist receiving UPI ID to Supabase
+                                        val cleanUpi = editUpiId.trim()
+                                        withContext(Dispatchers.IO) {
+                                            SupabaseClientProvider.db
+                                                .from("lenders")
+                                                .update(
+                                                    buildJsonObject {
+                                                        put("upi_id", cleanUpi.ifBlank { null })
+                                                    }
+                                                ) {
+                                                    filter { eq("id", resolvedLenderId) }
+                                                }
+                                        }
+
                                         isSavingAddr = false
                                         showAddressDialog = false
-                                        Toast.makeText(context, "Address updated successfully!", Toast.LENGTH_SHORT).show()
+                                        Toast.makeText(context, "Profile and UPI ID updated successfully!", Toast.LENGTH_SHORT).show()
                                         loadData()
-                                    }.onFailure {
+                                    } catch (e: Exception) {
                                         isSavingAddr = false
-                                        Toast.makeText(context, "Update failed: ${it.message}", Toast.LENGTH_SHORT).show()
+                                        Toast.makeText(context, "Update failed: ${e.message}", Toast.LENGTH_SHORT).show()
                                     }
                                 }
                             },
                             enabled = !isSavingAddr,
                             colors = ButtonDefaults.buttonColors(containerColor = BrandPrimary)
                         ) {
-                            Text(if (isSavingAddr) "Saving..." else "Save Address")
+                            if (isSavingAddr) {
+                                CircularProgressIndicator(
+                                    color = MaterialTheme.colorScheme.onPrimary,
+                                    modifier = Modifier.size(16.dp),
+                                    strokeWidth = 2.dp
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Saving...")
+                            } else {
+                                Text("Save Profile")
+                            }
                         }
                     },
                     dismissButton = {
@@ -552,9 +712,9 @@ fun LenderHomeScreen(
                                             showResetPasswordDialog = false
                                             Toast.makeText(context, "Password updated successfully!", Toast.LENGTH_SHORT).show()
                                         }
-                                        .onFailure {
+                                        .onFailure { error ->
                                             isSavingPwd = false
-                                            Toast.makeText(context, "Reset failed: ${it.message}", Toast.LENGTH_SHORT).show()
+                                            Toast.makeText(context, "Reset failed: ${error.message}", Toast.LENGTH_SHORT).show()
                                         }
                                 }
                             },
@@ -604,8 +764,20 @@ private fun PendingListTab(
             contentPadding = PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            items(pendingList, key = { it.loanId }) { item ->
+            items(
+                items = pendingList,
+                key = { item -> "${item.loanId}_${item.borrowerId}" }
+            ) { item ->
                 val hasOverdue = item.todayDueBalance > item.dailyInstallment
+                val formattedTodayDue = remember(item.todayDueBalance) {
+                    String.format(Locale.US, "%.2f", maxOf(0.0, item.todayDueBalance))
+                }
+                val formattedInstallment = remember(item.dailyInstallment) {
+                    String.format(Locale.US, "%.2f", item.dailyInstallment)
+                }
+                val formattedRemaining = remember(item.remainingBalance) {
+                    String.format(Locale.US, "%.2f", maxOf(0.0, item.remainingBalance))
+                }
 
                 Card(
                     modifier = Modifier
@@ -632,10 +804,9 @@ private fun PendingListTab(
                             Spacer(modifier = Modifier.width(12.dp))
 
                             Column(modifier = Modifier.weight(1f)) {
-                                Text(item.borrowerName, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                                Text(item.borrowerName.ifBlank { "Customer" }, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                                 Text("+91 ${item.borrowerMobile}", style = MaterialTheme.typography.bodySmall, color = TextSecondaryLight)
 
-                                // Current Date Badge & Overdue indicator
                                 Row(
                                     verticalAlignment = Alignment.CenterVertically,
                                     modifier = Modifier.padding(top = 4.dp),
@@ -684,11 +855,15 @@ private fun PendingListTab(
                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                 IconButton(
                                     onClick = {
-                                        CommunicationUtils.openWhatsAppChat(
-                                            context = context,
-                                            rawMobileNumber = item.borrowerMobile,
-                                            message = "Hello ${item.borrowerName}, your daily installment for $currentDateStr of ₹${item.todayDueBalance} is due today."
-                                        )
+                                        try {
+                                            CommunicationUtils.openWhatsAppChat(
+                                                context = context,
+                                                rawMobileNumber = item.borrowerMobile,
+                                                message = "Hello ${item.borrowerName}, your daily installment for $currentDateStr of ₹$formattedTodayDue is due today."
+                                            )
+                                        } catch (e: Exception) {
+                                            Toast.makeText(context, "Could not open WhatsApp", Toast.LENGTH_SHORT).show()
+                                        }
                                     },
                                     modifier = Modifier
                                         .size(36.dp)
@@ -699,7 +874,13 @@ private fun PendingListTab(
                                 }
 
                                 IconButton(
-                                    onClick = { CommunicationUtils.openPhoneDialer(context, item.borrowerMobile) },
+                                    onClick = {
+                                        try {
+                                            CommunicationUtils.openPhoneDialer(context, item.borrowerMobile)
+                                        } catch (e: Exception) {
+                                            Toast.makeText(context, "Could not open dialer", Toast.LENGTH_SHORT).show()
+                                        }
+                                    },
                                     modifier = Modifier
                                         .size(36.dp)
                                         .clip(CircleShape)
@@ -721,17 +902,17 @@ private fun PendingListTab(
                         ) {
                             Column {
                                 Text("Today Due", style = MaterialTheme.typography.labelSmall, color = AlertOrange)
-                                Text("₹${maxOf(0.0, item.todayDueBalance)}", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = AlertOrange)
+                                Text("₹$formattedTodayDue", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = AlertOrange)
                             }
 
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                 Text("Daily EMI", style = MaterialTheme.typography.labelSmall, color = TextSecondaryLight)
-                                Text("₹${item.dailyInstallment}", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+                                Text("₹$formattedInstallment", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
                             }
 
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                 Text("Balance Left", style = MaterialTheme.typography.labelSmall, color = TextSecondaryLight)
-                                Text("₹${maxOf(0.0, item.remainingBalance)}", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+                                Text("₹$formattedRemaining", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
                             }
 
                             Button(
@@ -781,7 +962,20 @@ private fun PaidTodayListTab(
             contentPadding = PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            items(paidList, key = { it.loanId }) { item ->
+            items(
+                items = paidList,
+                key = { item -> "${item.loanId}_${item.borrowerId}" }
+            ) { item ->
+                val formattedPaidToday = remember(item.todayPaidAmount) {
+                    String.format(Locale.US, "%.2f", item.todayPaidAmount)
+                }
+                val formattedTotalPaid = remember(item.totalPaid) {
+                    String.format(Locale.US, "%.2f", item.totalPaid)
+                }
+                val formattedRemaining = remember(item.remainingBalance) {
+                    String.format(Locale.US, "%.2f", maxOf(0.0, item.remainingBalance))
+                }
+
                 Card(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -807,10 +1001,9 @@ private fun PaidTodayListTab(
                             Spacer(modifier = Modifier.width(12.dp))
 
                             Column(modifier = Modifier.weight(1f)) {
-                                Text(item.borrowerName, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                                Text(item.borrowerName.ifBlank { "Customer" }, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                                 Text("+91 ${item.borrowerMobile}", style = MaterialTheme.typography.bodySmall, color = TextSecondaryLight)
 
-                                // Current Date Badge for Paid Collections
                                 Surface(
                                     shape = RoundedCornerShape(6.dp),
                                     color = MoneyGreen.copy(alpha = 0.12f),
@@ -840,30 +1033,34 @@ private fun PaidTodayListTab(
                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                 IconButton(
                                     onClick = {
-                                        val currentDateTime = SimpleDateFormat("dd MMMM yyyy, hh:mm a", Locale.getDefault()).format(Date())
-                                        val receiptText = """
-                                            🧾 *PAYMENT RECEIPT*
-                                            🏪 *${businessName.uppercase(Locale.getDefault())}*
-                                            📅 Date: $currentDateTime
+                                        try {
+                                            val currentDateTime = SimpleDateFormat("dd MMMM yyyy, hh:mm a", Locale.US).format(Date())
+                                            val receiptText = """
+                                                🧾 *PAYMENT RECEIPT*
+                                                🏪 *${businessName.uppercase(Locale.US)}*
+                                                📅 Date: $currentDateTime
 
-                                            👤 Customer: ${item.borrowerName}
-                                            📱 Mobile: +91 ${item.borrowerMobile}
+                                                👤 Customer: ${item.borrowerName}
+                                                📱 Mobile: +91 ${item.borrowerMobile}
 
-                                            ━━━━━━━━━━━━━━━━━━━
-                                            💵 *Amount Paid Today: ₹${item.todayPaidAmount}*
-                                            ✅ Total Recovered: ₹${item.totalPaid}
-                                            ⚠️ Remaining Balance: ₹${maxOf(0.0, item.remainingBalance)}
-                                            ━━━━━━━━━━━━━━━━━━━
+                                                ━━━━━━━━━━━━━━━━━━━
+                                                💵 *Amount Paid Today: ₹$formattedPaidToday*
+                                                ✅ Total Recovered: ₹$formattedTotalPaid
+                                                ⚠️ Remaining Balance: ₹$formattedRemaining
+                                                ━━━━━━━━━━━━━━━━━━━
 
-                                            Status: VERIFIED & CLEARED ✅
-                                            Thank you for your timely repayment!
-                                        """.trimIndent()
+                                                Status: VERIFIED & CLEARED ✅
+                                                Thank you for your timely repayment!
+                                            """.trimIndent()
 
-                                        CommunicationUtils.openWhatsAppChat(
-                                            context = context,
-                                            rawMobileNumber = item.borrowerMobile,
-                                            message = receiptText
-                                        )
+                                            CommunicationUtils.openWhatsAppChat(
+                                                context = context,
+                                                rawMobileNumber = item.borrowerMobile,
+                                                message = receiptText
+                                            )
+                                        } catch (e: Exception) {
+                                            Toast.makeText(context, "Could not open WhatsApp", Toast.LENGTH_SHORT).show()
+                                        }
                                     },
                                     modifier = Modifier
                                         .size(36.dp)
@@ -874,7 +1071,13 @@ private fun PaidTodayListTab(
                                 }
 
                                 IconButton(
-                                    onClick = { CommunicationUtils.openPhoneDialer(context, item.borrowerMobile) },
+                                    onClick = {
+                                        try {
+                                            CommunicationUtils.openPhoneDialer(context, item.borrowerMobile)
+                                        } catch (e: Exception) {
+                                            Toast.makeText(context, "Could not open dialer", Toast.LENGTH_SHORT).show()
+                                        }
+                                    },
                                     modifier = Modifier
                                         .size(36.dp)
                                         .clip(CircleShape)
@@ -896,18 +1099,18 @@ private fun PaidTodayListTab(
                         ) {
                             Column {
                                 Text("Paid Today", style = MaterialTheme.typography.labelSmall, color = MoneyGreen)
-                                Text("₹${item.todayPaidAmount}", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MoneyGreen)
+                                Text("₹$formattedPaidToday", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MoneyGreen)
                             }
 
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                 Text("Total Recovered", style = MaterialTheme.typography.labelSmall, color = TextSecondaryLight)
-                                Text("₹${item.totalPaid}", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+                                Text("₹$formattedTotalPaid", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
                             }
 
                             Column(horizontalAlignment = Alignment.End) {
                                 Text("Remaining Bal", style = MaterialTheme.typography.labelSmall, color = TextSecondaryLight)
                                 Text(
-                                    text = "₹${maxOf(0.0, item.remainingBalance)}",
+                                    text = "₹$formattedRemaining",
                                     style = MaterialTheme.typography.bodyMedium,
                                     fontWeight = FontWeight.Bold,
                                     color = if (item.remainingBalance > 0.0) DangerRed else MoneyGreen
