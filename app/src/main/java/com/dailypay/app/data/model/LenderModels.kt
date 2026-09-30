@@ -6,13 +6,13 @@ import kotlinx.serialization.Serializable
 @Serializable
 data class Lender(
     val id: String? = null,
-    val name: String,
+    val name: String = "",
     @SerialName("owner_name")
     val ownerName: String? = null,
     @SerialName("business_name")
     val businessName: String? = null,
     @SerialName("mobile_number")
-    val mobileNumber: String,
+    val mobileNumber: String = "",
     @SerialName("upi_id")
     val upiId: String? = null,
     @SerialName("village_town")
