@@ -45,7 +45,7 @@ class SessionManager(context: Context) {
             val loggedIn = prefs.getBoolean(KEY_IS_LOGGED_IN, false)
             val userId = prefs.getString(KEY_USER_ID, null)
             val role = getUserRole()
-            // Session is only valid if the flag is true, role is valid enum, and user ID is not a template placeholder
+            // Session is valid only when loggedIn flag is true, role is a valid enum, and user ID is not blank or a placeholder
             loggedIn && role != null && !userId.isNullOrBlank() &&
                     userId != "{lenderId}" && userId != "{borrowerId}"
         } catch (e: Exception) {
@@ -87,7 +87,7 @@ class SessionManager(context: Context) {
     }
 
     fun clearSession() {
-        // commit() is synchronous to ensure preferences are cleared before navigation routes re-evaluate
+        // commit() is used synchronously so session state clears before navigation re-evaluates
         prefs.edit().clear().commit()
     }
 }
