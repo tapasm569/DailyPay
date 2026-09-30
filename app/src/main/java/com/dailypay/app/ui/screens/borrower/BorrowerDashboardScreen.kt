@@ -5,16 +5,59 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Logout
-import androidx.compose.material.icons.filled.*
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material.icons.filled.CameraAlt
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.OpenInNew
+import androidx.compose.material.icons.filled.Payment
+import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.PostAdd
+import androidx.compose.material.icons.filled.ReceiptLong
+import androidx.compose.material.icons.filled.Schedule
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -22,19 +65,37 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
+import com.dailypay.app.data.model.ApprovedLoanDetail
 import com.dailypay.app.data.model.Borrower
 import com.dailypay.app.data.model.BorrowerDashboardSummary
+import com.dailypay.app.data.model.Lender
+import com.dailypay.app.data.model.PaymentMode
+import com.dailypay.app.data.model.Repayment
+import com.dailypay.app.data.model.RepaymentStatus
 import com.dailypay.app.data.repository.BorrowerRepository
-import com.dailypay.app.ui.theme.*
+import com.dailypay.app.ui.theme.AlertOrange
+import com.dailypay.app.ui.theme.AlertOrangeSubtle
+import com.dailypay.app.ui.theme.BorderSubtleLight
+import com.dailypay.app.ui.theme.BrandPrimary
+import com.dailypay.app.ui.theme.CallBlue
+import com.dailypay.app.ui.theme.DangerRed
+import com.dailypay.app.ui.theme.MoneyGreen
+import com.dailypay.app.ui.theme.MoneyGreenSubtle
+import com.dailypay.app.ui.theme.TextSecondaryLight
+import com.dailypay.app.util.DateUtils
+import com.dailypay.app.util.UpiIntentLauncher
 import kotlinx.coroutines.launch
+import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun BorrowerDashboardScreen(
     borrowerId: String,
-    onPayEmiClick: () -> Unit,
+    onPayEmiClick: () -> Unit = {},
     onApplyLoanClick: () -> Unit,
     onApprovedLoansClick: () -> Unit,
     onViewLedgerClick: () -> Unit,
@@ -46,13 +107,33 @@ fun BorrowerDashboardScreen(
     val borrowerRepo = remember { BorrowerRepository() }
 
     var borrowerProfile by remember { mutableStateOf<Borrower?>(null) }
+    var lenderProfile by remember { mutableStateOf<Lender?>(null) }
+    var activeLoans by remember { mutableStateOf<List<ApprovedLoanDetail>>(emptyList()) }
     var summary by remember { mutableStateOf<BorrowerDashboardSummary?>(null) }
     var isLoading by remember { mutableStateOf(true) }
     var isUploadingAvatar by remember { mutableStateOf(false) }
 
+    // Direct UPI payment dialog states
+    var showPayDialog by remember { mutableStateOf(false) }
+    var selectedLoan by remember { mutableStateOf<ApprovedLoanDetail?>(null) }
+    var emiAmountInput by remember { mutableStateOf("") }
+    var utrInput by remember { mutableStateOf("") }
+    var isSubmittingPayment by remember { mutableStateOf(false) }
+
     fun loadData() {
         scope.launch {
-            borrowerRepo.getBorrowerProfile(borrowerId).onSuccess { borrowerProfile = it }
+            borrowerRepo.getBorrowerProfile(borrowerId).onSuccess { profile ->
+                borrowerProfile = profile
+                val cleanLenderId = profile.lenderId.trim()
+                if (cleanLenderId.isNotBlank()) {
+                    borrowerRepo.getLenderProfile(cleanLenderId).onSuccess { lender ->
+                        lenderProfile = lender
+                    }
+                }
+            }
+            borrowerRepo.getCustomerApprovedLoans(borrowerId).onSuccess { loans ->
+                activeLoans = loans.filter { it.remainingBalance > 0.0 }
+            }
             borrowerRepo.getDashboardSummary(borrowerId)
                 .onSuccess {
                     summary = it
@@ -67,6 +148,20 @@ fun BorrowerDashboardScreen(
 
     LaunchedEffect(borrowerId) {
         loadData()
+    }
+
+    fun openPaymentDialog() {
+        if (activeLoans.isEmpty()) {
+            Toast.makeText(context, "You have no active loans with pending balance.", Toast.LENGTH_SHORT).show()
+            return
+        }
+        val loanToPay = activeLoans.firstOrNull { it.todayDue > 0.0 } ?: activeLoans.first()
+        selectedLoan = loanToPay
+
+        val defaultAmount = if (loanToPay.todayDue > 0.0) loanToPay.todayDue else loanToPay.dailyInstallment
+        emiAmountInput = String.format(Locale.US, "%.2f", maxOf(0.0, defaultAmount))
+        utrInput = ""
+        showPayDialog = true
     }
 
     val imagePickerLauncher = rememberLauncherForActivityResult(
@@ -100,6 +195,22 @@ fun BorrowerDashboardScreen(
                 }
             }
         }
+    }
+
+    val formattedTodayDue = remember(summary?.todayDue) {
+        String.format(Locale.US, "%.2f", summary?.todayDue ?: 0.0)
+    }
+    val formattedTodayPaid = remember(summary?.todayPaid) {
+        String.format(Locale.US, "%.2f", summary?.todayPaid ?: 0.0)
+    }
+    val formattedTotalBorrowed = remember(summary?.totalBorrowed) {
+        String.format(Locale.US, "%.2f", summary?.totalBorrowed ?: 0.0)
+    }
+    val formattedTotalPaid = remember(summary?.totalPaid) {
+        String.format(Locale.US, "%.2f", summary?.totalPaid ?: 0.0)
+    }
+    val formattedTotalRemaining = remember(summary?.totalRemaining) {
+        String.format(Locale.US, "%.2f", summary?.totalRemaining ?: 0.0)
     }
 
     Scaffold(
@@ -209,11 +320,11 @@ fun BorrowerDashboardScreen(
 
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                text = borrowerProfile?.name ?: "Customer",
+                                text = borrowerProfile?.name.orEmpty().ifBlank { "Customer" },
                                 style = MaterialTheme.typography.titleLarge
                             )
                             Text(
-                                text = "+91 ${borrowerProfile?.mobileNumber ?: ""}",
+                                text = "+91 ${borrowerProfile?.mobileNumber.orEmpty()}",
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = TextSecondaryLight
                             )
@@ -240,7 +351,8 @@ fun BorrowerDashboardScreen(
                     Card(
                         modifier = Modifier
                             .weight(1f)
-                            .border(1.dp, AlertOrange.copy(alpha = 0.35f), RoundedCornerShape(16.dp)),
+                            .border(1.dp, AlertOrange.copy(alpha = 0.35f), RoundedCornerShape(16.dp))
+                            .clickable { openPaymentDialog() },
                         shape = RoundedCornerShape(16.dp),
                         colors = CardDefaults.cardColors(containerColor = AlertOrangeSubtle)
                     ) {
@@ -254,7 +366,7 @@ fun BorrowerDashboardScreen(
                                 Icon(Icons.Default.Schedule, contentDescription = null, tint = AlertOrange, modifier = Modifier.size(16.dp))
                             }
                             Spacer(modifier = Modifier.height(6.dp))
-                            Text("₹${summary?.todayDue ?: 0.0}", style = MaterialTheme.typography.titleLarge, color = AlertOrange)
+                            Text("₹$formattedTodayDue", style = MaterialTheme.typography.titleLarge, color = AlertOrange)
                         }
                     }
 
@@ -275,7 +387,7 @@ fun BorrowerDashboardScreen(
                                 Icon(Icons.Default.CheckCircle, contentDescription = null, tint = MoneyGreen, modifier = Modifier.size(16.dp))
                             }
                             Spacer(modifier = Modifier.height(6.dp))
-                            Text("₹${summary?.todayPaid ?: 0.0}", style = MaterialTheme.typography.titleLarge, color = MoneyGreen)
+                            Text("₹$formattedTodayPaid", style = MaterialTheme.typography.titleLarge, color = MoneyGreen)
                         }
                     }
                 }
@@ -302,18 +414,40 @@ fun BorrowerDashboardScreen(
                         HorizontalDivider(color = BorderSubtleLight)
 
                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+         // Balance Breakdown
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .border(1.dp, BorderSubtleLight, RoundedCornerShape(16.dp)),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text("My Loan Overview", style = MaterialTheme.typography.titleMedium)
+                            Text("${summary?.activeLoansCount ?: 0} Active Loans", style = MaterialTheme.typography.labelSmall, color = BrandPrimary)
+                        }
+                        HorizontalDivider(color = BorderSubtleLight)
+
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                             Text("Total Borrowed", color = TextSecondaryLight)
-                            Text("₹${summary?.totalBorrowed ?: 0.0}", style = MaterialTheme.typography.titleMedium)
+                            Text("₹$formattedTotalBorrowed", style = MaterialTheme.typography.titleMedium)
                         }
 
                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                             Text("Total Paid", color = MoneyGreen)
-                            Text("₹${summary?.totalPaid ?: 0.0}", style = MaterialTheme.typography.titleMedium, color = MoneyGreen)
+                            Text("₹$formattedTotalPaid", style = MaterialTheme.typography.titleMedium, color = MoneyGreen)
                         }
 
                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                             Text("Total Remaining", color = DangerRed)
-                            Text("₹${summary?.totalRemaining ?: 0.0}", style = MaterialTheme.typography.titleMedium, color = DangerRed)
+                            Text("₹$formattedTotalRemaining", style = MaterialTheme.typography.titleMedium, color = DangerRed)
                         }
                     }
                 }
@@ -321,11 +455,11 @@ fun BorrowerDashboardScreen(
                 Text("Quick Actions", style = MaterialTheme.typography.titleMedium)
 
                 CustomerActionCard(
-                    title = "Pay EMI",
-                    subtitle = "Pay today's installment due via UPI or Cash",
+                    title = "Pay EMI Online",
+                    subtitle = "Pay daily installment via UPI app and submit 12-digit UTR",
                     icon = Icons.Default.Payment,
                     accentColor = MoneyGreen,
-                    onClick = onPayEmiClick
+                    onClick = { openPaymentDialog() }
                 )
 
                 CustomerActionCard(
@@ -352,6 +486,171 @@ fun BorrowerDashboardScreen(
                     onClick = onViewLedgerClick
                 )
             }
+        }
+
+        // ================= DIRECT UPI & UTR REPAYMENT DIALOG =================
+        if (showPayDialog) {
+            val lenderUpiId = lenderProfile?.upiId?.trim().orEmpty()
+            val lenderDisplayName = lenderProfile?.businessName?.ifBlank { lenderProfile?.name } ?: "Lender"
+
+            AlertDialog(
+                onDismissRequest = { if (!isSubmittingPayment) showPayDialog = false },
+                title = { Text("Pay Daily EMI Online") },
+                text = {
+                    Column(
+                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(
+                            text = "Lender: $lenderDisplayName\nUPI ID: ${if (lenderUpiId.isNotBlank()) lenderUpiId else "Not configured by lender"}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = TextSecondaryLight
+                        )
+
+                        OutlinedTextField(
+                            value = emiAmountInput,
+                            onValueChange = { input ->
+                                if (input.isEmpty() || input.matches(Regex("^\\d*\\.?\\d{0,2}$"))) {
+                                    emiAmountInput = input
+                                }
+                            },
+                            label = { Text("Installment Amount (₹) *") },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(12.dp),
+                            singleLine = true,
+                            enabled = !isSubmittingPayment
+                        )
+
+                        // STEP 1: Launch UPI Intent
+                        OutlinedButton(
+                            onClick = {
+                                val parsedAmount = emiAmountInput.toDoubleOrNull() ?: 0.0
+                                if (lenderUpiId.isBlank()) {
+                                    Toast.makeText(context, "Lender has not set up a UPI ID yet. Please contact them.", Toast.LENGTH_LONG).show()
+                                } else if (parsedAmount <= 0.0) {
+                                    Toast.makeText(context, "Enter a valid installment amount first.", Toast.LENGTH_SHORT).show()
+                                } else {
+                                    val currentLoanId = selectedLoan?.loanId.orEmpty().take(8)
+                                    UpiIntentLauncher.initiateUpiPayment(
+                                        context = context,
+                                        payeeUpiId = lenderUpiId,
+                                        payeeName = lenderDisplayName,
+                                        amount = parsedAmount,
+                                        transactionNote = "DailyPay EMI Loan #$currentLoanId"
+                                    )
+                                }
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(12.dp),
+                            enabled = !isSubmittingPayment && lenderUpiId.isNotBlank()
+                        ) {
+                            Icon(Icons.Default.OpenInNew, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("1. Pay in GPay / PhonePe / Paytm")
+                        }
+
+                        HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+
+                        // STEP 2: Enter 12-digit UTR
+                        Text(
+                            text = "2. Enter 12-Digit UPI Ref / UTR Number:",
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+
+                        OutlinedTextField(
+                            value = utrInput,
+                            onValueChange = { input ->
+                                val digitsOnly = input.filter { it.isDigit() }
+                                if (digitsOnly.length <= 12) {
+                                    utrInput = digitsOnly
+                                }
+                            },
+                            label = { Text("12-Digit UTR Number *") },
+                            supportingText = { Text("${utrInput.length}/12 digits") },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(12.dp),
+                            singleLine = true,
+                            enabled = !isSubmittingPayment
+                        )
+                    }
+                },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            val parsedAmount = emiAmountInput.toDoubleOrNull() ?: 0.0
+                            if (parsedAmount <= 0.0) {
+                                Toast.makeText(context, "Please enter a valid amount.", Toast.LENGTH_SHORT).show()
+                                return@Button
+                            }
+                            val cleanUtr = utrInput.trim()
+                            if (cleanUtr.length != 12) {
+                                Toast.makeText(context, "Please enter a valid 12-digit UTR number from your bank receipt.", Toast.LENGTH_SHORT).show()
+                                return@Button
+                            }
+
+                            isSubmittingPayment = true
+                            scope.launch {
+                                val currentLoan = selectedLoan ?: activeLoans.firstOrNull()
+                                val loanId = currentLoan?.loanId.orEmpty()
+                                val cleanLenderId = borrowerProfile?.lenderId?.trim().orEmpty()
+
+                                val repayment = Repayment(
+                                    loanId = loanId,
+                                    borrowerId = borrowerId.trim(),
+                                    lenderId = cleanLenderId,
+                                    paymentDate = DateUtils.getTodaySqlFormat(),
+                                    amountPaid = parsedAmount,
+                                    paymentMode = PaymentMode.UPI,
+                                    status = RepaymentStatus.PENDING,
+                                    utrReference = cleanUtr,
+                                    notes = "Online UPI payment submitted by customer. UTR: $cleanUtr"
+                                )
+
+                                borrowerRepo.submitEmiPayment(repayment)
+                                    .onSuccess {
+                                        isSubmittingPayment = false
+                                        showPayDialog = false
+                                        Toast.makeText(
+                                            context,
+                                            "Payment submitted! Pending lender verification.",
+                                            Toast.LENGTH_LONG
+                                        ).show()
+                                        loadData()
+                                    }
+                                    .onFailure { error ->
+                                        isSubmittingPayment = false
+                                        Toast.makeText(context, "Submission failed: ${error.message}", Toast.LENGTH_LONG).show()
+                                    }
+                            }
+                        },
+                        enabled = !isSubmittingPayment,
+                        colors = ButtonDefaults.buttonColors(containerColor = BrandPrimary)
+                    ) {
+                        if (isSubmittingPayment) {
+                            CircularProgressIndicator(
+                                color = MaterialTheme.colorScheme.onPrimary,
+                                modifier = Modifier.size(16.dp),
+                                strokeWidth = 2.dp
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Submitting...")
+                        } else {
+                            Text("Confirm & Submit")
+                        }
+                    }
+                },
+                dismissButton = {
+                    TextButton(
+                        onClick = { showPayDialog = false },
+                        enabled = !isSubmittingPayment
+                    ) {
+                        Text("Cancel")
+                    }
+                }
+            )
         }
     }
 }
@@ -398,4 +697,3 @@ private fun CustomerActionCard(
             Icon(imageVector = Icons.Default.ChevronRight, contentDescription = null, tint = TextSecondaryLight)
         }
     }
-}
