@@ -2,7 +2,18 @@ package com.dailypay.app.ui.screens.lender
 
 import android.widget.Toast
 import androidx.compose.foundation.border
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
@@ -10,9 +21,36 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.*
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Event
+import androidx.compose.material.icons.filled.Payment
+import androidx.compose.material.icons.filled.Schedule
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -26,13 +64,17 @@ import com.dailypay.app.data.model.DailyDueItem
 import com.dailypay.app.data.model.PaymentMode
 import com.dailypay.app.data.model.Repayment
 import com.dailypay.app.data.repository.LenderRepository
-import com.dailypay.app.ui.theme.*
+import com.dailypay.app.ui.theme.AlertOrange
+import com.dailypay.app.ui.theme.BorderSubtleLight
+import com.dailypay.app.ui.theme.BrandPrimary
+import com.dailypay.app.ui.theme.CallBlue
+import com.dailypay.app.ui.theme.DangerRed
+import com.dailypay.app.ui.theme.MoneyGreen
+import com.dailypay.app.ui.theme.TextSecondaryLight
+import com.dailypay.app.ui.theme.WhatsAppGreen
 import com.dailypay.app.util.CommunicationUtils
 import com.dailypay.app.util.DateUtils
-import com.dailypay.app.util.UpiIntentLauncher
 import kotlinx.coroutines.launch
-import java.text.SimpleDateFormat
-import java.util.Date
 import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -44,7 +86,7 @@ fun TodaysDueScreen(
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val lenderRepo = remember { LenderRepository(context) }
+    val lenderRepo = remember { LenderRepository(context.applicationContext) }
 
     var duesList by remember { mutableStateOf<List<DailyDueItem>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
@@ -54,30 +96,38 @@ fun TodaysDueScreen(
     var selectedPaymentMode by remember { mutableStateOf(PaymentMode.CASH) }
     var isSubmittingPayment by remember { mutableStateOf(false) }
 
-    val currentDateText = remember {
-        SimpleDateFormat("dd MMM yyyy", Locale.getDefault()).format(Date())
-    }
+    val currentDateText = remember { DateUtils.getTodayDisplayFormat() }
+    val cleanLenderId = remember(lenderId) { lenderId.trim() }
 
     fun loadData() {
+        if (cleanLenderId.isBlank() || cleanLenderId == "{lenderId}") {
+            isLoading = false
+            return
+        }
         scope.launch {
-            lenderRepo.getDailyDues(lenderId)
+            lenderRepo.getDailyDues(cleanLenderId)
                 .onSuccess { list ->
-                    // Filter borrowers who have an unpaid balance today and an active loan balance
+                    // Show only borrowers who have an unpaid balance today and active remaining balance
                     duesList = list.filter { it.todayDueBalance > 0.0 && it.remainingBalance > 0.0 }
                     isLoading = false
                 }
-                .onFailure {
+                .onFailure { error ->
                     isLoading = false
-                    Toast.makeText(context, "Error: ${it.message}", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(context, "Error: ${error.message}", Toast.LENGTH_SHORT).show()
                 }
         }
     }
 
-    LaunchedEffect(lenderId) {
+    LaunchedEffect(cleanLenderId) {
         loadData()
     }
 
-    val totalPendingToday = duesList.sumOf { it.todayDueBalance }
+    val totalPendingToday = remember(duesList) {
+        duesList.sumOf { it.todayDueBalance }
+    }
+    val formattedTotalPending = remember(totalPendingToday) {
+        String.format(Locale.US, "%.2f", totalPendingToday)
+    }
 
     Scaffold(
         topBar = {
@@ -86,7 +136,7 @@ fun TodaysDueScreen(
                     Column {
                         Text("Today's Dues (${duesList.size})")
                         Text(
-                            text = "Pending: ₹$totalPendingToday • $currentDateText",
+                            text = "Pending: ₹$formattedTotalPending • $currentDateText",
                             style = MaterialTheme.typography.bodySmall,
                             color = AlertOrange,
                             fontWeight = FontWeight.Medium
@@ -148,8 +198,20 @@ fun TodaysDueScreen(
                     .padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                itemsIndexed(duesList, key = { index, item -> item.loanId.ifBlank { "due_$index" } }) { _, item ->
+                itemsIndexed(
+                    items = duesList,
+                    key = { index, item -> "${item.loanId}_${item.borrowerId}_$index" }
+                ) { _, item ->
                     val hasOverdue = item.todayDueBalance > item.dailyInstallment
+                    val formattedTodayDue = remember(item.todayDueBalance) {
+                        String.format(Locale.US, "%.2f", maxOf(0.0, item.todayDueBalance))
+                    }
+                    val formattedInstallment = remember(item.dailyInstallment) {
+                        String.format(Locale.US, "%.2f", item.dailyInstallment)
+                    }
+                    val formattedRemaining = remember(item.remainingBalance) {
+                        String.format(Locale.US, "%.2f", maxOf(0.0, item.remainingBalance))
+                    }
 
                     Card(
                         modifier = Modifier
@@ -182,7 +244,7 @@ fun TodaysDueScreen(
 
                                 Column(modifier = Modifier.weight(1f)) {
                                     Text(
-                                        text = item.borrowerName,
+                                        text = item.borrowerName.ifBlank { "Borrower" },
                                         style = MaterialTheme.typography.titleMedium,
                                         fontWeight = FontWeight.Bold
                                     )
@@ -192,7 +254,6 @@ fun TodaysDueScreen(
                                         color = TextSecondaryLight
                                     )
 
-                                    // Current Date Badge & Cumulative Overdue Indicator
                                     Row(
                                         verticalAlignment = Alignment.CenterVertically,
                                         modifier = Modifier.padding(top = 4.dp),
@@ -241,11 +302,15 @@ fun TodaysDueScreen(
                                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                     IconButton(
                                         onClick = {
-                                            CommunicationUtils.openWhatsAppChat(
-                                                context = context,
-                                                rawMobileNumber = item.borrowerMobile,
-                                                message = "Hello ${item.borrowerName}, your daily due of ₹${item.todayDueBalance} for $currentDateText is pending."
-                                            )
+                                            try {
+                                                CommunicationUtils.openWhatsAppChat(
+                                                    context = context,
+                                                    rawMobileNumber = item.borrowerMobile,
+                                                    message = "Hello ${item.borrowerName}, your daily due of ₹$formattedTodayDue for $currentDateText is pending."
+                                                )
+                                            } catch (e: Exception) {
+                                                Toast.makeText(context, "Could not open WhatsApp", Toast.LENGTH_SHORT).show()
+                                            }
                                         },
                                         modifier = Modifier
                                             .size(36.dp)
@@ -261,7 +326,13 @@ fun TodaysDueScreen(
                                     }
 
                                     IconButton(
-                                        onClick = { CommunicationUtils.openPhoneDialer(context, item.borrowerMobile) },
+                                        onClick = {
+                                            try {
+                                                CommunicationUtils.openPhoneDialer(context, item.borrowerMobile)
+                                            } catch (e: Exception) {
+                                                Toast.makeText(context, "Could not open phone dialer", Toast.LENGTH_SHORT).show()
+                                            }
+                                        },
                                         modifier = Modifier
                                             .size(36.dp)
                                             .clip(CircleShape)
@@ -289,7 +360,7 @@ fun TodaysDueScreen(
                                 Column {
                                     Text("Today Due", style = MaterialTheme.typography.labelSmall, color = AlertOrange)
                                     Text(
-                                        text = "₹${maxOf(0.0, item.todayDueBalance)}",
+                                        text = "₹$formattedTodayDue",
                                         style = MaterialTheme.typography.titleMedium,
                                         fontWeight = FontWeight.Bold,
                                         color = AlertOrange
@@ -299,7 +370,7 @@ fun TodaysDueScreen(
                                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                     Text("Daily EMI", style = MaterialTheme.typography.labelSmall, color = TextSecondaryLight)
                                     Text(
-                                        text = "₹${item.dailyInstallment}",
+                                        text = "₹$formattedInstallment",
                                         style = MaterialTheme.typography.bodyMedium,
                                         fontWeight = FontWeight.SemiBold
                                     )
@@ -308,7 +379,7 @@ fun TodaysDueScreen(
                                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                     Text("Balance Left", style = MaterialTheme.typography.labelSmall, color = TextSecondaryLight)
                                     Text(
-                                        text = "₹${maxOf(0.0, item.remainingBalance)}",
+                                        text = "₹$formattedRemaining",
                                         style = MaterialTheme.typography.bodyMedium,
                                         fontWeight = FontWeight.SemiBold
                                     )
@@ -317,116 +388,6 @@ fun TodaysDueScreen(
                                 Button(
                                     onClick = {
                                         selectedDueItem = item
-                                        collectAmount = item.todayDueBalance.toString()
-                                    },
-                                    shape = RoundedCornerShape(10.dp),
-                                    colors = ButtonDefaults.buttonColors(containerColor = BrandPrimary),
-                                    contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp)
-                                ) {
-                                    Icon(Icons.Default.Payment, contentDescription = null, modifier = Modifier.size(16.dp))
-                                    Spacer(modifier = Modifier.width(6.dp))
-                                    Text("Collect")
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        // ================= COLLECT DUE DIALOG =================
-        selectedDueItem?.let { dueItem ->
-            AlertDialog(
-                onDismissRequest = { if (!isSubmittingPayment) selectedDueItem = null },
-                title = { Text("Collect Due - ${dueItem.borrowerName}") },
-                text = {
-                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                        Text(
-                            text = "Date: $currentDateText\nDaily Due: ₹${dueItem.dailyInstallment} | Total Due for Today: ₹${dueItem.todayDueBalance}" +
-                                    if (dueItem.todayDueBalance > dueItem.dailyInstallment) " (Includes Overdue)" else "",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = TextSecondaryLight
-                        )
-
-                        OutlinedTextField(
-                            value = collectAmount,
-                            onValueChange = { collectAmount = it.filter { ch -> ch.isDigit() || ch == '.' } },
-                            label = { Text("Amount Received (₹) *") },
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(12.dp)
-                        )
-
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            FilterChip(
-                                selected = selectedPaymentMode == PaymentMode.CASH,
-                                onClick = { selectedPaymentMode = PaymentMode.CASH },
-                                label = { Text("Cash") }
-                            )
-                            FilterChip(
-                                selected = selectedPaymentMode == PaymentMode.UPI,
-                                onClick = { selectedPaymentMode = PaymentMode.UPI },
-                                label = { Text("UPI Intent") }
-                            )
-                        }
-                    }
-                },
-                confirmButton = {
-                    Button(
-                        onClick = {
-                            val parsedAmount = collectAmount.toDoubleOrNull() ?: 0.0
-                            if (parsedAmount <= 0.0) {
-                                Toast.makeText(context, "Enter a valid amount", Toast.LENGTH_SHORT).show()
-                                return@Button
-                            }
-
-                            if (selectedPaymentMode == PaymentMode.UPI) {
-                                UpiIntentLauncher.initiateUpiPayment(
-                                    context = context,
-                                    payeeUpiId = "${dueItem.borrowerMobile}@upi",
-                                    payeeName = dueItem.borrowerName,
-                                    amount = parsedAmount,
-                                    transactionNote = "Repayment-${dueItem.borrowerName}"
-                                )
-                            }
-
-                            isSubmittingPayment = true
-                            scope.launch {
-                                val repayment = Repayment(
-                                    loanId = dueItem.loanId,
-                                    borrowerId = dueItem.borrowerId,
-                                    lenderId = lenderId,
-                                    paymentDate = DateUtils.getTodaySqlFormat(),
-                                    amountPaid = parsedAmount,
-                                    paymentMode = selectedPaymentMode,
-                                    notes = "Daily installment collected on $currentDateText"
-                                )
-
-                                lenderRepo.recordRepayment(repayment)
-                                    .onSuccess {
-                                        isSubmittingPayment = false
-                                        selectedDueItem = null
-                                        Toast.makeText(context, "Payment recorded successfully!", Toast.LENGTH_SHORT).show()
-                                        loadData()
-                                    }
-                                    .onFailure {
-                                        isSubmittingPayment = false
-                                        Toast.makeText(context, "Error: ${it.message}", Toast.LENGTH_SHORT).show()
-                                    }
-                            }
-                        },
-                        enabled = !isSubmittingPayment,
-                        colors = ButtonDefaults.buttonColors(containerColor = BrandPrimary)
-                    ) {
-                        Text(if (isSubmittingPayment) "Saving..." else "Confirm Collection")
-                    }
-                },
-                dismissButton = {
-                    TextButton(onClick = { selectedDueItem = null }, enabled = !isSubmittingPayment) {
-                        Text("Cancel")
-                    }
-                }
-            )
-        }
-    }
-}
+                                        collectAmount = String.format(Locale.US, "%.2f", item.todayDueBalance)
+                                        selectedPaymentMode = PaymentMode.CASH
+                                
