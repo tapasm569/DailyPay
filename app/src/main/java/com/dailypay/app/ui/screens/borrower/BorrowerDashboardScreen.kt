@@ -139,9 +139,9 @@ fun BorrowerDashboardScreen(
                     summary = it
                     isLoading = false
                 }
-                .onFailure {
+                .onFailure { error ->
                     isLoading = false
-                    Toast.makeText(context, "Error: ${it.message}", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(context, "Error: ${error.message}", Toast.LENGTH_SHORT).show()
                 }
         }
     }
@@ -393,28 +393,6 @@ fun BorrowerDashboardScreen(
                 }
 
                 // Balance Breakdown
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .border(1.dp, BorderSubtleLight, RoundedCornerShape(16.dp)),
-                    shape = RoundedCornerShape(16.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
-                ) {
-                    Column(
-                        modifier = Modifier.padding(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Text("My Loan Overview", style = MaterialTheme.typography.titleMedium)
-                            Text("${summary?.activeLoansCount ?: 0} Active Loans", style = MaterialTheme.typography.labelSmall, color = BrandPrimary)
-                        }
-                        HorizontalDivider(color = BorderSubtleLight)
-
-                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-         // Balance Breakdown
                 Card(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -697,3 +675,4 @@ private fun CustomerActionCard(
             Icon(imageVector = Icons.Default.ChevronRight, contentDescription = null, tint = TextSecondaryLight)
         }
     }
+}
