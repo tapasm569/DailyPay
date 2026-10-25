@@ -36,6 +36,7 @@ data class ApprovedLoanDetail(
     val startDate: String = "",
     val endDate: String = "",
     val status: String = "",
+    val totalPaid: Double = 0.0,
     val remainingBalance: Double = 0.0,
     val todayPaid: Double = 0.0,
     val todayDue: Double = 0.0

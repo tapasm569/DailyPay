@@ -91,6 +91,7 @@ class BorrowerRepository {
                         startDate = loan.startDate ?: "Not Set",
                         endDate = loan.endDate ?: "Not Set",
                         status = loan.status.name,
+                        totalPaid = totalPaid,
                         remainingBalance = remaining,
                         todayPaid = todayPaid,
                         todayDue = todayDue
