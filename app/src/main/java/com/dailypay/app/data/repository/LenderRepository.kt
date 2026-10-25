@@ -350,7 +350,7 @@ class LenderRepository(context: Context? = null) {
                     tenureDays = loan.tenureDays,
                     startDate = sDate,
                     endDate = eDate,
-                    status = loan.status,
+                    status = loan.status.name,
                     remainingBalance = maxOf(0.0, loan.totalPayable - (dueItem?.totalPaid ?: 0.0)),
                     todayPaid = todayPaid,
                     todayDue = todayDue
@@ -402,8 +402,7 @@ class LenderRepository(context: Context? = null) {
                     todayDueBalance = todayDueBalance,
                     todayPaidAmount = paidToday,
                     remainingBalance = remainingBalance,
-                    totalPaid = totalPaid,
-                    villageCity = borrower?.villageCity ?: ""
+                    totalPaid = totalPaid
                 )
             }
         }
@@ -472,25 +471,51 @@ class LenderRepository(context: Context? = null) {
         }
     }
 
-    suspend fun getLenderLedgerSummary(lenderId: String): Result<LenderLedgerSummary> = withContext(Dispatchers.IO) {
+    suspend fun getRepaymentsForLoan(loanId: String): Result<List<Repayment>> = withContext(Dispatchers.IO) {
+        runCatching {
+            val snapshot = FirebaseDbProvider.repaymentsRef
+                .orderByChild("loanId")
+                .equalTo(loanId.trim())
+                .get()
+                .await()
+
+            snapshot.children.mapNotNull { it.getValue(Repayment::class.java) }
+                .sortedByDescending { it.paymentDate }
+        }
+    }
+
+    suspend fun getTrackPayments(lenderId: String): Result<List<Repayment>> = withContext(Dispatchers.IO) {
+        runCatching {
+            val snapshot = FirebaseDbProvider.repaymentsRef
+                .orderByChild("lenderId")
+                .equalTo(lenderId.trim())
+                .get()
+                .await()
+
+            snapshot.children.mapNotNull { it.getValue(Repayment::class.java) }
+                .sortedByDescending { it.paymentDate }
+        }
+    }
+
+    suspend fun getLedgerSummary(lenderId: String): Result<LenderLedgerSummary> = withContext(Dispatchers.IO) {
         runCatching {
             val dues = getDailyDues(lenderId).getOrDefault(emptyList())
             val totalDisbursed = dues.sumOf { it.dailyInstallment * 30 }
             val totalRecovered = dues.sumOf { it.totalPaid }
             val totalRemaining = dues.sumOf { it.remainingBalance }
             val todayTotalDue = dues.sumOf { it.todayDueBalance }
-            val todayTotalCollected = dues.sumOf { it.todayPaidAmount }
 
             LenderLedgerSummary(
-                totalActiveBorrowers = dues.size,
+                lenderId = lenderId.trim(),
                 totalDisbursed = totalDisbursed,
-                totalRecovered = totalRecovered,
-                totalRemaining = totalRemaining,
-                todayTotalDue = todayTotalDue,
-                todayTotalCollected = todayTotalCollected
+                totalDueBalance = todayTotalDue,
+                totalPaid = totalRecovered,
+                totalRemainingBalance = totalRemaining
             )
         }
     }
+
+    suspend fun getLenderLedgerSummary(lenderId: String): Result<LenderLedgerSummary> = getLedgerSummary(lenderId)
 
     private fun calculateEndDate(startDateStr: String?, tenureDays: Int): String {
         return try {

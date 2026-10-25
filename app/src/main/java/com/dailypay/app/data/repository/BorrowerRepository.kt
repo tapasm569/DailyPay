@@ -84,7 +84,7 @@ class BorrowerRepository {
                     tenureDays = loan.tenureDays,
                     startDate = loan.startDate ?: "Not Set",
                     endDate = loan.endDate ?: "Not Set",
-                    status = loan.status,
+                    status = loan.status.name,
                     remainingBalance = remaining,
                     todayPaid = todayPaid,
                     todayDue = todayDue
@@ -123,6 +123,7 @@ class BorrowerRepository {
             val todayDue = maxOf(0.0, loans.sumOf { it.dailyInstallment } - todayPaid)
 
             BorrowerDashboardSummary(
+                borrowerId = cleanBorrowerId,
                 activeLoansCount = loans.size,
                 totalBorrowed = totalBorrowed,
                 totalPaid = totalPaid,
@@ -130,6 +131,19 @@ class BorrowerRepository {
                 todayDue = todayDue,
                 todayPaid = todayPaid
             )
+        }
+    }
+
+    suspend fun getRepaymentsForLoan(loanId: String): Result<List<Repayment>> = withContext(Dispatchers.IO) {
+        runCatching {
+            val snapshot = FirebaseDbProvider.repaymentsRef
+                .orderByChild("loanId")
+                .equalTo(loanId.trim())
+                .get()
+                .await()
+
+            snapshot.children.mapNotNull { it.getValue(Repayment::class.java) }
+                .sortedByDescending { it.paymentDate }
         }
     }
 
