@@ -24,5 +24,6 @@ data class Repayment(
 data class PendingPaymentItem(
     val repayment: Repayment = Repayment(),
     val borrowerName: String = "",
-    val borrowerMobile: String = ""
+    val borrowerMobile: String = "",
+    val borrowerProfilePic: String? = null
 )

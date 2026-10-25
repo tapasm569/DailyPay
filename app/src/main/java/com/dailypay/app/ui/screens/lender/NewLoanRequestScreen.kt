@@ -5,6 +5,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
@@ -14,6 +15,8 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -22,6 +25,7 @@ import com.dailypay.app.data.model.Borrower
 import com.dailypay.app.data.model.Loan
 import com.dailypay.app.data.model.PaymentMode
 import com.dailypay.app.data.repository.LenderRepository
+import com.dailypay.app.ui.components.AppImageView
 import com.dailypay.app.ui.theme.*
 import kotlinx.coroutines.launch
 import kotlin.math.round
@@ -132,17 +136,32 @@ fun NewLoanRequestScreen(
                                 horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Column {
-                                    Text(
-                                        text = borrower?.name ?: "Customer",
-                                        style = MaterialTheme.typography.titleMedium,
-                                        fontWeight = FontWeight.Bold
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    AppImageView(
+                                        data = borrower?.profilePicUrl,
+                                        contentDescription = borrower?.name,
+                                        modifier = Modifier
+                                            .size(46.dp)
+                                            .clip(CircleShape)
+                                            .border(1.5.dp, BrandPrimary.copy(alpha = 0.4f), CircleShape),
+                                        placeholderIcon = Icons.Default.Person,
+                                        contentScale = ContentScale.Crop
                                     )
-                                    Text(
-                                        text = "+91 ${borrower?.mobileNumber ?: ""}",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = TextSecondaryLight
-                                    )
+
+                                    Spacer(modifier = Modifier.width(12.dp))
+
+                                    Column {
+                                        Text(
+                                            text = borrower?.name ?: "Customer",
+                                            style = MaterialTheme.typography.titleMedium,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                        Text(
+                                            text = "+91 ${borrower?.mobileNumber ?: ""}",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = TextSecondaryLight
+                                        )
+                                    }
                                 }
 
                                 Surface(
@@ -250,7 +269,7 @@ fun NewLoanRequestScreen(
                             ) {
                                 Icon(Icons.Default.AccountBalanceWallet, contentDescription = null, tint = MoneyGreen, modifier = Modifier.size(18.dp))
                                 Spacer(modifier = Modifier.width(8.dp))
-                                Text("Disbursement Mode: CASH", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, color = MoneyGreen)
+                                Text("Disbursement Mode: CASH (Starts Next Day)", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, color = MoneyGreen)
                             }
                         }
 
@@ -278,7 +297,7 @@ fun NewLoanRequestScreen(
                                 ).onSuccess {
                                     isProcessing = false
                                     selectedLoanForApproval = null
-                                    Toast.makeText(context, "Loan approved & cash disbursed!", Toast.LENGTH_SHORT).show()
+                                    Toast.makeText(context, "Loan approved & cash disbursed! Daily EMI starts tomorrow.", Toast.LENGTH_SHORT).show()
                                     loadData()
                                 }.onFailure {
                                     isProcessing = false

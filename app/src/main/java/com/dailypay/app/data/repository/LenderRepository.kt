@@ -232,8 +232,7 @@ class LenderRepository(context: Context? = null) {
                     round((calculatedTotalPayable / tenure) * 100.0) / 100.0
                 }
 
-                // Daily EMI begins the following day
-                val startDate = loan.startDate?.trim()?.takeIf { it.isNotBlank() } ?: calculateNextDaySqlFormat()
+                val startDate = calculateNextDaySqlFormat()
                 val endDate = calculateEndDate(startDate, tenure)
 
                 val validLoanId = loan.id?.trim()?.takeIf { it.isNotBlank() }
@@ -291,7 +290,6 @@ class LenderRepository(context: Context? = null) {
                 val totalPayable = round((existingLoan.principalAmount + totalInterest) * 100.0) / 100.0
                 val dailyInstallment = round((totalPayable / tenure) * 100.0) / 100.0
 
-                // Loan approved today -> Daily EMI starts from NEXT day
                 val startDate = calculateNextDaySqlFormat()
                 val endDate = calculateEndDate(startDate, tenure)
 
@@ -354,6 +352,7 @@ class LenderRepository(context: Context? = null) {
                         borrowerId = loan.borrowerId,
                         borrowerName = borrower?.name ?: "Customer",
                         borrowerMobile = borrower?.mobileNumber ?: "N/A",
+                        borrowerProfilePic = borrower?.profilePicUrl,
                         principalAmount = loan.principalAmount,
                         totalPayable = loan.totalPayable,
                         dailyInstallment = loan.dailyInstallment,
@@ -405,7 +404,6 @@ class LenderRepository(context: Context? = null) {
                     val paidToday = loanRepayments.filter { it.paymentDate == todaySql }.sumOf { it.amountPaid }
                     val remainingBalance = maxOf(0.0, loan.totalPayable - totalPaid)
 
-                    // EMI is only due on or after the startDate
                     val isStarted = loan.startDate.isNullOrBlank() || loan.startDate <= todaySql
                     val todayDueBalance = if (isStarted) {
                         maxOf(0.0, minOf(loan.dailyInstallment - paidToday, remainingBalance))
@@ -418,6 +416,7 @@ class LenderRepository(context: Context? = null) {
                         borrowerId = loan.borrowerId,
                         borrowerName = borrower?.name ?: "Customer",
                         borrowerMobile = borrower?.mobileNumber ?: "",
+                        borrowerProfilePic = borrower?.profilePicUrl,
                         dailyInstallment = loan.dailyInstallment,
                         totalPayable = loan.totalPayable,
                         todayDueBalance = todayDueBalance,
@@ -469,7 +468,8 @@ class LenderRepository(context: Context? = null) {
                     PendingPaymentItem(
                         repayment = repayment,
                         borrowerName = borrower?.name ?: "Customer",
-                        borrowerMobile = borrower?.mobileNumber ?: "N/A"
+                        borrowerMobile = borrower?.mobileNumber ?: "N/A",
+                        borrowerProfilePic = borrower?.profilePicUrl
                     )
                 }
             }

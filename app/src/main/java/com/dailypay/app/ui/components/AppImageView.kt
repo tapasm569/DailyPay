@@ -5,7 +5,6 @@ import android.util.Base64
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
@@ -32,17 +31,17 @@ fun AppImageView(
     contentScale: ContentScale = ContentScale.Crop
 ) {
     val decodedBitmap = remember(data) {
-        if (!data.isNullOrBlank() && (data.startsWith("data:image") || data.length > 200)) {
+        if (!data.isNullOrBlank()) {
             try {
-                val cleanBase64 = if (data.contains(",")) data.substringAfter(",") else data
-                val bytes = Base64.decode(cleanBase64, Base64.DEFAULT)
-                BitmapFactory.decodeByteArray(bytes, 0, bytes.size)?.asImageBitmap()
+                if (data.startsWith("data:image") || data.length > 200) {
+                    val cleanBase64 = if (data.contains(",")) data.substringAfter(",") else data
+                    val bytes = Base64.decode(cleanBase64, Base64.DEFAULT)
+                    BitmapFactory.decodeByteArray(bytes, 0, bytes.size)?.asImageBitmap()
+                } else null
             } catch (_: Exception) {
                 null
             }
-        } else {
-            null
-        }
+        } else null
     }
 
     when {
@@ -102,7 +101,7 @@ fun KycDocumentViewerDialog(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .heightIn(min = 200.dp, max = 380.dp)
+                    .heightIn(min = 220.dp, max = 380.dp)
                     .clip(RoundedCornerShape(12.dp)),
                 contentAlignment = Alignment.Center
             ) {

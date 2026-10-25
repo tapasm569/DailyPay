@@ -5,18 +5,23 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.dailypay.app.data.model.Borrower
 import com.dailypay.app.data.model.Repayment
 import com.dailypay.app.data.repository.LenderRepository
+import com.dailypay.app.ui.components.AppImageView
 import com.dailypay.app.ui.theme.*
 import kotlinx.coroutines.launch
 
@@ -133,11 +138,26 @@ fun TrackPaymentsScreen(
                                 horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Column {
-                                    Text(borrower?.name ?: "Customer", style = MaterialTheme.typography.titleMedium)
-                                    Text("+91 ${borrower?.mobileNumber ?: ""}", style = MaterialTheme.typography.bodySmall, color = TextSecondaryLight)
-                                    if (!r.notes.isNullOrBlank()) {
-                                        Text(r.notes, style = MaterialTheme.typography.labelSmall, color = TextSecondaryLight)
+                                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                                    AppImageView(
+                                        data = borrower?.profilePicUrl,
+                                        contentDescription = borrower?.name,
+                                        modifier = Modifier
+                                            .size(42.dp)
+                                            .clip(CircleShape)
+                                            .border(1.2.dp, BrandPrimary.copy(alpha = 0.4f), CircleShape),
+                                        placeholderIcon = Icons.Default.Person,
+                                        contentScale = ContentScale.Crop
+                                    )
+
+                                    Spacer(modifier = Modifier.width(10.dp))
+
+                                    Column {
+                                        Text(borrower?.name ?: "Customer", style = MaterialTheme.typography.titleMedium)
+                                        Text("+91 ${borrower?.mobileNumber ?: ""}", style = MaterialTheme.typography.bodySmall, color = TextSecondaryLight)
+                                        if (!r.notes.isNullOrBlank()) {
+                                            Text(r.notes, style = MaterialTheme.typography.labelSmall, color = TextSecondaryLight)
+                                        }
                                     }
                                 }
 

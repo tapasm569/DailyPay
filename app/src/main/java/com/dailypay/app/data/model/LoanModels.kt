@@ -29,6 +29,7 @@ data class ApprovedLoanDetail(
     val borrowerId: String = "",
     val borrowerName: String = "",
     val borrowerMobile: String = "",
+    val borrowerProfilePic: String? = null,
     val principalAmount: Double = 0.0,
     val totalPayable: Double = 0.0,
     val dailyInstallment: Double = 0.0,

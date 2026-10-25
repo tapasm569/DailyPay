@@ -28,6 +28,7 @@ data class DailyDueItem(
     val borrowerId: String = "",
     val borrowerName: String = "",
     val borrowerMobile: String = "",
+    val borrowerProfilePic: String? = null,
     val dailyInstallment: Double = 0.0,
     val totalPayable: Double = 0.0,
     val todayDueBalance: Double = 0.0,
