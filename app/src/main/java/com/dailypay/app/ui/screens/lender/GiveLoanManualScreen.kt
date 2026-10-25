@@ -10,6 +10,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.AccountBalanceWallet
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -17,6 +18,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.dailypay.app.data.model.Borrower
@@ -26,7 +28,6 @@ import com.dailypay.app.data.model.PaymentMode
 import com.dailypay.app.data.repository.LenderRepository
 import com.dailypay.app.ui.theme.*
 import com.dailypay.app.util.DateUtils
-import com.dailypay.app.util.UpiIntentLauncher
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -47,7 +48,6 @@ fun GiveLoanManualScreen(
     var principalInput by remember { mutableStateOf("") }
     var selectedTenureDays by remember { mutableIntStateOf(30) }
     var monthlyRateInput by remember { mutableStateOf("10.0") }
-    var selectedDisbursementMode by remember { mutableStateOf(PaymentMode.CASH) }
     var isSubmitting by remember { mutableStateOf(false) }
     var isLoadingBorrowers by remember { mutableStateOf(true) }
 
@@ -63,7 +63,6 @@ fun GiveLoanManualScreen(
         }
     }
 
-    // Dynamic Financial Calculations
     val principal = principalInput.toDoubleOrNull() ?: 0.0
     val monthlyRate = monthlyRateInput.toDoubleOrNull() ?: 10.0
     val monthsFactor = selectedTenureDays / 30.0
@@ -74,7 +73,7 @@ fun GiveLoanManualScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Give Loan Manually") },
+                title = { Text("Give Cash Loan Manually") },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
@@ -98,7 +97,6 @@ fun GiveLoanManualScreen(
                     .padding(20.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                // Borrower Selection Dropdown
                 Text(text = "Select Borrower", style = MaterialTheme.typography.titleMedium)
                 Box(modifier = Modifier.fillMaxWidth()) {
                     OutlinedCard(
@@ -140,18 +138,16 @@ fun GiveLoanManualScreen(
                     }
                 }
 
-                // Loan Principal Amount
                 OutlinedTextField(
                     value = principalInput,
                     onValueChange = { principalInput = it.filter { ch -> ch.isDigit() || ch == '.' } },
-                    label = { Text("Principal Capital Amount (₹)") },
+                    label = { Text("Principal Cash Amount (₹)") },
                     placeholder = { Text("e.g. 10000") },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(12.dp)
                 )
 
-                // Tenure Selection (30, 60, 90 Days)
                 Text(text = "Repayment Tenure", style = MaterialTheme.typography.titleMedium)
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -168,7 +164,6 @@ fun GiveLoanManualScreen(
                     }
                 }
 
-                // Monthly Interest Rate Input
                 OutlinedTextField(
                     value = monthlyRateInput,
                     onValueChange = { monthlyRateInput = it.filter { ch -> ch.isDigit() || ch == '.' } },
@@ -178,7 +173,6 @@ fun GiveLoanManualScreen(
                     shape = RoundedCornerShape(12.dp)
                 )
 
-                // Live Calculation Preview Card
                 Card(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -197,30 +191,34 @@ fun GiveLoanManualScreen(
                         }
                         HorizontalDivider()
                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                            Text("Daily Installment Due:", style = MaterialTheme.typography.titleMedium)
+                            Text("Daily Cash Installment:", style = MaterialTheme.typography.titleMedium)
                             Text("₹${String.format("%.2f", dailyDue)} / day", style = MaterialTheme.typography.titleMedium, color = AlertOrange)
                         }
                     }
                 }
 
-                // Disbursement Mode
-                Text(text = "Disbursement Channel", style = MaterialTheme.typography.titleMedium)
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    FilterChip(
-                        selected = selectedDisbursementMode == PaymentMode.CASH,
-                        onClick = { selectedDisbursementMode = PaymentMode.CASH },
-                        label = { Text("Cash Settlement") }
-                    )
-                    FilterChip(
-                        selected = selectedDisbursementMode == PaymentMode.UPI,
-                        onClick = { selectedDisbursementMode = PaymentMode.UPI },
-                        label = { Text("Direct UPI App") }
-                    )
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = MoneyGreen.copy(alpha = 0.1f),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier.padding(14.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(Icons.Default.AccountBalanceWallet, contentDescription = null, tint = MoneyGreen)
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Text(
+                            text = "Disbursement Channel: Cash Handover Only",
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MoneyGreen
+                        )
+                    }
                 }
 
                 Spacer(modifier = Modifier.height(10.dp))
 
-                // Submit Button
                 Button(
                     onClick = {
                         val borrower = selectedBorrower
@@ -233,16 +231,6 @@ fun GiveLoanManualScreen(
                             return@Button
                         }
 
-                        if (selectedDisbursementMode == PaymentMode.UPI) {
-                            UpiIntentLauncher.initiateUpiPayment(
-                                context = context,
-                                payeeUpiId = "borrower@upi",
-                                payeeName = borrower.name,
-                                amount = principal,
-                                transactionNote = "Loan-Disbursement-${borrower.name}"
-                            )
-                        }
-
                         isSubmitting = true
                         scope.launch {
                             val newLoan = Loan(
@@ -251,7 +239,7 @@ fun GiveLoanManualScreen(
                                 principalAmount = principal,
                                 tenureDays = selectedTenureDays,
                                 monthlyInterestRate = monthlyRate,
-                                disbursementMode = selectedDisbursementMode,
+                                disbursementMode = PaymentMode.CASH,
                                 status = LoanStatus.ACTIVE,
                                 startDate = DateUtils.getTodaySqlFormat()
                             )
@@ -259,7 +247,7 @@ fun GiveLoanManualScreen(
                             lenderRepo.giveLoanManually(newLoan)
                                 .onSuccess {
                                     isSubmitting = false
-                                    Toast.makeText(context, "Loan successfully created and active!", Toast.LENGTH_LONG).show()
+                                    Toast.makeText(context, "Cash loan created and activated!", Toast.LENGTH_LONG).show()
                                     onNavigateBack()
                                 }
                                 .onFailure {
@@ -276,7 +264,7 @@ fun GiveLoanManualScreen(
                     if (isSubmitting) {
                         CircularProgressIndicator(color = Color.White, modifier = Modifier.size(24.dp))
                     } else {
-                        Text("Disburse & Activate Loan", style = MaterialTheme.typography.titleMedium)
+                        Text("Disburse Cash & Activate Loan", style = MaterialTheme.typography.titleMedium)
                     }
                 }
             }

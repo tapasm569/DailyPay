@@ -17,7 +17,6 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -69,8 +68,7 @@ fun ManageLenderScreen(
         lender.name.contains(searchQuery, ignoreCase = true) ||
                 (lender.businessName ?: "").contains(searchQuery, ignoreCase = true) ||
                 (lender.ownerName ?: "").contains(searchQuery, ignoreCase = true) ||
-                lender.mobileNumber.contains(searchQuery) ||
-                (lender.upiId ?: "").contains(searchQuery, ignoreCase = true)
+                lender.mobileNumber.contains(searchQuery)
     }
 
     Scaffold(
@@ -120,7 +118,7 @@ fun ManageLenderScreen(
                 OutlinedTextField(
                     value = searchQuery,
                     onValueChange = { searchQuery = it },
-                    placeholder = { Text("Search name, business, mobile, UPI...") },
+                    placeholder = { Text("Search name, business, or mobile...") },
                     leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
                     trailingIcon = {
                         if (searchQuery.isNotEmpty()) {
@@ -206,30 +204,12 @@ fun ManageLenderScreen(
                                         }
                                     }
 
-                                    if (!lender.upiId.isNullOrBlank()) {
-                                        Spacer(modifier = Modifier.height(6.dp))
-                                        Row(verticalAlignment = Alignment.CenterVertically) {
-                                            Icon(
-                                                Icons.Default.AccountBalance,
-                                                contentDescription = null,
-                                                tint = TextSecondaryLight,
-                                                modifier = Modifier.size(14.dp)
-                                            )
-                                            Spacer(modifier = Modifier.width(4.dp))
-                                            Text(
-                                                text = "UPI: ${lender.upiId}",
-                                                style = MaterialTheme.typography.bodySmall,
-                                                color = TextSecondaryLight
-                                            )
-                                        }
-                                    }
-
                                     val locationParts = listOfNotNull(
                                         lender.villageTown?.ifBlank { null },
                                         lender.dist?.ifBlank { null }
                                     )
                                     if (locationParts.isNotEmpty()) {
-                                        Spacer(modifier = Modifier.height(4.dp))
+                                        Spacer(modifier = Modifier.height(6.dp))
                                         Row(verticalAlignment = Alignment.CenterVertically) {
                                             Icon(
                                                 Icons.Default.LocationOn,
@@ -292,7 +272,6 @@ fun ManageLenderScreen(
             var editOwnerName by remember { mutableStateOf(lender.ownerName ?: "") }
             var editBusinessName by remember { mutableStateOf(lender.businessName ?: "") }
             var editMobile by remember { mutableStateOf(lender.mobileNumber) }
-            var editUpiId by remember { mutableStateOf(lender.upiId ?: "") }
             var editVillage by remember { mutableStateOf(lender.villageTown ?: "") }
             var editPostOffice by remember { mutableStateOf(lender.postOffice ?: "") }
             var editDist by remember { mutableStateOf(lender.dist ?: "") }
@@ -333,12 +312,6 @@ fun ManageLenderScreen(
                             onValueChange = { editMobile = it.filter { ch -> ch.isDigit() }.take(10) },
                             label = { Text("Mobile Number (10 digits) *") },
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                        OutlinedTextField(
-                            value = editUpiId,
-                            onValueChange = { editUpiId = it },
-                            label = { Text("UPI ID (e.g. name@upi)") },
                             modifier = Modifier.fillMaxWidth()
                         )
                         OutlinedTextField(
@@ -410,7 +383,7 @@ fun ManageLenderScreen(
                                 ownerName = editOwnerName.trim().ifBlank { null },
                                 businessName = editBusinessName.trim().ifBlank { null },
                                 mobileNumber = editMobile.trim(),
-                                upiId = editUpiId.trim().ifBlank { null },
+                                upiId = null,
                                 villageTown = editVillage.trim().ifBlank { null },
                                 postOffice = editPostOffice.trim().ifBlank { null },
                                 dist = editDist.trim().ifBlank { null },
@@ -496,4 +469,3 @@ fun ManageLenderScreen(
         }
     }
 }
-                           

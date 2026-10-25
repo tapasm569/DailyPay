@@ -41,7 +41,6 @@ fun NewLoanRequestScreen(
     var borrowersMap by remember { mutableStateOf<Map<String, Borrower>>(emptyMap()) }
     var isLoading by remember { mutableStateOf(true) }
 
-    // Modal states
     var selectedLoanForApproval by remember { mutableStateOf<Loan?>(null) }
     var selectedLoanForRejection by remember { mutableStateOf<Loan?>(null) }
     var isProcessing by remember { mutableStateOf(false) }
@@ -187,7 +186,6 @@ fun NewLoanRequestScreen(
 
                             Spacer(modifier = Modifier.height(14.dp))
 
-                            // Verify (Approve) & Reject Actions
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.spacedBy(10.dp)
@@ -220,18 +218,17 @@ fun NewLoanRequestScreen(
             }
         }
 
-        // ================= APPROVE (VERIFY) LOAN MODAL =================
+        // ================= APPROVE & DISBURSE CASH MODAL =================
         selectedLoanForApproval?.let { loan ->
             var interestRateText by remember { mutableStateOf("10.0") }
-            var selectedMode by remember { mutableStateOf(PaymentMode.UPI) }
-            var refText by remember { mutableStateOf("") }
+            var cashNoteText by remember { mutableStateOf("") }
 
             AlertDialog(
                 onDismissRequest = { if (!isProcessing) selectedLoanForApproval = null },
-                title = { Text("Verify & Approve Loan") },
+                title = { Text("Approve & Disburse Cash") },
                 text = {
                     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                        Text("Requested Principal: ₹${loan.principalAmount}", fontWeight = FontWeight.Bold)
+                        Text("Principal to Handover: ₹${loan.principalAmount}", fontWeight = FontWeight.Bold)
                         Text("Tenure: ${loan.tenureDays} Days")
 
                         OutlinedTextField(
@@ -242,29 +239,26 @@ fun NewLoanRequestScreen(
                             modifier = Modifier.fillMaxWidth()
                         )
 
-                        Text("Disbursement Mode:", style = MaterialTheme.typography.labelMedium)
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = MoneyGreen.copy(alpha = 0.1f),
+                            modifier = Modifier.fillMaxWidth()
                         ) {
-                            FilterChip(
-                                selected = selectedMode == PaymentMode.UPI,
-                                onClick = { selectedMode = PaymentMode.UPI },
-                                label = { Text("UPI Transfer") },
-                                modifier = Modifier.weight(1f)
-                            )
-                            FilterChip(
-                                selected = selectedMode == PaymentMode.CASH,
-                                onClick = { selectedMode = PaymentMode.CASH },
-                                label = { Text("Cash") },
-                                modifier = Modifier.weight(1f)
-                            )
+                            Row(
+                                modifier = Modifier.padding(10.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(Icons.Default.AccountBalanceWallet, contentDescription = null, tint = MoneyGreen, modifier = Modifier.size(18.dp))
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("Disbursement Mode: CASH", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, color = MoneyGreen)
+                            }
                         }
 
                         OutlinedTextField(
-                            value = refText,
-                            onValueChange = { refText = it },
-                            label = { Text("UTR / Transaction Ref ID *") },
+                            value = cashNoteText,
+                            onValueChange = { cashNoteText = it },
+                            label = { Text("Cash Handover Note (Optional)") },
+                            placeholder = { Text("e.g. Disbursed cash at office") },
                             modifier = Modifier.fillMaxWidth()
                         )
                     }
@@ -273,22 +267,18 @@ fun NewLoanRequestScreen(
                     Button(
                         onClick = {
                             val rate = interestRateText.toDoubleOrNull() ?: 0.0
-                            if (refText.isBlank()) {
-                                Toast.makeText(context, "Enter disbursement reference or UTR ID.", Toast.LENGTH_SHORT).show()
-                                return@Button
-                            }
 
                             isProcessing = true
                             scope.launch {
                                 lenderRepo.approveAndDisburseLoan(
                                     loanId = loan.id ?: "",
                                     interestRate = rate,
-                                    disbursementMode = selectedMode,
-                                    disbursementRef = refText
+                                    disbursementMode = PaymentMode.CASH,
+                                    disbursementRef = cashNoteText.trim().ifBlank { "CASH_DISBURSED" }
                                 ).onSuccess {
                                     isProcessing = false
                                     selectedLoanForApproval = null
-                                    Toast.makeText(context, "Loan verified and approved!", Toast.LENGTH_SHORT).show()
+                                    Toast.makeText(context, "Loan approved & cash disbursed!", Toast.LENGTH_SHORT).show()
                                     loadData()
                                 }.onFailure {
                                     isProcessing = false
@@ -299,7 +289,7 @@ fun NewLoanRequestScreen(
                         enabled = !isProcessing,
                         colors = ButtonDefaults.buttonColors(containerColor = MoneyGreen)
                     ) {
-                        Text(if (isProcessing) "Disbursing..." else "Confirm & Disburse")
+                        Text(if (isProcessing) "Disbursing..." else "Confirm Cash Disbursement")
                     }
                 },
                 dismissButton = {

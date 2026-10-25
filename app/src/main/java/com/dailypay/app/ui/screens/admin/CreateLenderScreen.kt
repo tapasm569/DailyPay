@@ -8,7 +8,6 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -34,7 +33,6 @@ fun CreateLenderScreen(
     var name by remember { mutableStateOf("") }
     var mobileNumber by remember { mutableStateOf("") }
     var businessName by remember { mutableStateOf("") }
-    var upiId by remember { mutableStateOf("") }
     var address by remember { mutableStateOf("") }
     var villageTown by remember { mutableStateOf("") }
     var postOffice by remember { mutableStateOf("") }
@@ -90,15 +88,6 @@ fun CreateLenderScreen(
             )
 
             OutlinedTextField(
-                value = upiId,
-                onValueChange = { upiId = it },
-                label = { Text("UPI ID *") },
-                placeholder = { Text("e.g. business@okaxis") },
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp)
-            )
-
-            OutlinedTextField(
                 value = address,
                 onValueChange = { address = it },
                 label = { Text("Address") },
@@ -144,7 +133,7 @@ fun CreateLenderScreen(
 
             Button(
                 onClick = {
-                    if (name.isBlank() || mobileNumber.length != 10 || businessName.isBlank() || upiId.isBlank() || password.isBlank()) {
+                    if (name.isBlank() || mobileNumber.length != 10 || businessName.isBlank() || password.isBlank()) {
                         Toast.makeText(context, "Please fill in all required (*) fields properly.", Toast.LENGTH_SHORT).show()
                         return@Button
                     }
@@ -155,7 +144,7 @@ fun CreateLenderScreen(
                             name = name.trim(),
                             mobileNumber = mobileNumber.trim(),
                             businessName = businessName.trim(),
-                            upiId = upiId.trim(),
+                            upiId = null,
                             address = address.trim(),
                             villageTown = villageTown.trim(),
                             postOffice = postOffice.trim(),
@@ -166,7 +155,7 @@ fun CreateLenderScreen(
                         adminRepo.createLender(newLender)
                             .onSuccess {
                                 isLoading = false
-                                Toast.makeText(context, "Lender Profile Created with 30-day Free Trial!", Toast.LENGTH_LONG).show()
+                                Toast.makeText(context, "Lender Profile Created!", Toast.LENGTH_LONG).show()
                                 onNavigateBack()
                             }
                             .onFailure {

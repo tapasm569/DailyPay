@@ -15,7 +15,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.dailypay.app.data.model.Borrower
-import com.dailypay.app.data.model.PaymentMode
 import com.dailypay.app.data.model.Repayment
 import com.dailypay.app.data.repository.LenderRepository
 import com.dailypay.app.ui.theme.*
@@ -57,7 +56,6 @@ fun TrackPaymentsScreen(
         loadData()
     }
 
-    // Group verified payments day-wise (date string)
     val dayWiseMap = remember(allPayments) {
         allPayments.groupBy { it.paymentDate ?: "Undated" }
     }
@@ -69,8 +67,8 @@ fun TrackPaymentsScreen(
             TopAppBar(
                 title = {
                     Column {
-                        Text("Track Payments")
-                        Text("Total Collected: ₹$lifetimeTotal", style = MaterialTheme.typography.bodySmall, color = MoneyGreen)
+                        Text("Track Cash Payments")
+                        Text("Total Cash Collected: ₹$lifetimeTotal", style = MaterialTheme.typography.bodySmall, color = MoneyGreen)
                     }
                 },
                 navigationIcon = {
@@ -89,7 +87,7 @@ fun TrackPaymentsScreen(
             }
         } else if (allPayments.isEmpty()) {
             Box(modifier = Modifier.fillMaxSize().padding(paddingValues), contentAlignment = Alignment.Center) {
-                Text("No verified payment records found.", style = MaterialTheme.typography.bodyLarge, color = TextSecondaryLight)
+                Text("No verified cash payment records found.", style = MaterialTheme.typography.bodyLarge, color = TextSecondaryLight)
             }
         } else {
             LazyColumn(
@@ -101,8 +99,6 @@ fun TrackPaymentsScreen(
             ) {
                 dayWiseMap.forEach { (date, paymentsList) ->
                     val dayTotal = paymentsList.sumOf { it.amountPaid }
-                    val cashTotal = paymentsList.filter { it.paymentMode == PaymentMode.CASH }.sumOf { it.amountPaid }
-                    val upiTotal = paymentsList.filter { it.paymentMode == PaymentMode.UPI }.sumOf { it.amountPaid }
 
                     item {
                         Card(
@@ -117,7 +113,7 @@ fun TrackPaymentsScreen(
                             ) {
                                 Column {
                                     Text(date, style = MaterialTheme.typography.titleMedium, color = BrandPrimary)
-                                    Text("Cash: ₹$cashTotal | UPI: ₹$upiTotal", style = MaterialTheme.typography.bodySmall, color = TextSecondaryLight)
+                                    Text("Cash Collected (${paymentsList.size} entries)", style = MaterialTheme.typography.bodySmall, color = TextSecondaryLight)
                                 }
                                 Text("₹$dayTotal", style = MaterialTheme.typography.titleLarge, color = MoneyGreen)
                             }
@@ -140,8 +136,8 @@ fun TrackPaymentsScreen(
                                 Column {
                                     Text(borrower?.name ?: "Customer", style = MaterialTheme.typography.titleMedium)
                                     Text("+91 ${borrower?.mobileNumber ?: ""}", style = MaterialTheme.typography.bodySmall, color = TextSecondaryLight)
-                                    if (!r.utrReference.isNullOrBlank()) {
-                                        Text("Ref: ${r.utrReference}", style = MaterialTheme.typography.labelSmall, color = BrandPrimary)
+                                    if (!r.notes.isNullOrBlank()) {
+                                        Text(r.notes, style = MaterialTheme.typography.labelSmall, color = TextSecondaryLight)
                                     }
                                 }
 
@@ -149,7 +145,7 @@ fun TrackPaymentsScreen(
                                     Text("₹${r.amountPaid}", style = MaterialTheme.typography.titleMedium, color = MoneyGreen)
                                     SuggestionChip(
                                         onClick = {},
-                                        label = { Text(r.paymentMode.name) }
+                                        label = { Text("CASH") }
                                     )
                                 }
                             }

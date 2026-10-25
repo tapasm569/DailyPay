@@ -21,6 +21,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.AccountBalanceWallet
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Event
 import androidx.compose.material.icons.filled.Payment
@@ -32,7 +33,6 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -93,7 +93,6 @@ fun TodaysDueScreen(
 
     var selectedDueItem by remember { mutableStateOf<DailyDueItem?>(null) }
     var collectAmount by remember { mutableStateOf("") }
-    var selectedPaymentMode by remember { mutableStateOf(PaymentMode.CASH) }
     var isSubmittingPayment by remember { mutableStateOf(false) }
 
     val currentDateText = remember { DateUtils.getTodayDisplayFormat() }
@@ -303,7 +302,7 @@ fun TodaysDueScreen(
                                     IconButton(
                                         onClick = {
                                             try {
-                                                val whatsAppMessage = "Hello $borrowerName, your daily due of ₹$formattedTodayDue for $currentDateText is pending."
+                                                val whatsAppMessage = "Hello $borrowerName, your daily cash due of ₹$formattedTodayDue for $currentDateText is pending."
                                                 CommunicationUtils.openWhatsAppChat(
                                                     context = context,
                                                     rawMobileNumber = item.borrowerMobile,
@@ -390,7 +389,6 @@ fun TodaysDueScreen(
                                     onClick = {
                                         selectedDueItem = item
                                         collectAmount = String.format(Locale.US, "%.2f", item.todayDueBalance)
-                                        selectedPaymentMode = PaymentMode.CASH
                                     },
                                     enabled = !isSubmittingPayment,
                                     shape = RoundedCornerShape(10.dp),
@@ -408,7 +406,7 @@ fun TodaysDueScreen(
             }
         }
 
-        // ================= COLLECT DUE DIALOG =================
+        // ================= COLLECT CASH DUE DIALOG =================
         selectedDueItem?.let { dueItem ->
             val borrowerDisplayName = if (dueItem.borrowerName.isNotBlank()) dueItem.borrowerName.trim() else "Borrower"
             val dueDailyText = String.format(Locale.US, "%.2f", dueItem.dailyInstallment)
@@ -418,7 +416,7 @@ fun TodaysDueScreen(
 
             AlertDialog(
                 onDismissRequest = { if (!isSubmittingPayment) selectedDueItem = null },
-                title = { Text("Collect Due - $borrowerDisplayName") },
+                title = { Text("Collect Cash - $borrowerDisplayName") },
                 text = {
                     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                         Text(
@@ -434,7 +432,7 @@ fun TodaysDueScreen(
                                     collectAmount = input
                                 }
                             },
-                            label = { Text("Amount Received (₹) *") },
+                            label = { Text("Cash Amount Received (₹) *") },
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                             modifier = Modifier.fillMaxWidth(),
                             shape = RoundedCornerShape(12.dp),
@@ -442,17 +440,19 @@ fun TodaysDueScreen(
                             enabled = !isSubmittingPayment
                         )
 
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            FilterChip(
-                                selected = selectedPaymentMode == PaymentMode.CASH,
-                                onClick = { if (!isSubmittingPayment) selectedPaymentMode = PaymentMode.CASH },
-                                label = { Text("Cash") }
-                            )
-                            FilterChip(
-                                selected = selectedPaymentMode == PaymentMode.UPI,
-                                onClick = { if (!isSubmittingPayment) selectedPaymentMode = PaymentMode.UPI },
-                                label = { Text("UPI Received") }
-                            )
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = MoneyGreen.copy(alpha = 0.1f),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(10.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(Icons.Default.AccountBalanceWallet, contentDescription = null, tint = MoneyGreen, modifier = Modifier.size(18.dp))
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("Payment Mode: CASH", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, color = MoneyGreen)
+                            }
                         }
                     }
                 },
@@ -473,15 +473,15 @@ fun TodaysDueScreen(
                                     lenderId = cleanLenderId,
                                     paymentDate = DateUtils.getTodaySqlFormat(),
                                     amountPaid = parsedAmount,
-                                    paymentMode = selectedPaymentMode,
-                                    notes = "Daily installment collected on $currentDateText (${selectedPaymentMode.name})"
+                                    paymentMode = PaymentMode.CASH,
+                                    notes = "Daily cash installment collected on $currentDateText"
                                 )
 
                                 lenderRepo.recordRepayment(repayment)
                                     .onSuccess {
                                         isSubmittingPayment = false
                                         selectedDueItem = null
-                                        Toast.makeText(context, "Payment recorded successfully!", Toast.LENGTH_SHORT).show()
+                                        Toast.makeText(context, "Cash payment recorded successfully!", Toast.LENGTH_SHORT).show()
                                         loadData()
                                     }
                                     .onFailure { error ->
@@ -502,7 +502,7 @@ fun TodaysDueScreen(
                             Spacer(modifier = Modifier.width(8.dp))
                             Text("Saving...")
                         } else {
-                            Text("Confirm Collection")
+                            Text("Confirm Cash Collection")
                         }
                     }
                 },

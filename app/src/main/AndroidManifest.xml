@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
-    <!-- Network permissions for Supabase APIs -->
+    <!-- Network permissions for Firebase APIs -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
@@ -13,18 +13,6 @@
 
     <!-- Package visibility declarations for Android 11+ (API 30+) -->
     <queries>
-        <!-- Native UPI application packages for direct intent resolution -->
-        <package android:name="com.google.android.apps.nbu.paisa.user" />
-        <package android:name="com.phonepe.app" />
-        <package android:name="net.one97.paytm" />
-        <package android:name="in.org.npci.upiapp" />
-
-        <!-- Generic UPI scheme intent handler -->
-        <intent>
-            <action android:name="android.intent.action.VIEW" />
-            <data android:scheme="upi" />
-        </intent>
-
         <!-- Phone Dialer -->
         <intent>
             <action android:name="android.intent.action.DIAL" />
@@ -51,7 +39,6 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.DailyPay">
 
-        <!-- Launch Activity configured with the cold-start Splash Theme -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
@@ -63,7 +50,6 @@
             </intent-filter>
         </activity>
 
-        <!-- FileProvider configured to match PdfExporter.kt authority -->
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.fileprovider"
@@ -74,7 +60,6 @@
                 android:resource="@xml/file_paths" />
         </provider>
 
-        <!-- Service for backward-compatible in-app language persistence (AndroidX AppLocales) -->
         <service
             android:name="androidx.appcompat.app.AppLocalesMetadataHolderService"
             android:enabled="true"
