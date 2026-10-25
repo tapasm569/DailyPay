@@ -2,8 +2,10 @@ package com.dailypay.app.data.repository
 
 import com.dailypay.app.data.model.Borrower
 import com.dailypay.app.data.model.Lender
-import com.dailypay.app.data.remote.SupabaseClientProvider
-import io.github.jan.supabase.postgrest.from
+import com.dailypay.app.data.remote.FirebaseDbProvider
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.tasks.await
+import kotlinx.coroutines.withContext
 
 sealed class LoginResult {
     object Admin : LoginResult()
@@ -13,66 +15,70 @@ sealed class LoginResult {
 
 class AuthRepository {
 
-    private val db = SupabaseClientProvider.db
+    suspend fun unifiedLogin(mobile: String, pass: String): Result<LoginResult> = withContext(Dispatchers.IO) {
+        runCatching {
+            val cleanMobile = mobile.trim()
+            val cleanPass = pass.trim()
 
-    /**
-     * Unified login: Automatically identifies whether the mobile/password belongs to
-     * an Admin, a Lender, or a Borrower/Customer.
-     */
-    suspend fun unifiedLogin(mobile: String, pass: String): Result<LoginResult> = runCatching {
-        val cleanMobile = mobile.trim()
-        val cleanPass = pass.trim()
+            // 1. Check Super-Admin credentials
+            if (cleanMobile == "9932655607" && cleanPass == "India360@") {
+                return@runCatching LoginResult.Admin
+            }
 
-        // 1. Check Super-Admin credentials
-        if (cleanMobile == "9932655607" && cleanPass == "India360@") {
-            return@runCatching LoginResult.Admin
-        }
+            // Check Admin node
+            val adminSnapshot = FirebaseDbProvider.db.child("admins")
+                .orderByChild("mobileNumber")
+                .equalTo(cleanMobile)
+                .get()
+                .await()
 
-        // Check Admin table (if configured in Supabase)
-        val adminRecord = runCatching {
-            db.from("admins")
-                .select {
-                    filter {
-                        eq("mobile_number", cleanMobile)
-                        eq("password_hash", cleanPass)
+            for (child in adminSnapshot.children) {
+                val passHash = child.child("passwordHash").getValue(String::class.java)
+                    ?: child.child("password_hash").getValue(String::class.java)
+                if (passHash == cleanPass) {
+                    return@runCatching LoginResult.Admin
+                }
+            }
+
+            // 2. Check Lender node
+            val lenderSnapshot = FirebaseDbProvider.lendersRef
+                .orderByChild("mobileNumber")
+                .equalTo(cleanMobile)
+                .get()
+                .await()
+
+            for (child in lenderSnapshot.children) {
+                val lender = child.getValue(Lender::class.java)
+                val passHash = lender?.passwordHash?.ifBlank { null }
+                    ?: child.child("password_hash").getValue(String::class.java)
+                if (passHash == cleanPass) {
+                    val id = lender?.id?.takeIf { it.isNotBlank() } ?: child.key.orEmpty()
+                    if (id.isNotBlank()) {
+                        return@runCatching LoginResult.LenderUser(id)
                     }
-                }.decodeSingleOrNull<Map<String, String>>()
-        }.getOrNull()
+                }
+            }
 
-        if (adminRecord != null) {
-            return@runCatching LoginResult.Admin
-        }
+            // 3. Check Borrower node
+            val borrowerSnapshot = FirebaseDbProvider.borrowersRef
+                .orderByChild("mobileNumber")
+                .equalTo(cleanMobile)
+                .get()
+                .await()
 
-        // 2. Check Lender table
-        val lender = runCatching {
-            db.from("lenders")
-                .select {
-                    filter {
-                        eq("mobile_number", cleanMobile)
-                        eq("password_hash", cleanPass)
+            for (child in borrowerSnapshot.children) {
+                val borrower = child.getValue(Borrower::class.java)
+                val passHash = borrower?.passwordHash?.ifBlank { null }
+                    ?: child.child("password_hash").getValue(String::class.java)
+                if (passHash == cleanPass) {
+                    val id = borrower?.id?.takeIf { it.isNotBlank() } ?: child.key.orEmpty()
+                    if (id.isNotBlank()) {
+                        return@runCatching LoginResult.BorrowerUser(id)
                     }
-                }.decodeSingleOrNull<Lender>()
-        }.getOrNull()
+                }
+            }
 
-        if (lender != null && lender.id != null) {
-            return@runCatching LoginResult.LenderUser(lender.id)
+            throw Exception("Invalid credentials. No account found for this mobile and password.")
         }
-
-        // 3. Check Borrower table
-        val borrower = runCatching {
-            db.from("borrowers")
-                .select {
-                    filter {
-                        eq("mobile_number", cleanMobile)
-                        eq("password_hash", cleanPass)
-                    }
-                }.decodeSingleOrNull<Borrower>()
-        }.getOrNull()
-
-        if (borrower != null && borrower.id != null) {
-            return@runCatching LoginResult.BorrowerUser(borrower.id)
-        }
-
-        throw Exception("Invalid credentials. No account found for this mobile and password.")
     }
 }

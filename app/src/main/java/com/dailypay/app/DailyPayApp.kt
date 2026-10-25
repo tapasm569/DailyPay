@@ -2,7 +2,7 @@ package com.dailypay.app
 
 import android.app.Application
 import android.content.Context
-import com.dailypay.app.data.remote.SupabaseClientProvider
+import com.google.firebase.FirebaseApp
 
 class DailyPayApp : Application() {
 
@@ -14,8 +14,6 @@ class DailyPayApp : Application() {
     override fun onCreate() {
         super.onCreate()
         appContext = applicationContext
-
-        // Eagerly initialize the Supabase client on startup
-        SupabaseClientProvider.client
+        FirebaseApp.initializeApp(this)
     }
 }

@@ -2,72 +2,78 @@ package com.dailypay.app.data.repository
 
 import com.dailypay.app.data.model.Lender
 import com.dailypay.app.data.model.Subscription
-import com.dailypay.app.data.remote.SupabaseClientProvider
-import io.github.jan.supabase.postgrest.from
-import io.github.jan.supabase.postgrest.query.Order
-import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.put
+import com.dailypay.app.data.remote.FirebaseDbProvider
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.tasks.await
+import kotlinx.coroutines.withContext
+import java.util.UUID
 
 class AdminRepository {
 
-    private val db = SupabaseClientProvider.db
-
-    suspend fun getAllLenders(): Result<List<Lender>> = runCatching {
-        db.from("lenders")
-            .select {
-                order("created_at", Order.DESCENDING)
-            }
-            .decodeList<Lender>()
-    }
-
-    suspend fun createLender(lender: Lender): Result<Unit> = runCatching {
-        db.from("lenders").insert(lender)
-    }
-
-    suspend fun updateLender(lender: Lender): Result<Unit> = runCatching {
-        val lenderId = lender.id ?: throw IllegalArgumentException("Lender ID cannot be null")
-        db.from("lenders").update(
-            buildJsonObject {
-                put("name", lender.name.trim())
-                lender.ownerName?.let { put("owner_name", it.trim()) }
-                lender.businessName?.let { put("business_name", it.trim()) }
-                put("mobile_number", lender.mobileNumber.trim())
-                lender.upiId?.let { put("upi_id", it.trim()) }
-                lender.villageTown?.let { put("village_town", it.trim()) }
-                lender.postOffice?.let { put("post_office", it.trim()) }
-                lender.dist?.let { put("dist", it.trim()) }
-                lender.address?.let { put("address", it.trim()) }
-                put("status", lender.status.uppercase())
-                if (!lender.passwordHash.isNullOrBlank()) {
-                    put("password_hash", lender.passwordHash)
-                }
-            }
-        ) {
-            filter { eq("id", lenderId) }
+    suspend fun getAllLenders(): Result<List<Lender>> = withContext(Dispatchers.IO) {
+        runCatching {
+            val snapshot = FirebaseDbProvider.lendersRef.get().await()
+            snapshot.children.mapNotNull { it.getValue(Lender::class.java) }
         }
     }
 
-    suspend fun updateLenderStatus(lenderId: String, status: String): Result<Unit> = runCatching {
-        db.from("lenders").update(
-            buildJsonObject {
-                put("status", status.uppercase())
-            }
-        ) {
-            filter { eq("id", lenderId) }
+    suspend fun createLender(lender: Lender): Result<Unit> = withContext(Dispatchers.IO) {
+        runCatching {
+            val key = lender.id?.takeIf { it.isNotBlank() }
+                ?: FirebaseDbProvider.lendersRef.push().key
+                ?: UUID.randomUUID().toString()
+            val finalLender = lender.copy(id = key)
+            FirebaseDbProvider.lendersRef.child(key).setValue(finalLender).await()
+            Unit
         }
     }
 
-    suspend fun deleteLender(lenderId: String): Result<Unit> = runCatching {
-        db.from("lenders").delete {
-            filter { eq("id", lenderId) }
+    suspend fun updateLender(lender: Lender): Result<Unit> = withContext(Dispatchers.IO) {
+        runCatching {
+            val lenderId = lender.id?.takeIf { it.isNotBlank() }
+                ?: throw IllegalArgumentException("Lender ID cannot be null")
+
+            val updates = mutableMapOf<String, Any?>()
+            updates["name"] = lender.name.trim()
+            lender.ownerName?.let { updates["ownerName"] = it.trim() }
+            lender.businessName?.let { updates["businessName"] = it.trim() }
+            updates["mobileNumber"] = lender.mobileNumber.trim()
+            lender.villageTown?.let { updates["villageTown"] = it.trim() }
+            lender.postOffice?.let { updates["postOffice"] = it.trim() }
+            lender.dist?.let { updates["dist"] = it.trim() }
+            lender.address?.let { updates["address"] = it.trim() }
+            updates["status"] = lender.status.uppercase()
+            if (!lender.passwordHash.isNullOrBlank()) {
+                updates["passwordHash"] = lender.passwordHash
+            }
+
+            FirebaseDbProvider.lendersRef.child(lenderId).updateChildren(updates).await()
+            Unit
         }
     }
 
-    suspend fun getAllSubscriptions(): Result<List<Subscription>> = runCatching {
-        db.from("subscriptions")
-            .select {
-                order("created_at", Order.DESCENDING)
-            }
-            .decodeList<Subscription>()
+    suspend fun updateLenderStatus(lenderId: String, status: String): Result<Unit> = withContext(Dispatchers.IO) {
+        runCatching {
+            FirebaseDbProvider.lendersRef
+                .child(lenderId.trim())
+                .child("status")
+                .setValue(status.uppercase())
+                .await()
+            Unit
+        }
+    }
+
+    suspend fun deleteLender(lenderId: String): Result<Unit> = withContext(Dispatchers.IO) {
+        runCatching {
+            FirebaseDbProvider.lendersRef.child(lenderId.trim()).removeValue().await()
+            Unit
+        }
+    }
+
+    suspend fun getAllSubscriptions(): Result<List<Subscription>> = withContext(Dispatchers.IO) {
+        runCatching {
+            val snapshot = FirebaseDbProvider.db.child("subscriptions").get().await()
+            snapshot.children.mapNotNull { it.getValue(Subscription::class.java) }
+        }
     }
 }
