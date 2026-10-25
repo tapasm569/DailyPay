@@ -18,8 +18,8 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.AccountBalanceWallet
 import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -34,7 +34,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SuggestionChip
-import androidx.compose.material3.Surface
+import androidx.compose.material3.SuggestionChipDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -48,14 +48,11 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.dailypay.app.data.model.PendingPaymentItem
 import com.dailypay.app.data.repository.LenderRepository
-import com.dailypay.app.ui.theme.AlertOrange
 import com.dailypay.app.ui.theme.BorderSubtleLight
 import com.dailypay.app.ui.theme.BrandPrimary
 import com.dailypay.app.ui.theme.DangerRed
@@ -73,7 +70,6 @@ fun VerifyPaymentScreen(
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val clipboardManager = LocalClipboardManager.current
     val lenderRepo = remember { LenderRepository(context.applicationContext) }
 
     var pendingPayments by remember { mutableStateOf<List<PendingPaymentItem>>(emptyList()) }
@@ -108,7 +104,7 @@ fun VerifyPaymentScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Verify Payments (${pendingPayments.size})") },
+                title = { Text("Verify Cash (${pendingPayments.size})") },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
@@ -144,13 +140,13 @@ fun VerifyPaymentScreen(
                     )
                     Spacer(modifier = Modifier.height(10.dp))
                     Text(
-                        text = "No pending payments awaiting verification.",
+                        text = "No cash handovers awaiting verification.",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
                         color = MoneyGreen
                     )
                     Text(
-                        text = "All submitted borrower payments are processed.",
+                        text = "All submitted borrower payments are verified.",
                         style = MaterialTheme.typography.bodySmall,
                         color = TextSecondaryLight
                     )
@@ -173,7 +169,6 @@ fun VerifyPaymentScreen(
                         String.format(Locale.US, "%.2f", r.amountPaid)
                     }
                     val borrowerDisplayName = item.borrowerName.ifBlank { "Customer" }
-                    val utrText = r.utrReference?.trim().orEmpty()
 
                     Card(
                         modifier = Modifier
@@ -205,7 +200,12 @@ fun VerifyPaymentScreen(
                                 }
                                 SuggestionChip(
                                     onClick = {},
-                                    label = { Text(r.paymentMode.name) }
+                                    label = { Text("CASH HANDOVER") },
+                                    icon = { Icon(Icons.Default.AccountBalanceWallet, contentDescription = null, modifier = Modifier.size(16.dp)) },
+                                    colors = SuggestionChipDefaults.suggestionChipColors(
+                                        containerColor = MoneyGreen.copy(alpha = 0.1f),
+                                        labelColor = MoneyGreen
+                                    )
                                 )
                             }
 
@@ -217,7 +217,7 @@ fun VerifyPaymentScreen(
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Column {
-                                    Text("Payment Amount", style = MaterialTheme.typography.labelSmall, color = TextSecondaryLight)
+                                    Text("Cash Amount", style = MaterialTheme.typography.labelSmall, color = TextSecondaryLight)
                                     Text(
                                         text = "₹$formattedAmount",
                                         style = MaterialTheme.typography.headlineSmall,
@@ -226,59 +226,12 @@ fun VerifyPaymentScreen(
                                     )
                                 }
                                 Column(horizontalAlignment = Alignment.End) {
-                                    Text("Date Submitted", style = MaterialTheme.typography.labelSmall, color = TextSecondaryLight)
+                                    Text("Handover Date", style = MaterialTheme.typography.labelSmall, color = TextSecondaryLight)
                                     Text(
                                         text = r.paymentDate?.trim()?.ifBlank { "Today" } ?: "Today",
                                         style = MaterialTheme.typography.bodyMedium,
                                         fontWeight = FontWeight.Medium
                                     )
-                                }
-                            }
-
-                            // 12-Digit UTR Reference Display with One-Tap Copy
-                            if (utrText.isNotBlank()) {
-                                Surface(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    shape = RoundedCornerShape(10.dp),
-                                    color = BrandPrimary.copy(alpha = 0.08f)
-                                ) {
-                                    Row(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .padding(horizontal = 12.dp, vertical = 8.dp),
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.SpaceBetween
-                                    ) {
-                                        Column(modifier = Modifier.weight(1f)) {
-                                            Text(
-                                                text = "Bank Ref / UTR (12-Digit):",
-                                                style = MaterialTheme.typography.labelSmall,
-                                                color = BrandPrimary,
-                                                fontWeight = FontWeight.Bold
-                                            )
-                                            Text(
-                                                text = utrText,
-                                                style = MaterialTheme.typography.bodyLarge,
-                                                fontWeight = FontWeight.Bold,
-                                                color = MaterialTheme.colorScheme.onSurface
-                                            )
-                                        }
-
-                                        IconButton(
-                                            onClick = {
-                                                clipboardManager.setText(AnnotatedString(utrText))
-                                                Toast.makeText(context, "UTR copied: $utrText", Toast.LENGTH_SHORT).show()
-                                            },
-                                            modifier = Modifier.size(36.dp)
-                                        ) {
-                                            Icon(
-                                                imageVector = Icons.Default.ContentCopy,
-                                                contentDescription = "Copy UTR",
-                                                tint = BrandPrimary,
-                                                modifier = Modifier.size(18.dp)
-                                            )
-                                        }
-                                    }
                                 }
                             }
 
@@ -304,7 +257,7 @@ fun VerifyPaymentScreen(
                                             lenderRepo.verifyRepayment(id, accept = true, lenderId = cleanLenderId)
                                                 .onSuccess {
                                                     processingId = null
-                                                    Toast.makeText(context, "Payment verified & approved successfully!", Toast.LENGTH_SHORT).show()
+                                                    Toast.makeText(context, "Cash verified & loan balance updated!", Toast.LENGTH_SHORT).show()
                                                     loadData()
                                                 }
                                                 .onFailure { error ->
@@ -327,7 +280,7 @@ fun VerifyPaymentScreen(
                                         Spacer(modifier = Modifier.width(6.dp))
                                         Text("Verifying...")
                                     } else {
-                                        Text("Verify & Approve")
+                                        Text("Cash Received")
                                     }
                                 }
 
@@ -349,15 +302,14 @@ fun VerifyPaymentScreen(
             }
         }
 
-        // ================= REJECTION CONFIRMATION DIALOG =================
         itemToReject?.let { item ->
             val repaymentId = item.repayment.id.orEmpty()
             AlertDialog(
                 onDismissRequest = { if (processingId == null) itemToReject = null },
-                title = { Text("Reject Payment") },
+                title = { Text("Reject Cash Handover") },
                 text = {
                     Text(
-                        text = "Are you sure you want to reject the payment of ₹${String.format(Locale.US, "%.2f", item.repayment.amountPaid)} from ${item.borrowerName.ifBlank { "Customer" }}? This will keep their due balance open."
+                        text = "Are you sure you want to reject the cash handover of ₹${String.format(Locale.US, "%.2f", item.repayment.amountPaid)} from ${item.borrowerName.ifBlank { "Customer" }}? This will keep their due balance open."
                     )
                 },
                 confirmButton = {

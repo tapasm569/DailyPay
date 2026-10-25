@@ -3,7 +3,6 @@ package com.dailypay.app.data.repository
 import android.content.Context
 import com.dailypay.app.data.local.DailyPayDatabase
 import com.dailypay.app.data.local.entity.BorrowerEntity
-import com.dailypay.app.data.local.entity.DailyDueEntity
 import com.dailypay.app.data.model.ApprovedLoanDetail
 import com.dailypay.app.data.model.Borrower
 import com.dailypay.app.data.model.DailyDueItem
@@ -15,17 +14,13 @@ import com.dailypay.app.data.model.PaymentMode
 import com.dailypay.app.data.model.PendingPaymentItem
 import com.dailypay.app.data.model.Repayment
 import com.dailypay.app.data.model.RepaymentStatus
-import com.dailypay.app.data.remote.SupabaseClientProvider
+import com.dailypay.app.data.remote.FirebaseDbProvider
 import com.dailypay.app.util.DateUtils
-import io.github.jan.supabase.postgrest.from
-import io.github.jan.supabase.postgrest.query.Order
-import io.github.jan.supabase.storage.storage
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
-import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.put
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
@@ -34,20 +29,15 @@ import kotlin.math.round
 
 class LenderRepository(context: Context? = null) {
 
-    private val db = SupabaseClientProvider.db
-    private val storage = SupabaseClientProvider.storage
     private val localDb = context?.let {
         val appContext = it.applicationContext ?: it
         DailyPayDatabase.getDatabase(appContext)
     }
 
-    // ================= 1. LENDER PROFILE & ACCOUNT =================
     suspend fun getLenderProfile(lenderId: String): Result<Lender> = withContext(Dispatchers.IO) {
         runCatching {
-            db.from("lenders")
-                .select {
-                    filter { eq("id", lenderId.trim()) }
-                }.decodeSingle<Lender>()
+            val snapshot = FirebaseDbProvider.lendersRef.child(lenderId.trim()).get().await()
+            snapshot.getValue(Lender::class.java) ?: Lender(id = lenderId.trim())
         }
     }
 
@@ -59,15 +49,14 @@ class LenderRepository(context: Context? = null) {
         address: String?
     ): Result<Unit> = withContext(Dispatchers.IO) {
         runCatching {
-            db.from("lenders").update(
-                buildJsonObject {
-                    villageTown?.let { put("village_town", it.trim()) }
-                    postOffice?.let { put("post_office", it.trim()) }
-                    dist?.let { put("dist", it.trim()) }
-                    address?.let { put("address", it.trim()) }
-                }
-            ) {
-                filter { eq("id", lenderId.trim()) }
+            val updates = mutableMapOf<String, Any?>()
+            villageTown?.let { updates["villageTown"] = it.trim() }
+            postOffice?.let { updates["postOffice"] = it.trim() }
+            dist?.let { updates["dist"] = it.trim() }
+            address?.let { updates["address"] = it.trim() }
+
+            if (updates.isNotEmpty()) {
+                FirebaseDbProvider.lendersRef.child(lenderId.trim()).updateChildren(updates).await()
             }
             Unit
         }
@@ -78,18 +67,15 @@ class LenderRepository(context: Context? = null) {
         newPasswordPlain: String
     ): Result<Unit> = withContext(Dispatchers.IO) {
         runCatching {
-            db.from("lenders").update(
-                buildJsonObject {
-                    put("password_hash", newPasswordPlain.trim())
-                }
-            ) {
-                filter { eq("id", lenderId.trim()) }
-            }
+            FirebaseDbProvider.lendersRef
+                .child(lenderId.trim())
+                .child("passwordHash")
+                .setValue(newPasswordPlain.trim())
+                .await()
             Unit
         }
     }
 
-    // ================= 2. BORROWER MANAGEMENT & KYC (CACHE-FIRST) =================
     fun observeBorrowers(lenderId: String): Flow<List<Borrower>>? {
         return localDb?.borrowerDao()?.getBorrowersFlow(lenderId.trim())?.map { list ->
             list.map { it.toBorrower() }
@@ -102,22 +88,19 @@ class LenderRepository(context: Context? = null) {
             val cached = localDb?.borrowerDao()?.getBorrowersDirect(cleanLenderId)?.map { it.toBorrower() }
 
             try {
-                val remoteBorrowers = db.from("borrowers")
-                    .select { filter { eq("lender_id", cleanLenderId) } }
-                    .decodeList<Borrower>()
+                val snapshot = FirebaseDbProvider.borrowersRef
+                    .orderByChild("lenderId")
+                    .equalTo(cleanLenderId)
+                    .get()
+                    .await()
 
+                val remoteBorrowers = snapshot.children.mapNotNull { it.getValue(Borrower::class.java) }
                 try {
                     localDb?.borrowerDao()?.insertAll(remoteBorrowers.map { BorrowerEntity.fromModel(it) })
-                } catch (cacheError: Exception) {
-                    // Suppress local SQLite cache write error to allow remote data return
-                }
+                } catch (_: Exception) {}
                 remoteBorrowers
             } catch (e: Exception) {
-                if (!cached.isNullOrEmpty()) {
-                    cached
-                } else {
-                    throw e
-                }
+                cached ?: throw e
             }
         }
     }
@@ -132,29 +115,31 @@ class LenderRepository(context: Context? = null) {
             val timestamp = System.currentTimeMillis()
             val mobile = borrower.mobileNumber.trim()
 
-            var aadhaarUrl: String? = borrower.aadhaarCardUrl
-            var panUrl: String? = borrower.panCardUrl
-            var avatarUrl: String? = borrower.profilePicUrl
+            var aadhaarUrl = borrower.aadhaarCardUrl
+            var panUrl = borrower.panCardUrl
+            var avatarUrl = borrower.profilePicUrl
 
             if (aadhaarBytes != null && aadhaarBytes.isNotEmpty()) {
-                val path = "aadhaar_${mobile}_$timestamp.jpg"
-                storage.from("kyc-documents").upload(path = path, data = aadhaarBytes, upsert = true)
-                aadhaarUrl = storage.from("kyc-documents").publicUrl(path)
+                val ref = FirebaseDbProvider.storage.child("kyc-documents/aadhaar_${mobile}_$timestamp.jpg")
+                ref.putBytes(aadhaarBytes).await()
+                aadhaarUrl = ref.downloadUrl.await().toString()
             }
 
             if (panBytes != null && panBytes.isNotEmpty()) {
-                val path = "pan_${mobile}_$timestamp.jpg"
-                storage.from("kyc-documents").upload(path = path, data = panBytes, upsert = true)
-                panUrl = storage.from("kyc-documents").publicUrl(path)
+                val ref = FirebaseDbProvider.storage.child("kyc-documents/pan_${mobile}_$timestamp.jpg")
+                ref.putBytes(panBytes).await()
+                panUrl = ref.downloadUrl.await().toString()
             }
 
             if (avatarBytes != null && avatarBytes.isNotEmpty()) {
-                val path = "avatar_${mobile}_$timestamp.jpg"
-                storage.from("profile-avatars").upload(path = path, data = avatarBytes, upsert = true)
-                avatarUrl = storage.from("profile-avatars").publicUrl(path)
+                val ref = FirebaseDbProvider.storage.child("profile-avatars/avatar_${mobile}_$timestamp.jpg")
+                ref.putBytes(avatarBytes).await()
+                avatarUrl = ref.downloadUrl.await().toString()
             }
 
-            val validId = borrower.id?.trim()?.takeIf { it.isNotBlank() } ?: UUID.randomUUID().toString()
+            val validId = borrower.id?.trim()?.takeIf { it.isNotBlank() }
+                ?: FirebaseDbProvider.borrowersRef.push().key
+                ?: UUID.randomUUID().toString()
 
             val updatedBorrower = borrower.copy(
                 id = validId,
@@ -165,11 +150,8 @@ class LenderRepository(context: Context? = null) {
                 profilePicUrl = avatarUrl
             )
 
-            db.from("borrowers").insert(updatedBorrower)
-            try {
-                getBorrowers(borrower.lenderId)
-            } catch (ignored: Exception) {
-            }
+            FirebaseDbProvider.borrowersRef.child(validId).setValue(updatedBorrower).await()
+            try { getBorrowers(borrower.lenderId) } catch (_: Exception) {}
             Unit
         }
     }
@@ -179,28 +161,22 @@ class LenderRepository(context: Context? = null) {
             val id = borrower.id?.trim()?.takeIf { it.isNotBlank() }
                 ?: throw IllegalArgumentException("Borrower ID cannot be null or blank")
 
-            db.from("borrowers").update(
-                buildJsonObject {
-                    put("name", borrower.name.trim())
-                    put("mobile_number", borrower.mobileNumber.trim())
-                    borrower.villageCity?.let { put("village_city", it.trim()) }
-                    borrower.postOffice?.let { put("post_office", it.trim()) }
-                    borrower.policeStation?.let { put("police_station", it.trim()) }
-                    borrower.dist?.let { put("dist", it.trim()) }
-                    borrower.profilePicUrl?.let { put("profile_pic_url", it) }
-                    borrower.aadhaarCardUrl?.let { put("aadhaar_card_url", it) }
-                    borrower.panCardUrl?.let { put("pan_card_url", it) }
-                    if (!borrower.passwordHash.isNullOrBlank()) {
-                        put("password_hash", borrower.passwordHash)
-                    }
-                }
-            ) {
-                filter { eq("id", id) }
+            val updates = mutableMapOf<String, Any?>()
+            updates["name"] = borrower.name.trim()
+            updates["mobileNumber"] = borrower.mobileNumber.trim()
+            borrower.villageCity?.let { updates["villageCity"] = it.trim() }
+            borrower.postOffice?.let { updates["postOffice"] = it.trim() }
+            borrower.policeStation?.let { updates["policeStation"] = it.trim() }
+            borrower.dist?.let { updates["dist"] = it.trim() }
+            borrower.profilePicUrl?.let { updates["profilePicUrl"] = it }
+            borrower.aadhaarCardUrl?.let { updates["aadhaarCardUrl"] = it }
+            borrower.panCardUrl?.let { updates["panCardUrl"] = it }
+            if (!borrower.passwordHash.isNullOrBlank()) {
+                updates["passwordHash"] = borrower.passwordHash
             }
-            try {
-                getBorrowers(borrower.lenderId)
-            } catch (ignored: Exception) {
-            }
+
+            FirebaseDbProvider.borrowersRef.child(id).updateChildren(updates).await()
+            try { getBorrowers(borrower.lenderId) } catch (_: Exception) {}
             Unit
         }
     }
@@ -215,26 +191,19 @@ class LenderRepository(context: Context? = null) {
             val timestamp = System.currentTimeMillis()
             val cleanMobile = mobileNumber.trim()
             val cleanId = borrowerId.trim()
-            val bucket = if (docType == "avatar") "profile-avatars" else "kyc-documents"
-            val path = "${docType}_${cleanMobile}_$timestamp.jpg"
+            val folder = if (docType == "avatar") "profile-avatars" else "kyc-documents"
+            val ref = FirebaseDbProvider.storage.child("$folder/${docType}_${cleanMobile}_$timestamp.jpg")
 
-            storage.from(bucket).upload(path = path, data = imageBytes, upsert = true)
-            val publicUrl = storage.from(bucket).publicUrl(path)
+            ref.putBytes(imageBytes).await()
+            val publicUrl = ref.downloadUrl.await().toString()
 
-            val columnKey = when (docType) {
-                "aadhaar" -> "aadhaar_card_url"
-                "pan" -> "pan_card_url"
-                else -> "profile_pic_url"
+            val fieldKey = when (docType) {
+                "aadhaar" -> "aadhaarCardUrl"
+                "pan" -> "panCardUrl"
+                else -> "profilePicUrl"
             }
 
-            db.from("borrowers").update(
-                buildJsonObject {
-                    put(columnKey, publicUrl)
-                }
-            ) {
-                filter { eq("id", cleanId) }
-            }
-
+            FirebaseDbProvider.borrowersRef.child(cleanId).child(fieldKey).setValue(publicUrl).await()
             publicUrl
         }
     }
@@ -242,13 +211,12 @@ class LenderRepository(context: Context? = null) {
     suspend fun deleteBorrower(borrowerId: String): Result<Unit> = withContext(Dispatchers.IO) {
         runCatching {
             val cleanId = borrowerId.trim()
-            db.from("borrowers").delete { filter { eq("id", cleanId) } }
+            FirebaseDbProvider.borrowersRef.child(cleanId).removeValue().await()
             localDb?.borrowerDao()?.deleteById(cleanId)
             Unit
         }
     }
 
-    // ================= 3. LOAN MANAGEMENT & ACTIONS =================
     suspend fun giveLoanManually(loan: Loan): Result<Unit> = withContext(Dispatchers.IO) {
         runCatching {
             val tenure = if (loan.tenureDays > 0) loan.tenureDays else 30
@@ -266,7 +234,9 @@ class LenderRepository(context: Context? = null) {
             val startDate = loan.startDate?.trim()?.takeIf { it.isNotBlank() } ?: DateUtils.getTodaySqlFormat()
             val endDate = loan.endDate?.trim()?.takeIf { it.isNotBlank() } ?: calculateEndDate(startDate, tenure)
 
-            val validLoanId = loan.id?.trim()?.takeIf { it.isNotBlank() } ?: UUID.randomUUID().toString()
+            val validLoanId = loan.id?.trim()?.takeIf { it.isNotBlank() }
+                ?: FirebaseDbProvider.loansRef.push().key
+                ?: UUID.randomUUID().toString()
 
             val preparedLoan = loan.copy(
                 id = validLoanId,
@@ -279,24 +249,22 @@ class LenderRepository(context: Context? = null) {
                 status = LoanStatus.ACTIVE
             )
 
-            db.from("loans").insert(preparedLoan)
-            try {
-                getDailyDues(loan.lenderId)
-            } catch (ignored: Exception) {
-            }
+            FirebaseDbProvider.loansRef.child(validLoanId).setValue(preparedLoan).await()
+            try { getDailyDues(loan.lenderId) } catch (_: Exception) {}
             Unit
         }
     }
 
     suspend fun getPendingLoanRequests(lenderId: String): Result<List<Loan>> = withContext(Dispatchers.IO) {
         runCatching {
-            db.from("loans").select {
-                filter {
-                    eq("lender_id", lenderId.trim())
-                    eq("status", LoanStatus.PENDING.name)
-                }
-                order("created_at", Order.DESCENDING)
-            }.decodeList<Loan>()
+            val snapshot = FirebaseDbProvider.loansRef
+                .orderByChild("lenderId")
+                .equalTo(lenderId.trim())
+                .get()
+                .await()
+
+            snapshot.children.mapNotNull { it.getValue(Loan::class.java) }
+                .filter { it.status == LoanStatus.PENDING }
         }
     }
 
@@ -308,9 +276,9 @@ class LenderRepository(context: Context? = null) {
     ): Result<Unit> = withContext(Dispatchers.IO) {
         runCatching {
             val cleanLoanId = loanId.trim()
-            val existingLoan = db.from("loans").select {
-                filter { eq("id", cleanLoanId) }
-            }.decodeSingle<Loan>()
+            val snapshot = FirebaseDbProvider.loansRef.child(cleanLoanId).get().await()
+            val existingLoan = snapshot.getValue(Loan::class.java)
+                ?: throw IllegalArgumentException("Loan not found")
 
             val tenure = if (existingLoan.tenureDays > 0) existingLoan.tenureDays else 30
             val totalInterest = existingLoan.principalAmount * (interestRate / 100.0) * (tenure / 30.0)
@@ -320,38 +288,30 @@ class LenderRepository(context: Context? = null) {
             val startDate = DateUtils.getTodaySqlFormat()
             val endDate = calculateEndDate(startDate, tenure)
 
-            db.from("loans").update(
-                buildJsonObject {
-                    put("status", LoanStatus.ACTIVE.name)
-                    put("monthly_interest_rate", interestRate)
-                    put("total_payable", totalPayable)
-                    put("daily_installment", dailyInstallment)
-                    put("start_date", startDate)
-                    put("end_date", endDate)
-                    put("disbursement_mode", disbursementMode.name)
-                    put("disbursement_ref", disbursementRef.trim())
-                }
-            ) {
-                filter { eq("id", cleanLoanId) }
-            }
+            val updates = mapOf(
+                "status" to LoanStatus.ACTIVE.name,
+                "monthlyInterestRate" to interestRate,
+                "totalPayable" to totalPayable,
+                "dailyInstallment" to dailyInstallment,
+                "startDate" to startDate,
+                "endDate" to endDate,
+                "disbursementMode" to disbursementMode.name,
+                "disbursementRef" to disbursementRef.trim()
+            )
 
-            try {
-                getDailyDues(existingLoan.lenderId)
-            } catch (ignored: Exception) {
-            }
+            FirebaseDbProvider.loansRef.child(cleanLoanId).updateChildren(updates).await()
+            try { getDailyDues(existingLoan.lenderId) } catch (_: Exception) {}
             Unit
         }
     }
 
     suspend fun rejectLoan(loanId: String): Result<Unit> = withContext(Dispatchers.IO) {
         runCatching {
-            db.from("loans").update(
-                buildJsonObject {
-                    put("status", LoanStatus.REJECTED.name)
-                }
-            ) {
-                filter { eq("id", loanId.trim()) }
-            }
+            FirebaseDbProvider.loansRef
+                .child(loanId.trim())
+                .child("status")
+                .setValue(LoanStatus.REJECTED.name)
+                .await()
             Unit
         }
     }
@@ -359,13 +319,14 @@ class LenderRepository(context: Context? = null) {
     suspend fun getApprovedLoans(lenderId: String): Result<List<ApprovedLoanDetail>> = withContext(Dispatchers.IO) {
         runCatching {
             val cleanLenderId = lenderId.trim()
-            val loans = db.from("loans").select {
-                filter {
-                    eq("lender_id", cleanLenderId)
-                    isIn("status", listOf(LoanStatus.ACTIVE.name, LoanStatus.APPROVED.name))
-                }
-                order("created_at", Order.DESCENDING)
-            }.decodeList<Loan>()
+            val snapshot = FirebaseDbProvider.loansRef
+                .orderByChild("lenderId")
+                .equalTo(cleanLenderId)
+                .get()
+                .await()
+
+            val loans = snapshot.children.mapNotNull { it.getValue(Loan::class.java) }
+                .filter { it.status == LoanStatus.ACTIVE || it.status == LoanStatus.APPROVED }
 
             val borrowers = getBorrowers(cleanLenderId).getOrDefault(emptyList()).associateBy { it.id }
             val duesMap = getDailyDues(cleanLenderId).getOrDefault(emptyList()).associateBy { it.loanId }
@@ -389,78 +350,79 @@ class LenderRepository(context: Context? = null) {
                     tenureDays = loan.tenureDays,
                     startDate = sDate,
                     endDate = eDate,
-                    totalPaid = dueItem?.totalPaid ?: 0.0,
-                    remainingBalance = dueItem?.remainingBalance ?: loan.totalPayable,
-                    todayDue = maxOf(0.0, todayDue),
+                    status = loan.status,
+                    remainingBalance = maxOf(0.0, loan.totalPayable - (dueItem?.totalPaid ?: 0.0)),
                     todayPaid = todayPaid,
-                    status = loan.status.name
+                    todayDue = todayDue
                 )
             }
-        }
-    }
-
-    // ================= 4. PAYMENTS & COLLECTIONS (CACHE-FIRST) =================
-    fun observeDailyDues(lenderId: String): Flow<List<DailyDueItem>>? {
-        return localDb?.dailyDueDao()?.getDailyDuesFlow(lenderId.trim())?.map { list ->
-            list.map { it.toDailyDueItem() }
         }
     }
 
     suspend fun getDailyDues(lenderId: String): Result<List<DailyDueItem>> = withContext(Dispatchers.IO) {
         runCatching {
             val cleanLenderId = lenderId.trim()
-            val cached = localDb?.dailyDueDao()?.getDailyDuesDirect(cleanLenderId)?.map { it.toDailyDueItem() }
+            val todaySql = DateUtils.getTodaySqlFormat()
 
-            try {
-                val remoteDues = db.from("v_lender_daily_dues")
-                    .select { filter { eq("lender_id", cleanLenderId) } }
-                    .decodeList<DailyDueItem>()
+            val loansSnapshot = FirebaseDbProvider.loansRef
+                .orderByChild("lenderId")
+                .equalTo(cleanLenderId)
+                .get()
+                .await()
 
-                try {
-                    localDb?.dailyDueDao()?.insertAll(remoteDues.map { DailyDueEntity.fromModel(cleanLenderId, it) })
-                } catch (cacheError: Exception) {
-                    // Suppress local SQLite cache write error to allow remote data return
-                }
-                remoteDues
-            } catch (e: Exception) {
-                if (!cached.isNullOrEmpty()) {
-                    cached
-                } else {
-                    throw e
-                }
+            val activeLoans = loansSnapshot.children.mapNotNull { it.getValue(Loan::class.java) }
+                .filter { it.status == LoanStatus.ACTIVE }
+
+            val borrowers = getBorrowers(cleanLenderId).getOrDefault(emptyList()).associateBy { it.id }
+
+            val repaymentsSnapshot = FirebaseDbProvider.repaymentsRef
+                .orderByChild("lenderId")
+                .equalTo(cleanLenderId)
+                .get()
+                .await()
+
+            val repayments = repaymentsSnapshot.children.mapNotNull { it.getValue(Repayment::class.java) }
+                .filter { it.status == RepaymentStatus.VERIFIED || it.status == null }
+
+            activeLoans.map { loan ->
+                val borrower = borrowers[loan.borrowerId]
+                val loanRepayments = repayments.filter { it.loanId == loan.id }
+
+                val totalPaid = loanRepayments.sumOf { it.amountPaid }
+                val paidToday = loanRepayments.filter { it.paymentDate == todaySql }.sumOf { it.amountPaid }
+                val remainingBalance = maxOf(0.0, loan.totalPayable - totalPaid)
+                val todayDueBalance = maxOf(0.0, minOf(loan.dailyInstallment - paidToday, remainingBalance))
+
+                DailyDueItem(
+                    loanId = loan.id.orEmpty(),
+                    borrowerId = loan.borrowerId,
+                    borrowerName = borrower?.name ?: "Customer",
+                    borrowerMobile = borrower?.mobileNumber ?: "",
+                    dailyInstallment = loan.dailyInstallment,
+                    todayDueBalance = todayDueBalance,
+                    todayPaidAmount = paidToday,
+                    remainingBalance = remainingBalance,
+                    totalPaid = totalPaid,
+                    villageCity = borrower?.villageCity ?: ""
+                )
             }
         }
     }
 
     suspend fun recordRepayment(repayment: Repayment): Result<Unit> = withContext(Dispatchers.IO) {
         runCatching {
-            val cleanPaymentDate = repayment.paymentDate?.trim()?.takeIf { it.isNotBlank() } ?: DateUtils.getTodaySqlFormat()
-            val validId = repayment.id?.trim()?.takeIf { it.isNotBlank() } ?: UUID.randomUUID().toString()
-            val cleanLenderId = repayment.lenderId.trim()
+            val validId = repayment.id?.takeIf { it.isNotBlank() }
+                ?: FirebaseDbProvider.repaymentsRef.push().key
+                ?: UUID.randomUUID().toString()
 
-            val sanitizedRepayment = repayment.copy(
+            val finalRepayment = repayment.copy(
                 id = validId,
-                loanId = repayment.loanId.trim(),
-                borrowerId = repayment.borrowerId.trim(),
-                lenderId = cleanLenderId,
-                paymentDate = cleanPaymentDate,
+                paymentMode = PaymentMode.CASH,
                 status = RepaymentStatus.VERIFIED
             )
 
-            // Insert verified repayment into Supabase
-            db.from("repayments").insert(sanitizedRepayment)
-
-            // Refresh dues immediately so Room & UI reflect the updated paid amount
-            if (cleanLenderId.isNotBlank() && cleanLenderId != "{lenderId}") {
-                try {
-                    val remoteDues = db.from("v_lender_daily_dues")
-                        .select { filter { eq("lender_id", cleanLenderId) } }
-                        .decodeList<DailyDueItem>()
-                    localDb?.dailyDueDao()?.insertAll(remoteDues.map { DailyDueEntity.fromModel(cleanLenderId, it) })
-                } catch (cacheSyncError: Exception) {
-                    // Cache sync failure does not fail the primary payment recording
-                }
-            }
+            FirebaseDbProvider.repaymentsRef.child(validId).setValue(finalRepayment).await()
+            try { getDailyDues(repayment.lenderId) } catch (_: Exception) {}
             Unit
         }
     }
@@ -468,100 +430,78 @@ class LenderRepository(context: Context? = null) {
     suspend fun getPendingVerifications(lenderId: String): Result<List<PendingPaymentItem>> = withContext(Dispatchers.IO) {
         runCatching {
             val cleanLenderId = lenderId.trim()
-            val pendingRepayments = db.from("repayments").select {
-                filter {
-                    eq("lender_id", cleanLenderId)
-                    eq("status", RepaymentStatus.PENDING.name)
-                }
-                order("created_at", Order.DESCENDING)
-            }.decodeList<Repayment>()
+            val snapshot = FirebaseDbProvider.repaymentsRef
+                .orderByChild("lenderId")
+                .equalTo(cleanLenderId)
+                .get()
+                .await()
+
+            val pendingRepayments = snapshot.children.mapNotNull { it.getValue(Repayment::class.java) }
+                .filter { it.status == RepaymentStatus.PENDING }
 
             val borrowers = getBorrowers(cleanLenderId).getOrDefault(emptyList()).associateBy { it.id }
 
-            pendingRepayments.map { r ->
-                val b = borrowers[r.borrowerId]
+            pendingRepayments.map { repayment ->
+                val borrower = borrowers[repayment.borrowerId]
                 PendingPaymentItem(
-                    repayment = r,
-                    borrowerName = b?.name ?: "Customer",
-                    borrowerMobile = b?.mobileNumber ?: "N/A"
+                    repayment = repayment,
+                    borrowerName = borrower?.name ?: "Customer",
+                    borrowerMobile = borrower?.mobileNumber ?: "N/A"
                 )
             }
         }
     }
 
-    suspend fun verifyRepayment(repaymentId: String, accept: Boolean, lenderId: String? = null): Result<Unit> = withContext(Dispatchers.IO) {
+    suspend fun verifyRepayment(
+        repaymentId: String,
+        accept: Boolean,
+        lenderId: String? = null
+    ): Result<Unit> = withContext(Dispatchers.IO) {
         runCatching {
             val newStatus = if (accept) RepaymentStatus.VERIFIED.name else RepaymentStatus.REJECTED.name
-            db.from("repayments").update(
-                buildJsonObject { put("status", newStatus) }
-            ) {
-                filter { eq("id", repaymentId.trim()) }
-            }
+            FirebaseDbProvider.repaymentsRef
+                .child(repaymentId.trim())
+                .child("status")
+                .setValue(newStatus)
+                .await()
 
-            val cleanLender = lenderId?.trim().orEmpty()
-            if (cleanLender.isNotBlank() && cleanLender != "{lenderId}") {
-                try {
-                    getDailyDues(cleanLender)
-                } catch (ignored: Exception) {
-                }
+            if (!lenderId.isNullOrBlank()) {
+                try { getDailyDues(lenderId) } catch (_: Exception) {}
             }
             Unit
         }
     }
 
-    suspend fun getTrackPayments(lenderId: String): Result<List<Repayment>> = withContext(Dispatchers.IO) {
+    suspend fun getLenderLedgerSummary(lenderId: String): Result<LenderLedgerSummary> = withContext(Dispatchers.IO) {
         runCatching {
-            db.from("repayments").select {
-                filter {
-                    eq("lender_id", lenderId.trim())
-                    eq("status", RepaymentStatus.VERIFIED.name)
-                }
-                order("payment_date", Order.DESCENDING)
-                order("created_at", Order.DESCENDING)
-            }.decodeList<Repayment>()
-        }
-    }
+            val dues = getDailyDues(lenderId).getOrDefault(emptyList())
+            val totalDisbursed = dues.sumOf { it.dailyInstallment * 30 }
+            val totalRecovered = dues.sumOf { it.totalPaid }
+            val totalRemaining = dues.sumOf { it.remainingBalance }
+            val todayTotalDue = dues.sumOf { it.todayDueBalance }
+            val todayTotalCollected = dues.sumOf { it.todayPaidAmount }
 
-    suspend fun getRepaymentsForLoan(loanId: String): Result<List<Repayment>> = withContext(Dispatchers.IO) {
-        runCatching {
-            db.from("repayments")
-                .select {
-                    filter {
-                        eq("loan_id", loanId.trim())
-                        eq("status", RepaymentStatus.VERIFIED.name)
-                    }
-                    order("created_at", Order.DESCENDING)
-                }.decodeList<Repayment>()
-        }
-    }
-
-    // ================= 5. PORTFOLIO LEDGER SUMMARY =================
-    suspend fun getLedgerSummary(lenderId: String): Result<LenderLedgerSummary> = withContext(Dispatchers.IO) {
-        runCatching {
-            val dues = getDailyDues(lenderId.trim()).getOrThrow()
             LenderLedgerSummary(
-                lenderId = lenderId.trim(),
-                totalDisbursed = dues.sumOf { it.totalPayable },
-                totalDueBalance = dues.sumOf { maxOf(0.0, it.todayDueBalance) },
-                totalPaid = dues.sumOf { it.todayPaidAmount },
-                totalRemainingBalance = dues.sumOf { maxOf(0.0, it.remainingBalance) }
+                totalActiveBorrowers = dues.size,
+                totalDisbursed = totalDisbursed,
+                totalRecovered = totalRecovered,
+                totalRemaining = totalRemaining,
+                todayTotalDue = todayTotalDue,
+                todayTotalCollected = todayTotalCollected
             )
         }
     }
 
     private fun calculateEndDate(startDateStr: String?, tenureDays: Int): String {
-        val cleanDate = startDateStr?.trim().orEmpty()
-        if (cleanDate.isEmpty()) return "Pending"
         return try {
-            val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.US)
-            val date = sdf.parse(cleanDate) ?: return "Pending"
-            val calendar = Calendar.getInstance().apply {
-                time = date
-                add(Calendar.DAY_OF_YEAR, tenureDays)
-            }
-            sdf.format(calendar.time)
-        } catch (e: Exception) {
-            "Pending"
+            val format = SimpleDateFormat("yyyy-MM-dd", Locale.US)
+            val date = if (!startDateStr.isNullOrBlank()) format.parse(startDateStr) else java.util.Date()
+            val cal = Calendar.getInstance()
+            cal.time = date ?: java.util.Date()
+            cal.add(Calendar.DAY_OF_YEAR, tenureDays)
+            format.format(cal.time)
+        } catch (_: Exception) {
+            DateUtils.getTodaySqlFormat()
         }
     }
 }

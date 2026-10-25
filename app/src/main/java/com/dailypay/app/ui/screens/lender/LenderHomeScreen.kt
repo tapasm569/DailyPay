@@ -29,6 +29,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AccountBalanceWallet
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Dashboard
@@ -48,7 +49,6 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DrawerValue
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -88,7 +88,6 @@ import com.dailypay.app.data.model.DailyDueItem
 import com.dailypay.app.data.model.Lender
 import com.dailypay.app.data.model.PaymentMode
 import com.dailypay.app.data.model.Repayment
-import com.dailypay.app.data.remote.SupabaseClientProvider
 import com.dailypay.app.data.repository.LenderRepository
 import com.dailypay.app.ui.theme.AlertOrange
 import com.dailypay.app.ui.theme.BorderSubtleLight
@@ -101,12 +100,7 @@ import com.dailypay.app.ui.theme.WhatsAppGreen
 import com.dailypay.app.util.CommunicationUtils
 import com.dailypay.app.util.DateUtils
 import com.dailypay.app.util.SessionManager
-import io.github.jan.supabase.postgrest.from
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
-import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.put
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -123,7 +117,6 @@ fun LenderHomeScreen(
     val lenderRepo = remember { LenderRepository(context.applicationContext) }
     val sessionManager = remember { SessionManager(context) }
 
-    // Fallback: if argument was empty, grab from SessionManager
     val resolvedLenderId = remember(lenderId) {
         if (lenderId.isNotBlank() && lenderId != "{lenderId}") {
             lenderId.trim()
@@ -143,7 +136,6 @@ fun LenderHomeScreen(
 
     var selectedItemForPayment by remember { mutableStateOf<DailyDueItem?>(null) }
     var paymentAmountText by remember { mutableStateOf("") }
-    var selectedPaymentMode by remember { mutableStateOf(PaymentMode.CASH) }
     var isSubmittingPayment by remember { mutableStateOf(false) }
 
     val pagerState = rememberPagerState(initialPage = 0) { 2 }
@@ -184,7 +176,6 @@ fun LenderHomeScreen(
 
     val businessName = lenderProfile?.businessName?.ifBlank { lenderProfile?.name } ?: "DailyPay Finance"
     val ownerName = lenderProfile?.ownerName?.ifBlank { lenderProfile?.name } ?: "Lender"
-    val currentUpiId = lenderProfile?.upiId?.trim().orEmpty()
 
     ModalNavigationDrawer(
         drawerState = drawerState,
@@ -226,22 +217,6 @@ fun LenderHomeScreen(
                             style = MaterialTheme.typography.bodySmall,
                             color = Color.White.copy(alpha = 0.75f)
                         )
-
-                        Spacer(modifier = Modifier.height(6.dp))
-
-                        // Receiving UPI status badge
-                        Surface(
-                            shape = RoundedCornerShape(6.dp),
-                            color = Color.White.copy(alpha = 0.18f)
-                        ) {
-                            Text(
-                                text = if (currentUpiId.isNotBlank()) "UPI: $currentUpiId" else "UPI: Not Configured",
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
-                                style = MaterialTheme.typography.labelSmall,
-                                color = Color.White,
-                                fontWeight = FontWeight.Medium
-                            )
-                        }
                     }
                 }
 
@@ -249,7 +224,7 @@ fun LenderHomeScreen(
 
                 NavigationDrawerItem(
                     icon = { Icon(Icons.Default.EditLocation, contentDescription = null, tint = BrandPrimary) },
-                    label = { Text("Edit Profile & UPI ID") },
+                    label = { Text("Edit Business Address") },
                     selected = false,
                     onClick = {
                         scope.launch { drawerState.close() }
@@ -421,7 +396,6 @@ fun LenderHomeScreen(
                                 onCollectClick = { item ->
                                     selectedItemForPayment = item
                                     paymentAmountText = String.format(Locale.US, "%.2f", item.todayDueBalance)
-                                    selectedPaymentMode = PaymentMode.CASH
                                 }
                             )
                             1 -> PaidTodayListTab(
@@ -434,13 +408,12 @@ fun LenderHomeScreen(
                 }
             }
 
-            // ================= COLLECT PAYMENT DIALOG =================
             selectedItemForPayment?.let { item ->
                 val formattedDue = String.format(Locale.US, "%.2f", maxOf(0.0, item.todayDueBalance))
 
                 AlertDialog(
                     onDismissRequest = { if (!isSubmittingPayment) selectedItemForPayment = null },
-                    title = { Text("Collect EMI Payment") },
+                    title = { Text("Collect Cash EMI") },
                     text = {
                         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                             Text("Borrower: ${item.borrowerName.ifBlank { "Customer" }}")
@@ -457,30 +430,26 @@ fun LenderHomeScreen(
                                         paymentAmountText = input
                                     }
                                 },
-                                label = { Text("Amount Collected (₹) *") },
+                                label = { Text("Cash Collected (₹) *") },
                                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                                 modifier = Modifier.fillMaxWidth(),
                                 singleLine = true,
                                 enabled = !isSubmittingPayment
                             )
 
-                            Text("Payment Method:", style = MaterialTheme.typography.labelMedium)
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            Surface(
+                                shape = RoundedCornerShape(8.dp),
+                                color = MoneyGreen.copy(alpha = 0.1f),
+                                modifier = Modifier.fillMaxWidth()
                             ) {
-                                FilterChip(
-                                    selected = selectedPaymentMode == PaymentMode.CASH,
-                                    onClick = { if (!isSubmittingPayment) selectedPaymentMode = PaymentMode.CASH },
-                                    label = { Text("Cash") },
-                                    modifier = Modifier.weight(1f)
-                                )
-                                FilterChip(
-                                    selected = selectedPaymentMode == PaymentMode.UPI,
-                                    onClick = { if (!isSubmittingPayment) selectedPaymentMode = PaymentMode.UPI },
-                                    label = { Text("UPI Received") },
-                                    modifier = Modifier.weight(1f)
-                                )
+                                Row(
+                                    modifier = Modifier.padding(10.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(Icons.Default.AccountBalanceWallet, contentDescription = null, tint = MoneyGreen, modifier = Modifier.size(18.dp))
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text("Payment Mode: CASH", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, color = MoneyGreen)
+                                }
                             }
                         }
                     },
@@ -501,14 +470,14 @@ fun LenderHomeScreen(
                                         lenderId = resolvedLenderId,
                                         amountPaid = amount,
                                         paymentDate = DateUtils.getTodaySqlFormat(),
-                                        paymentMode = selectedPaymentMode,
-                                        notes = "Collected on $currentDateText (${selectedPaymentMode.name})"
+                                        paymentMode = PaymentMode.CASH,
+                                        notes = "Cash collected on $currentDateText"
                                     )
                                     lenderRepo.recordRepayment(repayment)
                                         .onSuccess {
                                             isSubmittingPayment = false
                                             selectedItemForPayment = null
-                                            Toast.makeText(context, "Payment recorded successfully!", Toast.LENGTH_SHORT).show()
+                                            Toast.makeText(context, "Cash payment recorded successfully!", Toast.LENGTH_SHORT).show()
                                             loadData()
                                         }
                                         .onFailure { error ->
@@ -529,7 +498,7 @@ fun LenderHomeScreen(
                                 Spacer(modifier = Modifier.width(6.dp))
                                 Text("Saving...")
                             } else {
-                                Text("Confirm Payment")
+                                Text("Confirm Cash Received")
                             }
                         }
                     },
@@ -541,9 +510,7 @@ fun LenderHomeScreen(
                 )
             }
 
-            // ================= EDIT ADDRESS & UPI ID DIALOG =================
             if (showAddressDialog) {
-                var editUpiId by remember { mutableStateOf(lenderProfile?.upiId ?: "") }
                 var editVillage by remember { mutableStateOf(lenderProfile?.villageTown ?: "") }
                 var editPostOffice by remember { mutableStateOf(lenderProfile?.postOffice ?: "") }
                 var editDist by remember { mutableStateOf(lenderProfile?.dist ?: "") }
@@ -552,26 +519,14 @@ fun LenderHomeScreen(
 
                 AlertDialog(
                     onDismissRequest = { if (!isSavingAddr) showAddressDialog = false },
-                    title = { Text("Business Profile & Receiving UPI") },
+                    title = { Text("Update Business Address") },
                     text = {
                         Column(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .verticalScroll(rememberScrollState()),
-                            verticalArrangement = Arrangement.spacedBy(10.dp)
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            OutlinedTextField(
-                                value = editUpiId,
-                                onValueChange = { editUpiId = it },
-                                label = { Text("Receiving UPI ID / VPA *") },
-                                placeholder = { Text("e.g. mobile@upi, business@okhdfcbank") },
-                                supportingText = { Text("Borrowers will send online EMI payments to this UPI address") },
-                                modifier = Modifier.fillMaxWidth(),
-                                singleLine = true
-                            )
-
-                            HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
-
                             OutlinedTextField(
                                 value = editVillage,
                                 onValueChange = { editVillage = it },
@@ -607,37 +562,20 @@ fun LenderHomeScreen(
                             onClick = {
                                 isSavingAddr = true
                                 scope.launch {
-                                    try {
-                                        // 1. Update address fields via lenderRepo
-                                        lenderRepo.updateLenderAddress(
-                                            lenderId = resolvedLenderId,
-                                            villageTown = editVillage.trim().ifBlank { null },
-                                            postOffice = editPostOffice.trim().ifBlank { null },
-                                            dist = editDist.trim().ifBlank { null },
-                                            address = editAddress.trim().ifBlank { null }
-                                        ).getOrThrow()
-
-                                        // 2. Persist receiving UPI ID to Supabase
-                                        val cleanUpi = editUpiId.trim()
-                                        withContext(Dispatchers.IO) {
-                                            SupabaseClientProvider.db
-                                                .from("lenders")
-                                                .update(
-                                                    buildJsonObject {
-                                                        put("upi_id", cleanUpi.ifBlank { null })
-                                                    }
-                                                ) {
-                                                    filter { eq("id", resolvedLenderId) }
-                                                }
-                                        }
-
+                                    lenderRepo.updateLenderAddress(
+                                        lenderId = resolvedLenderId,
+                                        villageTown = editVillage.trim().ifBlank { null },
+                                        postOffice = editPostOffice.trim().ifBlank { null },
+                                        dist = editDist.trim().ifBlank { null },
+                                        address = editAddress.trim().ifBlank { null }
+                                    ).onSuccess {
                                         isSavingAddr = false
                                         showAddressDialog = false
-                                        Toast.makeText(context, "Profile and UPI ID updated successfully!", Toast.LENGTH_SHORT).show()
+                                        Toast.makeText(context, "Address updated successfully!", Toast.LENGTH_SHORT).show()
                                         loadData()
-                                    } catch (e: Exception) {
+                                    }.onFailure { error ->
                                         isSavingAddr = false
-                                        Toast.makeText(context, "Update failed: ${e.message}", Toast.LENGTH_SHORT).show()
+                                        Toast.makeText(context, "Update failed: ${error.message}", Toast.LENGTH_SHORT).show()
                                     }
                                 }
                             },
@@ -653,7 +591,7 @@ fun LenderHomeScreen(
                                 Spacer(modifier = Modifier.width(6.dp))
                                 Text("Saving...")
                             } else {
-                                Text("Save Profile")
+                                Text("Save Address")
                             }
                         }
                     },
@@ -665,7 +603,6 @@ fun LenderHomeScreen(
                 )
             }
 
-            // ================= RESET PASSWORD DIALOG =================
             if (showResetPasswordDialog) {
                 var newPassword by remember { mutableStateOf("") }
                 var confirmPassword by remember { mutableStateOf("") }

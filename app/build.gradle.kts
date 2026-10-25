@@ -3,6 +3,7 @@ plugins {
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.serialization")
     id("com.google.devtools.ksp") version "1.9.24-1.0.20"
+    id("com.google.gms.google-services")
 }
 
 android {
@@ -20,10 +21,6 @@ android {
         vectorDrawables {
             useSupportLibrary = true
         }
-
-        // Supabase configuration fields exposed via BuildConfig
-        buildConfigField("String", "SUPABASE_URL", "\"https://ngebgqyoelbxzyxdifvc.supabase.co\"")
-        buildConfigField("String", "SUPABASE_ANON_KEY", "\"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5nZWJncXlvZWxieHp5eGRpZnZjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODk5MDY5NDksImV4cCI6MjEwNTQ4Mjk0OX0.Q4ZWOmDylDKEfw9kc0L5zRGFqa15UOgDyW9xCCYHoBk\"")
     }
 
     buildTypes {
@@ -66,8 +63,6 @@ android {
 
 dependencies {
     val composeBom = platform("androidx.compose:compose-bom:2024.05.00")
-    val supabaseVersion = "2.4.0"
-    val ktorVersion = "2.3.11"
     val roomVersion = "2.6.1"
 
     // AndroidX & Core
@@ -93,19 +88,16 @@ dependencies {
     implementation("androidx.room:room-ktx:$roomVersion")
     ksp("androidx.room:room-compiler:$roomVersion")
 
-    // Supabase Kotlin SDK
-    implementation("io.github.jan-tennert.supabase:postgrest-kt:$supabaseVersion")
-    implementation("io.github.jan-tennert.supabase:storage-kt:$supabaseVersion")
-    implementation("io.github.jan-tennert.supabase:realtime-kt:$supabaseVersion")
+    // Firebase (Realtime Database & Cloud Storage)
+    implementation(platform("com.google.firebase:firebase-bom:33.7.0"))
+    implementation("com.google.firebase:firebase-database-ktx")
+    implementation("com.google.firebase:firebase-storage-ktx")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.8.1")
 
-    // Ktor Client Engine for Supabase
-    implementation("io.ktor:ktor-client-okhttp:$ktorVersion")
-    implementation("io.ktor:ktor-client-core:$ktorVersion")
-
-    // Kotlinx Serialization & Coroutines
+    // Serialization & Coroutines
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.3")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
 
-    // Coil (Image loading for KYC & Avatars)
+    // Coil Image Loader
     implementation("io.coil-kt:coil-compose:2.6.0")
 }
