@@ -1,54 +1,59 @@
 package com.dailypay.app.data.model
 
-import kotlinx.serialization.SerialName
+import com.google.firebase.database.IgnoreExtraProperties
 import kotlinx.serialization.Serializable
 
+@IgnoreExtraProperties
 @Serializable
 data class Lender(
     val id: String? = null,
     val name: String = "",
-    @SerialName("owner_name")
     val ownerName: String? = null,
-    @SerialName("business_name")
     val businessName: String? = null,
-    @SerialName("mobile_number")
     val mobileNumber: String = "",
-    @SerialName("upi_id")
     val upiId: String? = null,
-    @SerialName("village_town")
+    val address: String? = null,
     val villageTown: String? = null,
-    @SerialName("post_office")
     val postOffice: String? = null,
     val dist: String? = null,
-    val address: String? = null,
-    @SerialName("password_hash")
+    val status: String = "RUN",
     val passwordHash: String? = null,
-    val status: String = "RUN", // "RUN" or "STOP"
-    @SerialName("created_at")
     val createdAt: String? = null
 )
 
+@IgnoreExtraProperties
+@Serializable
+data class DailyDueItem(
+    val loanId: String = "",
+    val borrowerId: String = "",
+    val borrowerName: String = "",
+    val borrowerMobile: String = "",
+    val dailyInstallment: Double = 0.0,
+    val todayDueBalance: Double = 0.0,
+    val todayPaidAmount: Double = 0.0,
+    val remainingBalance: Double = 0.0,
+    val totalPaid: Double = 0.0
+)
+
+@IgnoreExtraProperties
+@Serializable
+data class LenderLedgerSummary(
+    val lenderId: String = "",
+    val totalDisbursed: Double = 0.0,
+    val totalDueBalance: Double = 0.0,
+    val totalPaid: Double = 0.0,
+    val totalRemainingBalance: Double = 0.0
+)
+
+@IgnoreExtraProperties
 @Serializable
 data class Subscription(
     val id: String? = null,
-    @SerialName("lender_id")
     val lenderId: String = "",
-    val plan: String = "MONTHLY",
-    @SerialName("start_date")
-    val startDate: String? = null,
-    @SerialName("end_date")
-    val endDate: String? = null,
-    val status: String = "ACTIVE",
+    val planName: String = "",
     val amount: Double = 0.0,
-    @SerialName("created_at")
+    val status: String = "ACTIVE",
+    val startDate: String? = null,
+    val endDate: String? = null,
     val createdAt: String? = null
-)
-
-@Serializable
-data class LenderLedgerSummary(
-    val lenderId: String,
-    val totalDisbursed: Double,
-    val totalDueBalance: Double,
-    val totalPaid: Double,
-    val totalRemainingBalance: Double
 )
