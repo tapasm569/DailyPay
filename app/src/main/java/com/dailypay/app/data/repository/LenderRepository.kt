@@ -1,7 +1,6 @@
 package com.dailypay.app.data.repository
 
 import android.content.Context
-import android.util.Base64
 import com.dailypay.app.data.local.DailyPayDatabase
 import com.dailypay.app.data.local.entity.BorrowerEntity
 import com.dailypay.app.data.model.ApprovedLoanDetail
@@ -17,6 +16,7 @@ import com.dailypay.app.data.model.Repayment
 import com.dailypay.app.data.model.RepaymentStatus
 import com.dailypay.app.data.remote.FirebaseDbProvider
 import com.dailypay.app.util.DateUtils
+import com.dailypay.app.util.ImageCompressor
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -125,34 +125,25 @@ class LenderRepository(context: Context? = null) {
             withTimeout(20000L) {
                 val mobile = borrower.mobileNumber.trim()
 
-                // Encode images as Base64 strings directly in RTDB (Bypasses Cloud Storage)
-                var aadhaarUrl = borrower.aadhaarCardUrl
-                var panUrl = borrower.panCardUrl
-                var avatarUrl = borrower.profilePicUrl
-
-                if (aadhaarBytes != null && aadhaarBytes.isNotEmpty()) {
-                    aadhaarUrl = "data:image/jpeg;base64," + Base64.encodeToString(aadhaarBytes, Base64.NO_WRAP)
-                }
-
-                if (panBytes != null && panBytes.isNotEmpty()) {
-                    panUrl = "data:image/jpeg;base64," + Base64.encodeToString(panBytes, Base64.NO_WRAP)
-                }
-
-                if (avatarBytes != null && avatarBytes.isNotEmpty()) {
-                    avatarUrl = "data:image/jpeg;base64," + Base64.encodeToString(avatarBytes, Base64.NO_WRAP)
-                }
+                val aadhaarBase64 = ImageCompressor.compressAndEncodeBase64(aadhaarBytes) ?: borrower.aadhaarCardUrl
+                val panBase64 = ImageCompressor.compressAndEncodeBase64(panBytes) ?: borrower.panCardUrl
+                val avatarBase64 = ImageCompressor.compressAndEncodeBase64(avatarBytes) ?: borrower.profilePicUrl
 
                 val validId = borrower.id?.trim()?.takeIf { it.isNotBlank() }
                     ?: FirebaseDbProvider.borrowersRef.push().key
                     ?: UUID.randomUUID().toString()
 
+                val cleanPassword = borrower.passwordHash?.trim()?.takeIf { it.isNotBlank() } ?: mobile
+
                 val updatedBorrower = borrower.copy(
                     id = validId,
                     lenderId = borrower.lenderId.trim(),
                     mobileNumber = mobile,
-                    aadhaarCardUrl = aadhaarUrl,
-                    panCardUrl = panUrl,
-                    profilePicUrl = avatarUrl
+                    passwordHash = cleanPassword,
+                    aadhaarCardUrl = aadhaarBase64,
+                    panCardUrl = panBase64,
+                    profilePicUrl = avatarBase64,
+                    createdAt = DateUtils.getTodaySqlFormat()
                 )
 
                 FirebaseDbProvider.borrowersRef.child(validId).setValue(updatedBorrower).await()
@@ -164,7 +155,7 @@ class LenderRepository(context: Context? = null) {
         }
     }
 
-    suspend fun updateBorrower(borrower: Borrower): Result<Unit> = withContext(Dispatchers.IO) {
+suspend fun updateBorrower(borrower: Borrower): Result<Unit> = withContext(Dispatchers.IO) {
         runCatching {
             withTimeout(15000L) {
                 val id = borrower.id?.trim()?.takeIf { it.isNotBlank() }
@@ -199,7 +190,7 @@ class LenderRepository(context: Context? = null) {
         runCatching {
             withTimeout(15000L) {
                 val cleanId = borrowerId.trim()
-                val dataUri = "data:image/jpeg;base64," + Base64.encodeToString(imageBytes, Base64.NO_WRAP)
+                val base64Data = ImageCompressor.compressAndEncodeBase64(imageBytes) ?: ""
 
                 val fieldKey = when (docType) {
                     "aadhaar" -> "aadhaarCardUrl"
@@ -207,8 +198,8 @@ class LenderRepository(context: Context? = null) {
                     else -> "profilePicUrl"
                 }
 
-                FirebaseDbProvider.borrowersRef.child(cleanId).child(fieldKey).setValue(dataUri).await()
-                dataUri
+                FirebaseDbProvider.borrowersRef.child(cleanId).child(fieldKey).setValue(base64Data).await()
+                base64Data
             }
         }
     }
@@ -387,7 +378,7 @@ class LenderRepository(context: Context? = null) {
                     .await()
 
                 val activeLoans = loansSnapshot.children.mapNotNull { it.getValue(Loan::class.java) }
-                .filter { it.status == LoanStatus.ACTIVE }
+                    .filter { it.status == LoanStatus.ACTIVE }
 
                 val borrowers = getBorrowers(cleanLenderId).getOrDefault(emptyList()).associateBy { it.id }
 
@@ -444,7 +435,7 @@ class LenderRepository(context: Context? = null) {
         }
     }
 
-    suspend fun getPendingVerifications(lenderId: String): Result<List<PendingPaymentItem>> = withContext(Dispatchers.IO) {
+suspend fun getPendingVerifications(lenderId: String): Result<List<PendingPaymentItem>> = withContext(Dispatchers.IO) {
         runCatching {
             withTimeout(15000L) {
                 val cleanLenderId = lenderId.trim()
@@ -464,7 +455,7 @@ class LenderRepository(context: Context? = null) {
                     PendingPaymentItem(
                         repayment = repayment,
                         borrowerName = borrower?.name ?: "Customer",
-                       borrowerMobile = borrower?.mobileNumber ?: "N/A"
+                        borrowerMobile = borrower?.mobileNumber ?: "N/A"
                     )
                 }
             }
