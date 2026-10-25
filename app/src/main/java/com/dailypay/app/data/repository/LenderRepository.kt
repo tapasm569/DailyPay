@@ -1,6 +1,7 @@
 package com.dailypay.app.data.repository
 
 import android.content.Context
+import android.util.Base64
 import com.dailypay.app.data.local.DailyPayDatabase
 import com.dailypay.app.data.local.entity.BorrowerEntity
 import com.dailypay.app.data.model.ApprovedLoanDetail
@@ -21,6 +22,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeout
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
@@ -36,8 +38,10 @@ class LenderRepository(context: Context? = null) {
 
     suspend fun getLenderProfile(lenderId: String): Result<Lender> = withContext(Dispatchers.IO) {
         runCatching {
-            val snapshot = FirebaseDbProvider.lendersRef.child(lenderId.trim()).get().await()
-            snapshot.getValue(Lender::class.java) ?: Lender(id = lenderId.trim())
+            withTimeout(15000L) {
+                val snapshot = FirebaseDbProvider.lendersRef.child(lenderId.trim()).get().await()
+                snapshot.getValue(Lender::class.java) ?: Lender(id = lenderId.trim())
+            }
         }
     }
 
@@ -49,16 +53,18 @@ class LenderRepository(context: Context? = null) {
         address: String?
     ): Result<Unit> = withContext(Dispatchers.IO) {
         runCatching {
-            val updates = mutableMapOf<String, Any?>()
-            villageTown?.let { updates["villageTown"] = it.trim() }
-            postOffice?.let { updates["postOffice"] = it.trim() }
-            dist?.let { updates["dist"] = it.trim() }
-            address?.let { updates["address"] = it.trim() }
+            withTimeout(15000L) {
+                val updates = mutableMapOf<String, Any?>()
+                villageTown?.let { updates["villageTown"] = it.trim() }
+                postOffice?.let { updates["postOffice"] = it.trim() }
+                dist?.let { updates["dist"] = it.trim() }
+                address?.let { updates["address"] = it.trim() }
 
-            if (updates.isNotEmpty()) {
-                FirebaseDbProvider.lendersRef.child(lenderId.trim()).updateChildren(updates).await()
+                if (updates.isNotEmpty()) {
+                    FirebaseDbProvider.lendersRef.child(lenderId.trim()).updateChildren(updates).await()
+                }
+                Unit
             }
-            Unit
         }
     }
 
@@ -67,12 +73,14 @@ class LenderRepository(context: Context? = null) {
         newPasswordPlain: String
     ): Result<Unit> = withContext(Dispatchers.IO) {
         runCatching {
-            FirebaseDbProvider.lendersRef
-                .child(lenderId.trim())
-                .child("passwordHash")
-                .setValue(newPasswordPlain.trim())
-                .await()
-            Unit
+            withTimeout(15000L) {
+                FirebaseDbProvider.lendersRef
+                    .child(lenderId.trim())
+                    .child("passwordHash")
+                    .setValue(newPasswordPlain.trim())
+                    .await()
+                Unit
+            }
         }
     }
 
@@ -88,17 +96,19 @@ class LenderRepository(context: Context? = null) {
             val cached = localDb?.borrowerDao()?.getBorrowersDirect(cleanLenderId)?.map { it.toBorrower() }
 
             try {
-                val snapshot = FirebaseDbProvider.borrowersRef
-                    .orderByChild("lenderId")
-                    .equalTo(cleanLenderId)
-                    .get()
-                    .await()
+                withTimeout(15000L) {
+                    val snapshot = FirebaseDbProvider.borrowersRef
+                        .orderByChild("lenderId")
+                        .equalTo(cleanLenderId)
+                        .get()
+                        .await()
 
-                val remoteBorrowers = snapshot.children.mapNotNull { it.getValue(Borrower::class.java) }
-                try {
-                    localDb?.borrowerDao()?.insertAll(remoteBorrowers.map { BorrowerEntity.fromModel(it) })
-                } catch (_: Exception) {}
-                remoteBorrowers
+                    val remoteBorrowers = snapshot.children.mapNotNull { it.getValue(Borrower::class.java) }
+                    try {
+                        localDb?.borrowerDao()?.insertAll(remoteBorrowers.map { BorrowerEntity.fromModel(it) })
+                    } catch (_: Exception) {}
+                    remoteBorrowers
+                }
             } catch (e: Exception) {
                 cached ?: throw e
             }
@@ -112,72 +122,71 @@ class LenderRepository(context: Context? = null) {
         avatarBytes: ByteArray?
     ): Result<Unit> = withContext(Dispatchers.IO) {
         runCatching {
-            val timestamp = System.currentTimeMillis()
-            val mobile = borrower.mobileNumber.trim()
+            withTimeout(20000L) {
+                val mobile = borrower.mobileNumber.trim()
 
-            var aadhaarUrl = borrower.aadhaarCardUrl
-            var panUrl = borrower.panCardUrl
-            var avatarUrl = borrower.profilePicUrl
+                // Encode images as Base64 strings directly in RTDB (Bypasses Cloud Storage)
+                var aadhaarUrl = borrower.aadhaarCardUrl
+                var panUrl = borrower.panCardUrl
+                var avatarUrl = borrower.profilePicUrl
 
-            if (aadhaarBytes != null && aadhaarBytes.isNotEmpty()) {
-                val ref = FirebaseDbProvider.storage.child("kyc-documents/aadhaar_${mobile}_$timestamp.jpg")
-                ref.putBytes(aadhaarBytes).await()
-                aadhaarUrl = ref.downloadUrl.await().toString()
+                if (aadhaarBytes != null && aadhaarBytes.isNotEmpty()) {
+                    aadhaarUrl = "data:image/jpeg;base64," + Base64.encodeToString(aadhaarBytes, Base64.NO_WRAP)
+                }
+
+                if (panBytes != null && panBytes.isNotEmpty()) {
+                    panUrl = "data:image/jpeg;base64," + Base64.encodeToString(panBytes, Base64.NO_WRAP)
+                }
+
+                if (avatarBytes != null && avatarBytes.isNotEmpty()) {
+                    avatarUrl = "data:image/jpeg;base64," + Base64.encodeToString(avatarBytes, Base64.NO_WRAP)
+                }
+
+                val validId = borrower.id?.trim()?.takeIf { it.isNotBlank() }
+                    ?: FirebaseDbProvider.borrowersRef.push().key
+                    ?: UUID.randomUUID().toString()
+
+                val updatedBorrower = borrower.copy(
+                    id = validId,
+                    lenderId = borrower.lenderId.trim(),
+                    mobileNumber = mobile,
+                    aadhaarCardUrl = aadhaarUrl,
+                    panCardUrl = panUrl,
+                    profilePicUrl = avatarUrl
+                )
+
+                FirebaseDbProvider.borrowersRef.child(validId).setValue(updatedBorrower).await()
+                try {
+                    localDb?.borrowerDao()?.insert(BorrowerEntity.fromModel(updatedBorrower))
+                } catch (_: Exception) {}
+                Unit
             }
-
-            if (panBytes != null && panBytes.isNotEmpty()) {
-                val ref = FirebaseDbProvider.storage.child("kyc-documents/pan_${mobile}_$timestamp.jpg")
-                ref.putBytes(panBytes).await()
-                panUrl = ref.downloadUrl.await().toString()
-            }
-
-            if (avatarBytes != null && avatarBytes.isNotEmpty()) {
-                val ref = FirebaseDbProvider.storage.child("profile-avatars/avatar_${mobile}_$timestamp.jpg")
-                ref.putBytes(avatarBytes).await()
-                avatarUrl = ref.downloadUrl.await().toString()
-            }
-
-            val validId = borrower.id?.trim()?.takeIf { it.isNotBlank() }
-                ?: FirebaseDbProvider.borrowersRef.push().key
-                ?: UUID.randomUUID().toString()
-
-            val updatedBorrower = borrower.copy(
-                id = validId,
-                lenderId = borrower.lenderId.trim(),
-                mobileNumber = mobile,
-                aadhaarCardUrl = aadhaarUrl,
-                panCardUrl = panUrl,
-                profilePicUrl = avatarUrl
-            )
-
-            FirebaseDbProvider.borrowersRef.child(validId).setValue(updatedBorrower).await()
-            try { getBorrowers(borrower.lenderId) } catch (_: Exception) {}
-            Unit
         }
     }
 
     suspend fun updateBorrower(borrower: Borrower): Result<Unit> = withContext(Dispatchers.IO) {
         runCatching {
-            val id = borrower.id?.trim()?.takeIf { it.isNotBlank() }
-                ?: throw IllegalArgumentException("Borrower ID cannot be null or blank")
+            withTimeout(15000L) {
+                val id = borrower.id?.trim()?.takeIf { it.isNotBlank() }
+                    ?: throw IllegalArgumentException("Borrower ID cannot be null or blank")
 
-            val updates = mutableMapOf<String, Any?>()
-            updates["name"] = borrower.name.trim()
-            updates["mobileNumber"] = borrower.mobileNumber.trim()
-            borrower.villageCity?.let { updates["villageCity"] = it.trim() }
-            borrower.postOffice?.let { updates["postOffice"] = it.trim() }
-            borrower.policeStation?.let { updates["policeStation"] = it.trim() }
-            borrower.dist?.let { updates["dist"] = it.trim() }
-            borrower.profilePicUrl?.let { updates["profilePicUrl"] = it }
-            borrower.aadhaarCardUrl?.let { updates["aadhaarCardUrl"] = it }
-            borrower.panCardUrl?.let { updates["panCardUrl"] = it }
-            if (!borrower.passwordHash.isNullOrBlank()) {
-                updates["passwordHash"] = borrower.passwordHash
+                val updates = mutableMapOf<String, Any?>()
+                updates["name"] = borrower.name.trim()
+                updates["mobileNumber"] = borrower.mobileNumber.trim()
+                borrower.villageCity?.let { updates["villageCity"] = it.trim() }
+                borrower.postOffice?.let { updates["postOffice"] = it.trim() }
+                borrower.policeStation?.let { updates["policeStation"] = it.trim() }
+                borrower.dist?.let { updates["dist"] = it.trim() }
+                borrower.profilePicUrl?.let { updates["profilePicUrl"] = it }
+                borrower.aadhaarCardUrl?.let { updates["aadhaarCardUrl"] = it }
+                borrower.panCardUrl?.let { updates["panCardUrl"] = it }
+                if (!borrower.passwordHash.isNullOrBlank()) {
+                    updates["passwordHash"] = borrower.passwordHash
+                }
+
+                FirebaseDbProvider.borrowersRef.child(id).updateChildren(updates).await()
+                Unit
             }
-
-            FirebaseDbProvider.borrowersRef.child(id).updateChildren(updates).await()
-            try { getBorrowers(borrower.lenderId) } catch (_: Exception) {}
-            Unit
         }
     }
 
@@ -188,83 +197,84 @@ class LenderRepository(context: Context? = null) {
         imageBytes: ByteArray
     ): Result<String> = withContext(Dispatchers.IO) {
         runCatching {
-            val timestamp = System.currentTimeMillis()
-            val cleanMobile = mobileNumber.trim()
-            val cleanId = borrowerId.trim()
-            val folder = if (docType == "avatar") "profile-avatars" else "kyc-documents"
-            val ref = FirebaseDbProvider.storage.child("$folder/${docType}_${cleanMobile}_$timestamp.jpg")
+            withTimeout(15000L) {
+                val cleanId = borrowerId.trim()
+                val dataUri = "data:image/jpeg;base64," + Base64.encodeToString(imageBytes, Base64.NO_WRAP)
 
-            ref.putBytes(imageBytes).await()
-            val publicUrl = ref.downloadUrl.await().toString()
+                val fieldKey = when (docType) {
+                    "aadhaar" -> "aadhaarCardUrl"
+                    "pan" -> "panCardUrl"
+                    else -> "profilePicUrl"
+                }
 
-            val fieldKey = when (docType) {
-                "aadhaar" -> "aadhaarCardUrl"
-                "pan" -> "panCardUrl"
-                else -> "profilePicUrl"
+                FirebaseDbProvider.borrowersRef.child(cleanId).child(fieldKey).setValue(dataUri).await()
+                dataUri
             }
-
-            FirebaseDbProvider.borrowersRef.child(cleanId).child(fieldKey).setValue(publicUrl).await()
-            publicUrl
         }
     }
 
     suspend fun deleteBorrower(borrowerId: String): Result<Unit> = withContext(Dispatchers.IO) {
         runCatching {
-            val cleanId = borrowerId.trim()
-            FirebaseDbProvider.borrowersRef.child(cleanId).removeValue().await()
-            localDb?.borrowerDao()?.deleteById(cleanId)
-            Unit
+            withTimeout(15000L) {
+                val cleanId = borrowerId.trim()
+                FirebaseDbProvider.borrowersRef.child(cleanId).removeValue().await()
+                localDb?.borrowerDao()?.deleteById(cleanId)
+                Unit
+            }
         }
     }
 
     suspend fun giveLoanManually(loan: Loan): Result<Unit> = withContext(Dispatchers.IO) {
         runCatching {
-            val tenure = if (loan.tenureDays > 0) loan.tenureDays else 30
-            val totalInterest = loan.principalAmount * (loan.monthlyInterestRate / 100.0) * (tenure / 30.0)
-            val calculatedTotalPayable = if (loan.totalPayable > 0.0) {
-                loan.totalPayable
-            } else {
-                round((loan.principalAmount + totalInterest) * 100.0) / 100.0
+            withTimeout(15000L) {
+                val tenure = if (loan.tenureDays > 0) loan.tenureDays else 30
+                val totalInterest = loan.principalAmount * (loan.monthlyInterestRate / 100.0) * (tenure / 30.0)
+                val calculatedTotalPayable = if (loan.totalPayable > 0.0) {
+                    loan.totalPayable
+                } else {
+                    round((loan.principalAmount + totalInterest) * 100.0) / 100.0
+                }
+                val calculatedInstallment = if (loan.dailyInstallment > 0.0) {
+                    loan.dailyInstallment
+                } else {
+                    round((calculatedTotalPayable / tenure) * 100.0) / 100.0
+                }
+                val startDate = loan.startDate?.trim()?.takeIf { it.isNotBlank() } ?: DateUtils.getTodaySqlFormat()
+                val endDate = loan.endDate?.trim()?.takeIf { it.isNotBlank() } ?: calculateEndDate(startDate, tenure)
+
+                val validLoanId = loan.id?.trim()?.takeIf { it.isNotBlank() }
+                    ?: FirebaseDbProvider.loansRef.push().key
+                    ?: UUID.randomUUID().toString()
+
+                val preparedLoan = loan.copy(
+                    id = validLoanId,
+                    lenderId = loan.lenderId.trim(),
+                    borrowerId = loan.borrowerId.trim(),
+                    totalPayable = calculatedTotalPayable,
+                    dailyInstallment = calculatedInstallment,
+                    startDate = startDate,
+                    endDate = endDate,
+                    status = LoanStatus.ACTIVE
+                )
+
+                FirebaseDbProvider.loansRef.child(validLoanId).setValue(preparedLoan).await()
+                Unit
             }
-            val calculatedInstallment = if (loan.dailyInstallment > 0.0) {
-                loan.dailyInstallment
-            } else {
-                round((calculatedTotalPayable / tenure) * 100.0) / 100.0
-            }
-            val startDate = loan.startDate?.trim()?.takeIf { it.isNotBlank() } ?: DateUtils.getTodaySqlFormat()
-            val endDate = loan.endDate?.trim()?.takeIf { it.isNotBlank() } ?: calculateEndDate(startDate, tenure)
-
-            val validLoanId = loan.id?.trim()?.takeIf { it.isNotBlank() }
-                ?: FirebaseDbProvider.loansRef.push().key
-                ?: UUID.randomUUID().toString()
-
-            val preparedLoan = loan.copy(
-                id = validLoanId,
-                lenderId = loan.lenderId.trim(),
-                borrowerId = loan.borrowerId.trim(),
-                totalPayable = calculatedTotalPayable,
-                dailyInstallment = calculatedInstallment,
-                startDate = startDate,
-                endDate = endDate,
-                status = LoanStatus.ACTIVE
-            )
-
-            FirebaseDbProvider.loansRef.child(validLoanId).setValue(preparedLoan).await()
-            try { getDailyDues(loan.lenderId) } catch (_: Exception) {}
-            Unit
         }
     }
 
     suspend fun getPendingLoanRequests(lenderId: String): Result<List<Loan>> = withContext(Dispatchers.IO) {
         runCatching {
-            val snapshot = FirebaseDbProvider.loansRef
-                .orderByChild("lenderId")
-                .equalTo(lenderId.trim())
-                .get()
-                .await()
+            withTimeout(15000L) {
+                val snapshot = FirebaseDbProvider.loansRef
+                    .orderByChild("lenderId")
+                    .equalTo(lenderId.trim())
+                    .get()
+                    .await()
 
-            snapshot.children.mapNotNull { it.getValue(Loan::class.java) }
-                .filter { it.status == LoanStatus.PENDING }
+                snapshot.children.mapNotNull { it.getValue(Loan::class.java) }
+                    .filter { it.status == LoanStatus.PENDING }
+            }
         }
     }
 
@@ -275,178 +285,188 @@ class LenderRepository(context: Context? = null) {
         disbursementRef: String
     ): Result<Unit> = withContext(Dispatchers.IO) {
         runCatching {
-            val cleanLoanId = loanId.trim()
-            val snapshot = FirebaseDbProvider.loansRef.child(cleanLoanId).get().await()
-            val existingLoan = snapshot.getValue(Loan::class.java)
-                ?: throw IllegalArgumentException("Loan not found")
+            withTimeout(15000L) {
+                val cleanLoanId = loanId.trim()
+                val snapshot = FirebaseDbProvider.loansRef.child(cleanLoanId).get().await()
+                val existingLoan = snapshot.getValue(Loan::class.java)
+                    ?: throw IllegalArgumentException("Loan not found")
 
-            val tenure = if (existingLoan.tenureDays > 0) existingLoan.tenureDays else 30
-            val totalInterest = existingLoan.principalAmount * (interestRate / 100.0) * (tenure / 30.0)
-            val totalPayable = round((existingLoan.principalAmount + totalInterest) * 100.0) / 100.0
-            val dailyInstallment = round((totalPayable / tenure) * 100.0) / 100.0
+                val tenure = if (existingLoan.tenureDays > 0) existingLoan.tenureDays else 30
+                val totalInterest = existingLoan.principalAmount * (interestRate / 100.0) * (tenure / 30.0)
+                val totalPayable = round((existingLoan.principalAmount + totalInterest) * 100.0) / 100.0
+                val dailyInstallment = round((totalPayable / tenure) * 100.0) / 100.0
 
-            val startDate = DateUtils.getTodaySqlFormat()
-            val endDate = calculateEndDate(startDate, tenure)
+                val startDate = DateUtils.getTodaySqlFormat()
+                val endDate = calculateEndDate(startDate, tenure)
 
-            val updates = mapOf(
-                "status" to LoanStatus.ACTIVE.name,
-                "monthlyInterestRate" to interestRate,
-                "totalPayable" to totalPayable,
-                "dailyInstallment" to dailyInstallment,
-                "startDate" to startDate,
-                "endDate" to endDate,
-                "disbursementMode" to disbursementMode.name,
-                "disbursementRef" to disbursementRef.trim()
-            )
+                val updates = mapOf(
+                    "status" to LoanStatus.ACTIVE.name,
+                    "monthlyInterestRate" to interestRate,
+                    "totalPayable" to totalPayable,
+                    "dailyInstallment" to dailyInstallment,
+                    "startDate" to startDate,
+                    "endDate" to endDate,
+                    "disbursementMode" to disbursementMode.name,
+                    "disbursementRef" to disbursementRef.trim()
+                )
 
-            FirebaseDbProvider.loansRef.child(cleanLoanId).updateChildren(updates).await()
-            try { getDailyDues(existingLoan.lenderId) } catch (_: Exception) {}
-            Unit
+                FirebaseDbProvider.loansRef.child(cleanLoanId).updateChildren(updates).await()
+                Unit
+            }
         }
     }
 
     suspend fun rejectLoan(loanId: String): Result<Unit> = withContext(Dispatchers.IO) {
         runCatching {
-            FirebaseDbProvider.loansRef
-                .child(loanId.trim())
-                .child("status")
-                .setValue(LoanStatus.REJECTED.name)
-                .await()
-            Unit
+            withTimeout(15000L) {
+                FirebaseDbProvider.loansRef
+                    .child(loanId.trim())
+                    .child("status")
+                    .setValue(LoanStatus.REJECTED.name)
+                    .await()
+                Unit
+            }
         }
     }
 
     suspend fun getApprovedLoans(lenderId: String): Result<List<ApprovedLoanDetail>> = withContext(Dispatchers.IO) {
         runCatching {
-            val cleanLenderId = lenderId.trim()
-            val snapshot = FirebaseDbProvider.loansRef
-                .orderByChild("lenderId")
-                .equalTo(cleanLenderId)
-                .get()
-                .await()
+            withTimeout(15000L) {
+                val cleanLenderId = lenderId.trim()
+                val snapshot = FirebaseDbProvider.loansRef
+                    .orderByChild("lenderId")
+                    .equalTo(cleanLenderId)
+                    .get()
+                    .await()
 
-            val loans = snapshot.children.mapNotNull { it.getValue(Loan::class.java) }
-                .filter { it.status == LoanStatus.ACTIVE || it.status == LoanStatus.APPROVED }
+                val loans = snapshot.children.mapNotNull { it.getValue(Loan::class.java) }
+                    .filter { it.status == LoanStatus.ACTIVE || it.status == LoanStatus.APPROVED }
 
-            val borrowers = getBorrowers(cleanLenderId).getOrDefault(emptyList()).associateBy { it.id }
-            val duesMap = getDailyDues(cleanLenderId).getOrDefault(emptyList()).associateBy { it.loanId }
+                val borrowers = getBorrowers(cleanLenderId).getOrDefault(emptyList()).associateBy { it.id }
+                val duesMap = getDailyDues(cleanLenderId).getOrDefault(emptyList()).associateBy { it.loanId }
 
-            loans.map { loan ->
-                val borrower = borrowers[loan.borrowerId]
-                val dueItem = duesMap[loan.id]
-                val sDate = loan.startDate?.trim()?.takeIf { it.isNotBlank() } ?: "Not Set"
-                val eDate = loan.endDate?.trim()?.takeIf { it.isNotBlank() } ?: calculateEndDate(loan.startDate, loan.tenureDays)
-                val todayPaid = dueItem?.todayPaidAmount ?: 0.0
-                val todayDue = dueItem?.todayDueBalance ?: maxOf(0.0, loan.dailyInstallment - todayPaid)
+                loans.map { loan ->
+                    val borrower = borrowers[loan.borrowerId]
+                    val dueItem = duesMap[loan.id]
+                    val sDate = loan.startDate?.trim()?.takeIf { it.isNotBlank() } ?: "Not Set"
+                    val eDate = loan.endDate?.trim()?.takeIf { it.isNotBlank() } ?: calculateEndDate(loan.startDate, loan.tenureDays)
+                    val todayPaid = dueItem?.todayPaidAmount ?: 0.0
+                    val todayDue = dueItem?.todayDueBalance ?: maxOf(0.0, loan.dailyInstallment - todayPaid)
 
-                ApprovedLoanDetail(
-                    loanId = loan.id.orEmpty(),
-                    borrowerId = loan.borrowerId,
-                    borrowerName = borrower?.name ?: "Customer",
-                    borrowerMobile = borrower?.mobileNumber ?: "N/A",
-                    principalAmount = loan.principalAmount,
-                    totalPayable = loan.totalPayable,
-                    dailyInstallment = loan.dailyInstallment,
-                    tenureDays = loan.tenureDays,
-                    startDate = sDate,
-                    endDate = eDate,
-                    status = loan.status.name,
-                    remainingBalance = maxOf(0.0, loan.totalPayable - (dueItem?.totalPaid ?: 0.0)),
-                    todayPaid = todayPaid,
-                    todayDue = todayDue
-                )
+                    ApprovedLoanDetail(
+                        loanId = loan.id.orEmpty(),
+                        borrowerId = loan.borrowerId,
+                        borrowerName = borrower?.name ?: "Customer",
+                        borrowerMobile = borrower?.mobileNumber ?: "N/A",
+                        principalAmount = loan.principalAmount,
+                        totalPayable = loan.totalPayable,
+                        dailyInstallment = loan.dailyInstallment,
+                        tenureDays = loan.tenureDays,
+                        startDate = sDate,
+                        endDate = eDate,
+                        status = loan.status.name,
+                        remainingBalance = maxOf(0.0, loan.totalPayable - (dueItem?.totalPaid ?: 0.0)),
+                        todayPaid = todayPaid,
+                        todayDue = todayDue
+                    )
+                }
             }
         }
     }
 
     suspend fun getDailyDues(lenderId: String): Result<List<DailyDueItem>> = withContext(Dispatchers.IO) {
         runCatching {
-            val cleanLenderId = lenderId.trim()
-            val todaySql = DateUtils.getTodaySqlFormat()
+            withTimeout(15000L) {
+                val cleanLenderId = lenderId.trim()
+                val todaySql = DateUtils.getTodaySqlFormat()
 
-            val loansSnapshot = FirebaseDbProvider.loansRef
-                .orderByChild("lenderId")
-                .equalTo(cleanLenderId)
-                .get()
-                .await()
+                val loansSnapshot = FirebaseDbProvider.loansRef
+                    .orderByChild("lenderId")
+                    .equalTo(cleanLenderId)
+                    .get()
+                    .await()
 
-            val activeLoans = loansSnapshot.children.mapNotNull { it.getValue(Loan::class.java) }
+                val activeLoans = loansSnapshot.children.mapNotNull { it.getValue(Loan::class.java) }
                 .filter { it.status == LoanStatus.ACTIVE }
 
-            val borrowers = getBorrowers(cleanLenderId).getOrDefault(emptyList()).associateBy { it.id }
+                val borrowers = getBorrowers(cleanLenderId).getOrDefault(emptyList()).associateBy { it.id }
 
-            val repaymentsSnapshot = FirebaseDbProvider.repaymentsRef
-                .orderByChild("lenderId")
-                .equalTo(cleanLenderId)
-                .get()
-                .await()
+                val repaymentsSnapshot = FirebaseDbProvider.repaymentsRef
+                    .orderByChild("lenderId")
+                    .equalTo(cleanLenderId)
+                    .get()
+                    .await()
 
-            val repayments = repaymentsSnapshot.children.mapNotNull { it.getValue(Repayment::class.java) }
-                .filter { it.status == RepaymentStatus.VERIFIED || it.status == null }
+                val repayments = repaymentsSnapshot.children.mapNotNull { it.getValue(Repayment::class.java) }
+                    .filter { it.status == RepaymentStatus.VERIFIED || it.status == null }
 
-            activeLoans.map { loan ->
-                val borrower = borrowers[loan.borrowerId]
-                val loanRepayments = repayments.filter { it.loanId == loan.id }
+                activeLoans.map { loan ->
+                    val borrower = borrowers[loan.borrowerId]
+                    val loanRepayments = repayments.filter { it.loanId == loan.id }
 
-                val totalPaid = loanRepayments.sumOf { it.amountPaid }
-                val paidToday = loanRepayments.filter { it.paymentDate == todaySql }.sumOf { it.amountPaid }
-                val remainingBalance = maxOf(0.0, loan.totalPayable - totalPaid)
-                val todayDueBalance = maxOf(0.0, minOf(loan.dailyInstallment - paidToday, remainingBalance))
+                    val totalPaid = loanRepayments.sumOf { it.amountPaid }
+                    val paidToday = loanRepayments.filter { it.paymentDate == todaySql }.sumOf { it.amountPaid }
+                    val remainingBalance = maxOf(0.0, loan.totalPayable - totalPaid)
+                    val todayDueBalance = maxOf(0.0, minOf(loan.dailyInstallment - paidToday, remainingBalance))
 
-                DailyDueItem(
-                    loanId = loan.id.orEmpty(),
-                    borrowerId = loan.borrowerId,
-                    borrowerName = borrower?.name ?: "Customer",
-                    borrowerMobile = borrower?.mobileNumber ?: "",
-                    dailyInstallment = loan.dailyInstallment,
-                    todayDueBalance = todayDueBalance,
-                    todayPaidAmount = paidToday,
-                    remainingBalance = remainingBalance,
-                    totalPaid = totalPaid
-                )
+                    DailyDueItem(
+                        loanId = loan.id.orEmpty(),
+                        borrowerId = loan.borrowerId,
+                        borrowerName = borrower?.name ?: "Customer",
+                        borrowerMobile = borrower?.mobileNumber ?: "",
+                        dailyInstallment = loan.dailyInstallment,
+                        todayDueBalance = todayDueBalance,
+                        todayPaidAmount = paidToday,
+                        remainingBalance = remainingBalance,
+                        totalPaid = totalPaid
+                    )
+                }
             }
         }
     }
 
     suspend fun recordRepayment(repayment: Repayment): Result<Unit> = withContext(Dispatchers.IO) {
         runCatching {
-            val validId = repayment.id?.takeIf { it.isNotBlank() }
-                ?: FirebaseDbProvider.repaymentsRef.push().key
-                ?: UUID.randomUUID().toString()
+            withTimeout(15000L) {
+                val validId = repayment.id?.takeIf { it.isNotBlank() }
+                    ?: FirebaseDbProvider.repaymentsRef.push().key
+                    ?: UUID.randomUUID().toString()
 
-            val finalRepayment = repayment.copy(
-                id = validId,
-                paymentMode = PaymentMode.CASH,
-                status = RepaymentStatus.VERIFIED
-            )
+                val finalRepayment = repayment.copy(
+                    id = validId,
+                    paymentMode = PaymentMode.CASH,
+                    status = RepaymentStatus.VERIFIED
+                )
 
-            FirebaseDbProvider.repaymentsRef.child(validId).setValue(finalRepayment).await()
-            try { getDailyDues(repayment.lenderId) } catch (_: Exception) {}
-            Unit
+                FirebaseDbProvider.repaymentsRef.child(validId).setValue(finalRepayment).await()
+                Unit
+            }
         }
     }
 
     suspend fun getPendingVerifications(lenderId: String): Result<List<PendingPaymentItem>> = withContext(Dispatchers.IO) {
         runCatching {
-            val cleanLenderId = lenderId.trim()
-            val snapshot = FirebaseDbProvider.repaymentsRef
-                .orderByChild("lenderId")
-                .equalTo(cleanLenderId)
-                .get()
-                .await()
+            withTimeout(15000L) {
+                val cleanLenderId = lenderId.trim()
+                val snapshot = FirebaseDbProvider.repaymentsRef
+                    .orderByChild("lenderId")
+                    .equalTo(cleanLenderId)
+                    .get()
+                    .await()
 
-            val pendingRepayments = snapshot.children.mapNotNull { it.getValue(Repayment::class.java) }
-                .filter { it.status == RepaymentStatus.PENDING }
+                val pendingRepayments = snapshot.children.mapNotNull { it.getValue(Repayment::class.java) }
+                    .filter { it.status == RepaymentStatus.PENDING }
 
-            val borrowers = getBorrowers(cleanLenderId).getOrDefault(emptyList()).associateBy { it.id }
+                val borrowers = getBorrowers(cleanLenderId).getOrDefault(emptyList()).associateBy { it.id }
 
-            pendingRepayments.map { repayment ->
-                val borrower = borrowers[repayment.borrowerId]
-                PendingPaymentItem(
-                    repayment = repayment,
-                    borrowerName = borrower?.name ?: "Customer",
-                    borrowerMobile = borrower?.mobileNumber ?: "N/A"
-                )
+                pendingRepayments.map { repayment ->
+                    val borrower = borrowers[repayment.borrowerId]
+                    PendingPaymentItem(
+                        repayment = repayment,
+                        borrowerName = borrower?.name ?: "Customer",
+                       borrowerMobile = borrower?.mobileNumber ?: "N/A"
+                    )
+                }
             }
         }
     }
@@ -457,43 +477,45 @@ class LenderRepository(context: Context? = null) {
         lenderId: String? = null
     ): Result<Unit> = withContext(Dispatchers.IO) {
         runCatching {
-            val newStatus = if (accept) RepaymentStatus.VERIFIED.name else RepaymentStatus.REJECTED.name
-            FirebaseDbProvider.repaymentsRef
-                .child(repaymentId.trim())
-                .child("status")
-                .setValue(newStatus)
-                .await()
-
-            if (!lenderId.isNullOrBlank()) {
-                try { getDailyDues(lenderId) } catch (_: Exception) {}
+            withTimeout(15000L) {
+                val newStatus = if (accept) RepaymentStatus.VERIFIED.name else RepaymentStatus.REJECTED.name
+                FirebaseDbProvider.repaymentsRef
+                    .child(repaymentId.trim())
+                    .child("status")
+                    .setValue(newStatus)
+                    .await()
+                Unit
             }
-            Unit
         }
     }
 
     suspend fun getRepaymentsForLoan(loanId: String): Result<List<Repayment>> = withContext(Dispatchers.IO) {
         runCatching {
-            val snapshot = FirebaseDbProvider.repaymentsRef
-                .orderByChild("loanId")
-                .equalTo(loanId.trim())
-                .get()
-                .await()
+            withTimeout(15000L) {
+                val snapshot = FirebaseDbProvider.repaymentsRef
+                    .orderByChild("loanId")
+                    .equalTo(loanId.trim())
+                    .get()
+                    .await()
 
-            snapshot.children.mapNotNull { it.getValue(Repayment::class.java) }
-                .sortedByDescending { it.paymentDate }
+                snapshot.children.mapNotNull { it.getValue(Repayment::class.java) }
+                    .sortedByDescending { it.paymentDate }
+            }
         }
     }
 
     suspend fun getTrackPayments(lenderId: String): Result<List<Repayment>> = withContext(Dispatchers.IO) {
         runCatching {
-            val snapshot = FirebaseDbProvider.repaymentsRef
-                .orderByChild("lenderId")
-                .equalTo(lenderId.trim())
-                .get()
-                .await()
+            withTimeout(15000L) {
+                val snapshot = FirebaseDbProvider.repaymentsRef
+                    .orderByChild("lenderId")
+                    .equalTo(lenderId.trim())
+                    .get()
+                    .await()
 
-            snapshot.children.mapNotNull { it.getValue(Repayment::class.java) }
-                .sortedByDescending { it.paymentDate }
+                snapshot.children.mapNotNull { it.getValue(Repayment::class.java) }
+                    .sortedByDescending { it.paymentDate }
+            }
         }
     }
 
