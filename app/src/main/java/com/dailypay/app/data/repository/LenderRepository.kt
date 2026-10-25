@@ -17,6 +17,7 @@ import com.dailypay.app.data.model.RepaymentStatus
 import com.dailypay.app.data.remote.FirebaseDbProvider
 import com.dailypay.app.util.DateUtils
 import com.dailypay.app.util.ImageCompressor
+import com.google.firebase.database.DataSnapshot
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -36,11 +37,12 @@ class LenderRepository(context: Context? = null) {
         DailyPayDatabase.getDatabase(appContext)
     }
 
+    // --- 1. LENDER PROFILE & ADDRESS ---
     suspend fun getLenderProfile(lenderId: String): Result<Lender> = withContext(Dispatchers.IO) {
         runCatching {
             withTimeout(15000L) {
                 val snapshot = FirebaseDbProvider.lendersRef.child(lenderId.trim()).get().await()
-                snapshot.getValue(Lender::class.java) ?: Lender(id = lenderId.trim())
+                parseLender(snapshot) ?: Lender(id = lenderId.trim())
             }
         }
     }
@@ -84,6 +86,7 @@ class LenderRepository(context: Context? = null) {
         }
     }
 
+    // --- 2. MASTER CLIENTS & BORROWERS ---
     fun observeBorrowers(lenderId: String): Flow<List<Borrower>>? {
         return localDb?.borrowerDao()?.getBorrowersFlow(lenderId.trim())?.map { list ->
             list.map { it.toBorrower() }
@@ -103,7 +106,7 @@ class LenderRepository(context: Context? = null) {
                         .get()
                         .await()
 
-                    val remoteBorrowers = snapshot.children.mapNotNull { it.getValue(Borrower::class.java) }
+                    val remoteBorrowers = snapshot.children.mapNotNull { parseBorrower(it) }
                     try {
                         localDb?.borrowerDao()?.insertAll(remoteBorrowers.map { BorrowerEntity.fromModel(it) })
                     } catch (_: Exception) {}
@@ -115,6 +118,7 @@ class LenderRepository(context: Context? = null) {
         }
     }
 
+    // --- 3. ADD BORROWER (Base64 KYC Compression, no Cloud Storage) ---
     suspend fun addBorrower(
         borrower: Borrower,
         aadhaarBytes: ByteArray?,
@@ -214,6 +218,7 @@ class LenderRepository(context: Context? = null) {
         }
     }
 
+    // --- 4. DISBURSE LOAN (Give Loan Manually) ---
     suspend fun giveLoanManually(loan: Loan): Result<Unit> = withContext(Dispatchers.IO) {
         runCatching {
             withTimeout(15000L) {
@@ -253,6 +258,7 @@ class LenderRepository(context: Context? = null) {
         }
     }
 
+    // --- 5. NEW REQUESTS (Pending Loans) ---
     suspend fun getPendingLoanRequests(lenderId: String): Result<List<Loan>> = withContext(Dispatchers.IO) {
         runCatching {
             withTimeout(15000L) {
@@ -262,7 +268,7 @@ class LenderRepository(context: Context? = null) {
                     .get()
                     .await()
 
-                snapshot.children.mapNotNull { it.getValue(Loan::class.java) }
+                snapshot.children.mapNotNull { parseLoan(it) }
                     .filter { it.status == LoanStatus.PENDING }
             }
         }
@@ -278,7 +284,7 @@ class LenderRepository(context: Context? = null) {
             withTimeout(15000L) {
                 val cleanLoanId = loanId.trim()
                 val snapshot = FirebaseDbProvider.loansRef.child(cleanLoanId).get().await()
-                val existingLoan = snapshot.getValue(Loan::class.java)
+                val existingLoan = parseLoan(snapshot)
                     ?: throw IllegalArgumentException("Loan not found")
 
                 val tenure = if (existingLoan.tenureDays > 0) existingLoan.tenureDays else 30
@@ -319,6 +325,7 @@ class LenderRepository(context: Context? = null) {
         }
     }
 
+    // --- 6. APPROVED LOANS ---
     suspend fun getApprovedLoans(lenderId: String): Result<List<ApprovedLoanDetail>> = withContext(Dispatchers.IO) {
         runCatching {
             withTimeout(15000L) {
@@ -329,7 +336,7 @@ class LenderRepository(context: Context? = null) {
                     .get()
                     .await()
 
-                val loans = snapshot.children.mapNotNull { it.getValue(Loan::class.java) }
+                val loans = snapshot.children.mapNotNull { parseLoan(it) }
                     .filter { it.status == LoanStatus.ACTIVE || it.status == LoanStatus.APPROVED }
 
                 val borrowers = getBorrowers(cleanLenderId).getOrDefault(emptyList()).associateBy { it.id }
@@ -364,6 +371,7 @@ class LenderRepository(context: Context? = null) {
         }
     }
 
+    // --- 7. TODAY'S DUE & PAID TODAY ---
     suspend fun getDailyDues(lenderId: String): Result<List<DailyDueItem>> = withContext(Dispatchers.IO) {
         runCatching {
             withTimeout(15000L) {
@@ -376,7 +384,7 @@ class LenderRepository(context: Context? = null) {
                     .get()
                     .await()
 
-                val activeLoans = loansSnapshot.children.mapNotNull { it.getValue(Loan::class.java) }
+                val activeLoans = loansSnapshot.children.mapNotNull { parseLoan(it) }
                     .filter { it.status == LoanStatus.ACTIVE }
 
                 val borrowers = getBorrowers(cleanLenderId).getOrDefault(emptyList()).associateBy { it.id }
@@ -387,7 +395,7 @@ class LenderRepository(context: Context? = null) {
                     .get()
                     .await()
 
-                val repayments = repaymentsSnapshot.children.mapNotNull { it.getValue(Repayment::class.java) }
+                val repayments = repaymentsSnapshot.children.mapNotNull { parseRepayment(it) }
                     .filter { it.status == RepaymentStatus.VERIFIED || it.status == null }
 
                 activeLoans.map { loan ->
@@ -434,6 +442,7 @@ class LenderRepository(context: Context? = null) {
         }
     }
 
+    // --- 8. VERIFY PAYMENT (Pending Cash Handovers) ---
     suspend fun getPendingVerifications(lenderId: String): Result<List<PendingPaymentItem>> = withContext(Dispatchers.IO) {
         runCatching {
             withTimeout(15000L) {
@@ -444,7 +453,7 @@ class LenderRepository(context: Context? = null) {
                     .get()
                     .await()
 
-                val pendingRepayments = snapshot.children.mapNotNull { it.getValue(Repayment::class.java) }
+                val pendingRepayments = snapshot.children.mapNotNull { parseRepayment(it) }
                     .filter { it.status == RepaymentStatus.PENDING }
 
                 val borrowers = getBorrowers(cleanLenderId).getOrDefault(emptyList()).associateBy { it.id }
@@ -455,7 +464,7 @@ class LenderRepository(context: Context? = null) {
                         repayment = repayment,
                         borrowerName = borrower?.name ?: "Customer",
                         borrowerMobile = borrower?.mobileNumber ?: "N/A"
-      )
+                    )
                 }
             }
         }
@@ -479,6 +488,7 @@ class LenderRepository(context: Context? = null) {
         }
     }
 
+    // --- 9. TRACK RECORDS & REPAYMENT HISTORY ---
     suspend fun getRepaymentsForLoan(loanId: String): Result<List<Repayment>> = withContext(Dispatchers.IO) {
         runCatching {
             withTimeout(15000L) {
@@ -488,7 +498,7 @@ class LenderRepository(context: Context? = null) {
                     .get()
                     .await()
 
-                snapshot.children.mapNotNull { it.getValue(Repayment::class.java) }
+                snapshot.children.mapNotNull { parseRepayment(it) }
                     .sortedByDescending { it.paymentDate }
             }
         }
@@ -503,12 +513,13 @@ class LenderRepository(context: Context? = null) {
                     .get()
                     .await()
 
-                snapshot.children.mapNotNull { it.getValue(Repayment::class.java) }
+                snapshot.children.mapNotNull { parseRepayment(it) }
                     .sortedByDescending { it.paymentDate }
             }
         }
     }
 
+    // --- 10. LENDER LEDGER SUMMARY ---
     suspend fun getLedgerSummary(lenderId: String): Result<LenderLedgerSummary> = withContext(Dispatchers.IO) {
         runCatching {
             val dues = getDailyDues(lenderId).getOrDefault(emptyList())
@@ -528,6 +539,101 @@ class LenderRepository(context: Context? = null) {
     }
 
     suspend fun getLenderLedgerSummary(lenderId: String): Result<LenderLedgerSummary> = getLedgerSummary(lenderId)
+
+    // --- ROBUST SAFE PARSERS (Guarantees zero crashes from mismatched Firebase fields) ---
+    private fun parseLoan(snapshot: DataSnapshot): Loan? {
+        return runCatching { snapshot.getValue(Loan::class.java) }.getOrNull()
+            ?: runCatching {
+                val map = snapshot.value as? Map<*, *> ?: return null
+                Loan(
+                    id = snapshot.key,
+                    lenderId = map["lenderId"]?.toString() ?: "",
+                    borrowerId = map["borrowerId"]?.toString() ?: "",
+                    principalAmount = (map["principalAmount"] as? Number)?.toDouble() ?: 0.0,
+                    monthlyInterestRate = (map["monthlyInterestRate"] as? Number)?.toDouble() ?: 10.0,
+                    tenureDays = (map["tenureDays"] as? Number)?.toInt() ?: 30,
+                    totalPayable = (map["totalPayable"] as? Number)?.toDouble() ?: 0.0,
+                    dailyInstallment = (map["dailyInstallment"] as? Number)?.toDouble() ?: 0.0,
+                    status = parseStatus(map["status"]?.toString()),
+                    startDate = map["startDate"]?.toString(),
+                    endDate = map["endDate"]?.toString()
+                )
+            }.getOrNull()
+    }
+
+    private fun parseBorrower(snapshot: DataSnapshot): Borrower? {
+        return runCatching { snapshot.getValue(Borrower::class.java) }.getOrNull()
+            ?: runCatching {
+                val map = snapshot.value as? Map<*, *> ?: return null
+                Borrower(
+                    id = snapshot.key,
+                    lenderId = map["lenderId"]?.toString() ?: "",
+                    name = map["name"]?.toString() ?: "",
+                    mobileNumber = map["mobileNumber"]?.toString() ?: map["mobile_number"]?.toString() ?: "",
+                    villageCity = map["villageCity"]?.toString(),
+                    postOffice = map["postOffice"]?.toString(),
+                    policeStation = map["policeStation"]?.toString(),
+                    dist = map["dist"]?.toString(),
+                    aadhaarCardUrl = map["aadhaarCardUrl"]?.toString(),
+                    panCardUrl = map["panCardUrl"]?.toString(),
+                    profilePicUrl = map["profilePicUrl"]?.toString(),
+                    passwordHash = map["passwordHash"]?.toString()
+                )
+            }.getOrNull()
+    }
+
+    private fun parseRepayment(snapshot: DataSnapshot): Repayment? {
+        return runCatching { snapshot.getValue(Repayment::class.java) }.getOrNull()
+            ?: runCatching {
+                val map = snapshot.value as? Map<*, *> ?: return null
+                val statusStr = map["status"]?.toString()?.uppercase()
+                val repStatus = when (statusStr) {
+                    "PENDING" -> RepaymentStatus.PENDING
+                    "REJECTED" -> RepaymentStatus.REJECTED
+                    else -> RepaymentStatus.VERIFIED
+                }
+                Repayment(
+                    id = snapshot.key,
+                    loanId = map["loanId"]?.toString() ?: "",
+                    borrowerId = map["borrowerId"]?.toString() ?: "",
+                    lenderId = map["lenderId"]?.toString() ?: "",
+                    paymentDate = map["paymentDate"]?.toString(),
+                    amountPaid = (map["amountPaid"] as? Number)?.toDouble() ?: 0.0,
+                    paymentMode = PaymentMode.CASH,
+                    notes = map["notes"]?.toString(),
+                    status = repStatus
+                )
+            }.getOrNull()
+    }
+
+    private fun parseLender(snapshot: DataSnapshot): Lender? {
+        return runCatching { snapshot.getValue(Lender::class.java) }.getOrNull()
+            ?: runCatching {
+                val map = snapshot.value as? Map<*, *> ?: return null
+                Lender(
+                    id = snapshot.key,
+                    name = map["name"]?.toString() ?: "",
+                    ownerName = map["ownerName"]?.toString(),
+                    businessName = map["businessName"]?.toString(),
+                    mobileNumber = map["mobileNumber"]?.toString() ?: "",
+                    address = map["address"]?.toString(),
+                    villageTown = map["villageTown"]?.toString(),
+                    postOffice = map["postOffice"]?.toString(),
+                    dist = map["dist"]?.toString(),
+                    status = map["status"]?.toString() ?: "RUN"
+                )
+            }.getOrNull()
+    }
+
+    private fun parseStatus(str: String?): LoanStatus {
+        return when (str?.uppercase()?.trim()) {
+            "ACTIVE" -> LoanStatus.ACTIVE
+            "APPROVED" -> LoanStatus.APPROVED
+            "REJECTED" -> LoanStatus.REJECTED
+            "CLOSED" -> LoanStatus.CLOSED
+            else -> LoanStatus.PENDING
+        }
+    }
 
     private fun calculateEndDate(startDateStr: String?, tenureDays: Int): String {
         return try {
