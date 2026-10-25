@@ -37,7 +37,6 @@ class LenderRepository(context: Context? = null) {
         DailyPayDatabase.getDatabase(appContext)
     }
 
-    // --- 1. LENDER PROFILE & ADDRESS ---
     suspend fun getLenderProfile(lenderId: String): Result<Lender> = withContext(Dispatchers.IO) {
         runCatching {
             withTimeout(15000L) {
@@ -86,7 +85,6 @@ class LenderRepository(context: Context? = null) {
         }
     }
 
-    // --- 2. MASTER CLIENTS & BORROWERS ---
     fun observeBorrowers(lenderId: String): Flow<List<Borrower>>? {
         return localDb?.borrowerDao()?.getBorrowersFlow(lenderId.trim())?.map { list ->
             list.map { it.toBorrower() }
@@ -118,7 +116,6 @@ class LenderRepository(context: Context? = null) {
         }
     }
 
-    // --- 3. ADD BORROWER (Base64 KYC Compression, no Cloud Storage) ---
     suspend fun addBorrower(
         borrower: Borrower,
         aadhaarBytes: ByteArray?,
@@ -218,7 +215,7 @@ class LenderRepository(context: Context? = null) {
         }
     }
 
-    // --- 4. DISBURSE LOAN (Give Loan Manually) ---
+    // --- MANUAL LOAN: Starts Next Day ---
     suspend fun giveLoanManually(loan: Loan): Result<Unit> = withContext(Dispatchers.IO) {
         runCatching {
             withTimeout(15000L) {
@@ -234,8 +231,10 @@ class LenderRepository(context: Context? = null) {
                 } else {
                     round((calculatedTotalPayable / tenure) * 100.0) / 100.0
                 }
-                val startDate = loan.startDate?.trim()?.takeIf { it.isNotBlank() } ?: DateUtils.getTodaySqlFormat()
-                val endDate = loan.endDate?.trim()?.takeIf { it.isNotBlank() } ?: calculateEndDate(startDate, tenure)
+
+                // Daily EMI begins the following day
+                val startDate = loan.startDate?.trim()?.takeIf { it.isNotBlank() } ?: calculateNextDaySqlFormat()
+                val endDate = calculateEndDate(startDate, tenure)
 
                 val validLoanId = loan.id?.trim()?.takeIf { it.isNotBlank() }
                     ?: FirebaseDbProvider.loansRef.push().key
@@ -258,7 +257,6 @@ class LenderRepository(context: Context? = null) {
         }
     }
 
-    // --- 5. NEW REQUESTS (Pending Loans) ---
     suspend fun getPendingLoanRequests(lenderId: String): Result<List<Loan>> = withContext(Dispatchers.IO) {
         runCatching {
             withTimeout(15000L) {
@@ -274,6 +272,7 @@ class LenderRepository(context: Context? = null) {
         }
     }
 
+    // --- LOAN APPROVAL: Starts Next Day ---
     suspend fun approveAndDisburseLoan(
         loanId: String,
         interestRate: Double,
@@ -292,7 +291,8 @@ class LenderRepository(context: Context? = null) {
                 val totalPayable = round((existingLoan.principalAmount + totalInterest) * 100.0) / 100.0
                 val dailyInstallment = round((totalPayable / tenure) * 100.0) / 100.0
 
-                val startDate = DateUtils.getTodaySqlFormat()
+                // Loan approved today -> Daily EMI starts from NEXT day
+                val startDate = calculateNextDaySqlFormat()
                 val endDate = calculateEndDate(startDate, tenure)
 
                 val updates = mapOf(
@@ -325,7 +325,6 @@ class LenderRepository(context: Context? = null) {
         }
     }
 
-    // --- 6. APPROVED LOANS ---
     suspend fun getApprovedLoans(lenderId: String): Result<List<ApprovedLoanDetail>> = withContext(Dispatchers.IO) {
         runCatching {
             withTimeout(15000L) {
@@ -348,7 +347,7 @@ class LenderRepository(context: Context? = null) {
                     val sDate = loan.startDate?.trim()?.takeIf { it.isNotBlank() } ?: "Not Set"
                     val eDate = loan.endDate?.trim()?.takeIf { it.isNotBlank() } ?: calculateEndDate(loan.startDate, loan.tenureDays)
                     val todayPaid = dueItem?.todayPaidAmount ?: 0.0
-                    val todayDue = dueItem?.todayDueBalance ?: maxOf(0.0, loan.dailyInstallment - todayPaid)
+                    val todayDue = dueItem?.todayDueBalance ?: 0.0
 
                     ApprovedLoanDetail(
                         loanId = loan.id.orEmpty(),
@@ -362,6 +361,7 @@ class LenderRepository(context: Context? = null) {
                         startDate = sDate,
                         endDate = eDate,
                         status = loan.status.name,
+                        totalPaid = dueItem?.totalPaid ?: 0.0,
                         remainingBalance = maxOf(0.0, loan.totalPayable - (dueItem?.totalPaid ?: 0.0)),
                         todayPaid = todayPaid,
                         todayDue = todayDue
@@ -371,7 +371,6 @@ class LenderRepository(context: Context? = null) {
         }
     }
 
-    // --- 7. TODAY'S DUE & PAID TODAY ---
     suspend fun getDailyDues(lenderId: String): Result<List<DailyDueItem>> = withContext(Dispatchers.IO) {
         runCatching {
             withTimeout(15000L) {
@@ -405,7 +404,14 @@ class LenderRepository(context: Context? = null) {
                     val totalPaid = loanRepayments.sumOf { it.amountPaid }
                     val paidToday = loanRepayments.filter { it.paymentDate == todaySql }.sumOf { it.amountPaid }
                     val remainingBalance = maxOf(0.0, loan.totalPayable - totalPaid)
-                    val todayDueBalance = maxOf(0.0, minOf(loan.dailyInstallment - paidToday, remainingBalance))
+
+                    // EMI is only due on or after the startDate
+                    val isStarted = loan.startDate.isNullOrBlank() || loan.startDate <= todaySql
+                    val todayDueBalance = if (isStarted) {
+                        maxOf(0.0, minOf(loan.dailyInstallment - paidToday, remainingBalance))
+                    } else {
+                        0.0
+                    }
 
                     DailyDueItem(
                         loanId = loan.id.orEmpty(),
@@ -413,6 +419,7 @@ class LenderRepository(context: Context? = null) {
                         borrowerName = borrower?.name ?: "Customer",
                         borrowerMobile = borrower?.mobileNumber ?: "",
                         dailyInstallment = loan.dailyInstallment,
+                        totalPayable = loan.totalPayable,
                         todayDueBalance = todayDueBalance,
                         todayPaidAmount = paidToday,
                         remainingBalance = remainingBalance,
@@ -442,7 +449,6 @@ class LenderRepository(context: Context? = null) {
         }
     }
 
-    // --- 8. VERIFY PAYMENT (Pending Cash Handovers) ---
     suspend fun getPendingVerifications(lenderId: String): Result<List<PendingPaymentItem>> = withContext(Dispatchers.IO) {
         runCatching {
             withTimeout(15000L) {
@@ -488,7 +494,6 @@ class LenderRepository(context: Context? = null) {
         }
     }
 
-    // --- 9. TRACK RECORDS & REPAYMENT HISTORY ---
     suspend fun getRepaymentsForLoan(loanId: String): Result<List<Repayment>> = withContext(Dispatchers.IO) {
         runCatching {
             withTimeout(15000L) {
@@ -519,7 +524,6 @@ class LenderRepository(context: Context? = null) {
         }
     }
 
-    // --- 10. LENDER LEDGER SUMMARY ---
     suspend fun getLedgerSummary(lenderId: String): Result<LenderLedgerSummary> = withContext(Dispatchers.IO) {
         runCatching {
             val dues = getDailyDues(lenderId).getOrDefault(emptyList())
@@ -540,7 +544,6 @@ class LenderRepository(context: Context? = null) {
 
     suspend fun getLenderLedgerSummary(lenderId: String): Result<LenderLedgerSummary> = getLedgerSummary(lenderId)
 
-    // --- ROBUST SAFE PARSERS (Guarantees zero crashes from mismatched Firebase fields) ---
     private fun parseLoan(snapshot: DataSnapshot): Loan? {
         return runCatching { snapshot.getValue(Loan::class.java) }.getOrNull()
             ?: runCatching {
@@ -633,6 +636,12 @@ class LenderRepository(context: Context? = null) {
             "CLOSED" -> LoanStatus.CLOSED
             else -> LoanStatus.PENDING
         }
+    }
+
+    private fun calculateNextDaySqlFormat(): String {
+        val cal = Calendar.getInstance()
+        cal.add(Calendar.DAY_OF_YEAR, 1)
+        return SimpleDateFormat("yyyy-MM-dd", Locale.US).format(cal.time)
     }
 
     private fun calculateEndDate(startDateStr: String?, tenureDays: Int): String {

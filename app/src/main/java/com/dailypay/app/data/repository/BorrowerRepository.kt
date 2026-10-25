@@ -52,6 +52,8 @@ class BorrowerRepository {
         runCatching {
             withTimeout(15000L) {
                 val cleanBorrowerId = borrowerId.trim()
+                val todaySql = DateUtils.getTodaySqlFormat()
+
                 val loansSnapshot = FirebaseDbProvider.loansRef
                     .orderByChild("borrowerId")
                     .equalTo(cleanBorrowerId)
@@ -70,14 +72,18 @@ class BorrowerRepository {
                 val repayments = repaymentsSnapshot.children.mapNotNull { it.getValue(Repayment::class.java) }
                     .filter { it.status == RepaymentStatus.VERIFIED || it.status == null }
 
-                val todaySql = DateUtils.getTodaySqlFormat()
-
                 loans.map { loan ->
                     val loanRepayments = repayments.filter { it.loanId == loan.id }
                     val totalPaid = loanRepayments.sumOf { it.amountPaid }
                     val todayPaid = loanRepayments.filter { it.paymentDate == todaySql }.sumOf { it.amountPaid }
                     val remaining = maxOf(0.0, loan.totalPayable - totalPaid)
-                    val todayDue = maxOf(0.0, minOf(loan.dailyInstallment - todayPaid, remaining))
+
+                    val isStarted = loan.startDate.isNullOrBlank() || loan.startDate <= todaySql
+                    val todayDue = if (isStarted) {
+                        maxOf(0.0, minOf(loan.dailyInstallment - todayPaid, remaining))
+                    } else {
+                        0.0
+                    }
 
                     ApprovedLoanDetail(
                         loanId = loan.id.orEmpty(),
@@ -105,6 +111,8 @@ class BorrowerRepository {
         runCatching {
             withTimeout(15000L) {
                 val cleanBorrowerId = borrowerId.trim()
+                val todaySql = DateUtils.getTodaySqlFormat()
+
                 val loansSnapshot = FirebaseDbProvider.loansRef
                     .orderByChild("borrowerId")
                     .equalTo(cleanBorrowerId)
@@ -123,13 +131,13 @@ class BorrowerRepository {
                 val repayments = repaymentsSnapshot.children.mapNotNull { it.getValue(Repayment::class.java) }
                     .filter { it.status == RepaymentStatus.VERIFIED || it.status == null }
 
-                val todaySql = DateUtils.getTodaySqlFormat()
-
                 val totalBorrowed = loans.sumOf { it.totalPayable }
                 val totalPaid = repayments.sumOf { it.amountPaid }
                 val totalRemaining = maxOf(0.0, totalBorrowed - totalPaid)
                 val todayPaid = repayments.filter { it.paymentDate == todaySql }.sumOf { it.amountPaid }
-                val todayDue = maxOf(0.0, loans.sumOf { it.dailyInstallment } - todayPaid)
+
+                val activeStartedLoans = loans.filter { it.startDate.isNullOrBlank() || it.startDate <= todaySql }
+                val todayDue = maxOf(0.0, activeStartedLoans.sumOf { it.dailyInstallment } - todayPaid)
 
                 BorrowerDashboardSummary(
                     borrowerId = cleanBorrowerId,
