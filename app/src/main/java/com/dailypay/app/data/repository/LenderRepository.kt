@@ -142,20 +142,19 @@ class LenderRepository(context: Context? = null) {
                     passwordHash = cleanPassword,
                     aadhaarCardUrl = aadhaarBase64,
                     panCardUrl = panBase64,
-                    profilePicUrl = avatarBase64,
-                    createdAt = DateUtils.getTodaySqlFormat()
+                    profilePicUrl = avatarBase64
                 )
 
                 FirebaseDbProvider.borrowersRef.child(validId).setValue(updatedBorrower).await()
                 try {
-                    localDb?.borrowerDao()?.insert(BorrowerEntity.fromModel(updatedBorrower))
+                    localDb?.borrowerDao()?.insertAll(listOf(BorrowerEntity.fromModel(updatedBorrower)))
                 } catch (_: Exception) {}
                 Unit
             }
         }
     }
 
-suspend fun updateBorrower(borrower: Borrower): Result<Unit> = withContext(Dispatchers.IO) {
+    suspend fun updateBorrower(borrower: Borrower): Result<Unit> = withContext(Dispatchers.IO) {
         runCatching {
             withTimeout(15000L) {
                 val id = borrower.id?.trim()?.takeIf { it.isNotBlank() }
@@ -435,7 +434,7 @@ suspend fun updateBorrower(borrower: Borrower): Result<Unit> = withContext(Dispa
         }
     }
 
-suspend fun getPendingVerifications(lenderId: String): Result<List<PendingPaymentItem>> = withContext(Dispatchers.IO) {
+    suspend fun getPendingVerifications(lenderId: String): Result<List<PendingPaymentItem>> = withContext(Dispatchers.IO) {
         runCatching {
             withTimeout(15000L) {
                 val cleanLenderId = lenderId.trim()
@@ -456,7 +455,7 @@ suspend fun getPendingVerifications(lenderId: String): Result<List<PendingPaymen
                         repayment = repayment,
                         borrowerName = borrower?.name ?: "Customer",
                         borrowerMobile = borrower?.mobileNumber ?: "N/A"
-                    )
+      )
                 }
             }
         }
