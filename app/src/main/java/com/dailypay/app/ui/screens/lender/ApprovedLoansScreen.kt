@@ -11,20 +11,23 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.ReceiptLong
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.dailypay.app.R
 import com.dailypay.app.data.model.ApprovedLoanDetail
 import com.dailypay.app.data.model.Repayment
 import com.dailypay.app.data.repository.LenderRepository
+import com.dailypay.app.ui.components.AppImageView
 import com.dailypay.app.ui.theme.*
 import com.dailypay.app.util.CommunicationUtils
 import kotlinx.coroutines.launch
@@ -127,17 +130,32 @@ fun ApprovedLoansScreen(
                                 horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(
-                                        text = loan.borrowerName,
-                                        style = MaterialTheme.typography.titleMedium,
-                                        color = MaterialTheme.colorScheme.onSurface
+                                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                                    AppImageView(
+                                        data = loan.borrowerProfilePic,
+                                        contentDescription = loan.borrowerName,
+                                        modifier = Modifier
+                                            .size(46.dp)
+                                            .clip(CircleShape)
+                                            .border(1.5.dp, BrandPrimary.copy(alpha = 0.4f), CircleShape),
+                                        placeholderIcon = Icons.Default.Person,
+                                        contentScale = ContentScale.Crop
                                     )
-                                    Text(
-                                        text = "+91 ${loan.borrowerMobile}",
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        color = TextSecondaryLight
-                                    )
+
+                                    Spacer(modifier = Modifier.width(12.dp))
+
+                                    Column {
+                                        Text(
+                                            text = loan.borrowerName,
+                                            style = MaterialTheme.typography.titleMedium,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                        Text(
+                                            text = "+91 ${loan.borrowerMobile}",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = TextSecondaryLight
+                                        )
+                                    }
                                 }
 
                                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -183,7 +201,6 @@ fun ApprovedLoansScreen(
                             HorizontalDivider(color = BorderSubtleLight)
                             Spacer(modifier = Modifier.height(10.dp))
 
-                            // TODAY'S DUE & TODAY'S PAID CARD
                             Surface(
                                 modifier = Modifier.fillMaxWidth(),
                                 shape = RoundedCornerShape(12.dp),
@@ -214,40 +231,6 @@ fun ApprovedLoansScreen(
                                 horizontalArrangement = Arrangement.SpaceBetween
                             ) {
                                 Column {
-                                    Text("Approved Principal", style = MaterialTheme.typography.labelSmall, color = TextSecondaryLight)
-                                    Text("₹${loan.principalAmount}", style = MaterialTheme.typography.titleLarge, color = BrandPrimary)
-                                }
-
-                                Column(horizontalAlignment = Alignment.End) {
-                                    Text("Total Payable", style = MaterialTheme.typography.labelSmall, color = TextSecondaryLight)
-                                    Text("₹${loan.totalPayable}", style = MaterialTheme.typography.titleMedium)
-                                }
-                            }
-
-                            Spacer(modifier = Modifier.height(8.dp))
-
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween
-                            ) {
-                                Column {
-                                    Text("Total Paid", style = MaterialTheme.typography.labelSmall, color = MoneyGreen)
-                                    Text("₹${loan.totalPaid}", style = MaterialTheme.typography.titleMedium, color = MoneyGreen)
-                                }
-
-                                Column(horizontalAlignment = Alignment.End) {
-                                    Text("Remaining Balance", style = MaterialTheme.typography.labelSmall, color = DangerRed)
-                                    Text("₹${maxOf(0.0, loan.remainingBalance)}", style = MaterialTheme.typography.titleMedium, color = DangerRed)
-                                }
-                            }
-
-                            Spacer(modifier = Modifier.height(8.dp))
-
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween
-                            ) {
-                                Column {
                                     Text("Daily Installment", style = MaterialTheme.typography.labelSmall, color = TextSecondaryLight)
                                     Text("₹${loan.dailyInstallment}/day", style = MaterialTheme.typography.bodyMedium)
                                 }
@@ -255,6 +238,23 @@ fun ApprovedLoansScreen(
                                 Column(horizontalAlignment = Alignment.End) {
                                     Text("Tenure", style = MaterialTheme.typography.labelSmall, color = TextSecondaryLight)
                                     Text("${loan.tenureDays} Days", style = MaterialTheme.typography.bodyMedium)
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.height(8.dp))
+
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Column {
+                                    Text("Total Lifetime Paid", style = MaterialTheme.typography.labelSmall, color = MoneyGreen)
+                                    Text("₹${loan.totalPaid}", style = MaterialTheme.typography.bodyMedium, color = MoneyGreen)
+                                }
+
+                                Column(horizontalAlignment = Alignment.End) {
+                                    Text("Remaining Balance", style = MaterialTheme.typography.labelSmall, color = DangerRed)
+                                    Text("₹${maxOf(0.0, loan.remainingBalance)}", style = MaterialTheme.typography.bodyMedium, color = DangerRed)
                                 }
                             }
 
@@ -310,7 +310,7 @@ fun ApprovedLoansScreen(
                                             }
                                             .onFailure {
                                                 isLoadingHistory = false
-                                                Toast.makeText(context, "Could not load history: ${it.message}", Toast.LENGTH_SHORT).show()
+                                                Toast.makeText(context, "Could not load receipts: ${it.message}", Toast.LENGTH_SHORT).show()
                                             }
                                     }
                                 },
@@ -319,7 +319,7 @@ fun ApprovedLoansScreen(
                             ) {
                                 Icon(Icons.Default.ReceiptLong, contentDescription = null, modifier = Modifier.size(18.dp))
                                 Spacer(modifier = Modifier.width(8.dp))
-                                Text("View Repayment History")
+                                Text("View Payment Receipts")
                             }
                         }
                     }
@@ -327,7 +327,7 @@ fun ApprovedLoansScreen(
             }
         }
 
-        selectedLoanForHistory?.let { loan ->
+        selectedLoanForHistory?.let {
             AlertDialog(
                 onDismissRequest = { selectedLoanForHistory = null },
                 title = {
@@ -336,7 +336,7 @@ fun ApprovedLoansScreen(
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text("Repayment Details", style = MaterialTheme.typography.titleLarge)
+                        Text("My Payment Receipts", style = MaterialTheme.typography.titleLarge)
                         IconButton(onClick = { selectedLoanForHistory = null }) {
                             Icon(Icons.Default.Close, contentDescription = "Close")
                         }
@@ -346,27 +346,16 @@ fun ApprovedLoansScreen(
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .heightIn(max = 420.dp),
+                            .heightIn(max = 400.dp),
                         verticalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
-                        Surface(
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(10.dp),
-                            color = BrandPrimary.copy(alpha = 0.08f)
-                        ) {
-                            Column(modifier = Modifier.padding(10.dp)) {
-                                Text(loan.borrowerName, style = MaterialTheme.typography.titleMedium, color = BrandPrimary)
-                                Text("Paid: ₹${loan.totalPaid} | Balance: ₹${maxOf(0.0, loan.remainingBalance)}", style = MaterialTheme.typography.bodySmall)
-                            }
-                        }
-
                         if (isLoadingHistory) {
                             Box(modifier = Modifier.fillMaxWidth().height(100.dp), contentAlignment = Alignment.Center) {
                                 CircularProgressIndicator(modifier = Modifier.size(28.dp), color = BrandPrimary)
                             }
                         } else if (repaymentHistory.isEmpty()) {
                             Box(modifier = Modifier.fillMaxWidth().height(100.dp), contentAlignment = Alignment.Center) {
-                                Text("No repayments recorded yet.", color = TextSecondaryLight)
+                                Text("No payment receipts recorded yet.", color = TextSecondaryLight)
                             }
                         } else {
                             LazyColumn(
@@ -407,7 +396,7 @@ fun ApprovedLoansScreen(
                         onClick = { selectedLoanForHistory = null },
                         colors = ButtonDefaults.buttonColors(containerColor = BrandPrimary)
                     ) {
-                        Text("Done")
+                        Text("Close")
                     }
                 }
             )

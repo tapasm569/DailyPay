@@ -2,64 +2,31 @@ package com.dailypay.app.ui.screens.lender
 
 import android.widget.Toast
 import androidx.compose.foundation.border
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.AccountBalanceWallet
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SuggestionChip
-import androidx.compose.material3.SuggestionChipDefaults
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.DoneAll
+import androidx.compose.material.icons.filled.Person
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.dailypay.app.data.model.PendingPaymentItem
 import com.dailypay.app.data.repository.LenderRepository
-import com.dailypay.app.ui.theme.BorderSubtleLight
-import com.dailypay.app.ui.theme.BrandPrimary
-import com.dailypay.app.ui.theme.DangerRed
-import com.dailypay.app.ui.theme.MoneyGreen
-import com.dailypay.app.ui.theme.TextSecondaryLight
+import com.dailypay.app.ui.components.AppImageView
+import com.dailypay.app.ui.theme.*
 import kotlinx.coroutines.launch
-import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -70,41 +37,34 @@ fun VerifyPaymentScreen(
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val lenderRepo = remember { LenderRepository(context.applicationContext) }
+    val lenderRepo = remember { LenderRepository() }
 
-    var pendingPayments by remember { mutableStateOf<List<PendingPaymentItem>>(emptyList()) }
+    var pendingList by remember { mutableStateOf<List<PendingPaymentItem>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
-    var processingId by remember { mutableStateOf<String?>(null) }
-    var itemToReject by remember { mutableStateOf<PendingPaymentItem?>(null) }
-
-    val cleanLenderId = remember(lenderId) { lenderId.trim() }
+    var isProcessing by remember { mutableStateOf(false) }
 
     fun loadData() {
-        if (cleanLenderId.isBlank() || cleanLenderId == "{lenderId}") {
-            isLoading = false
-            return
-        }
         scope.launch {
-            lenderRepo.getPendingVerifications(cleanLenderId)
+            lenderRepo.getPendingVerifications(lenderId)
                 .onSuccess {
-                    pendingPayments = it
+                    pendingList = it
                     isLoading = false
                 }
-                .onFailure { error ->
+                .onFailure {
                     isLoading = false
-                    Toast.makeText(context, "Error: ${error.message}", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(context, "Error: ${it.message}", Toast.LENGTH_SHORT).show()
                 }
         }
     }
 
-    LaunchedEffect(cleanLenderId) {
+    LaunchedEffect(lenderId) {
         loadData()
     }
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Verify Cash (${pendingPayments.size})") },
+                title = { Text("Verify Cash (${pendingList.size})") },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
@@ -116,40 +76,15 @@ fun VerifyPaymentScreen(
         containerColor = MaterialTheme.colorScheme.background
     ) { paddingValues ->
         if (isLoading) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(paddingValues),
-                contentAlignment = Alignment.Center
-            ) {
+            Box(modifier = Modifier.fillMaxSize().padding(paddingValues), contentAlignment = Alignment.Center) {
                 CircularProgressIndicator(color = BrandPrimary)
             }
-        } else if (pendingPayments.isEmpty()) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(paddingValues),
-                contentAlignment = Alignment.Center
-            ) {
+        } else if (pendingList.isEmpty()) {
+            Box(modifier = Modifier.fillMaxSize().padding(paddingValues), contentAlignment = Alignment.Center) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Icon(
-                        imageVector = Icons.Default.CheckCircle,
-                        contentDescription = null,
-                        tint = MoneyGreen,
-                        modifier = Modifier.size(54.dp)
-                    )
+                    Icon(Icons.Default.DoneAll, contentDescription = null, tint = MoneyGreen, modifier = Modifier.size(54.dp))
                     Spacer(modifier = Modifier.height(10.dp))
-                    Text(
-                        text = "No cash handovers awaiting verification.",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = MoneyGreen
-                    )
-                    Text(
-                        text = "All submitted borrower payments are verified.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = TextSecondaryLight
-                    )
+                    Text("All cash payments verified!", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                 }
             }
         } else {
@@ -160,16 +95,7 @@ fun VerifyPaymentScreen(
                     .padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(14.dp)
             ) {
-                itemsIndexed(
-                    items = pendingPayments,
-                    key = { index, item -> item.repayment.id?.takeIf { it.isNotBlank() } ?: "pending_${item.borrowerMobile}_$index" }
-                ) { _, item ->
-                    val r = item.repayment
-                    val formattedAmount = remember(r.amountPaid) {
-                        String.format(Locale.US, "%.2f", r.amountPaid)
-                    }
-                    val borrowerDisplayName = item.borrowerName.ifBlank { "Customer" }
-
+                items(pendingList, key = { it.repayment.id ?: "" }) { item ->
                     Card(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -177,175 +103,94 @@ fun VerifyPaymentScreen(
                         shape = RoundedCornerShape(16.dp),
                         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
                     ) {
-                        Column(
-                            modifier = Modifier.padding(16.dp),
-                            verticalArrangement = Arrangement.spacedBy(10.dp)
-                        ) {
+                        Column(modifier = Modifier.padding(16.dp)) {
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(
-                                        text = borrowerDisplayName,
-                                        style = MaterialTheme.typography.titleMedium,
-                                        fontWeight = FontWeight.Bold
+                                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                                    AppImageView(
+                                        data = item.borrowerProfilePic,
+                                        contentDescription = item.borrowerName,
+                                        modifier = Modifier
+                                            .size(46.dp)
+                                            .clip(CircleShape)
+                                            .border(1.5.dp, BrandPrimary.copy(alpha = 0.4f), CircleShape),
+                                        placeholderIcon = Icons.Default.Person,
+                                        contentScale = ContentScale.Crop
                                     )
-                                    Text(
-                                        text = "+91 ${item.borrowerMobile}",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = TextSecondaryLight
-                                    )
+                                    Spacer(modifier = Modifier.width(12.dp))
+                                    Column {
+                                        Text(item.borrowerName, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                                        Text("+91 ${item.borrowerMobile}", style = MaterialTheme.typography.bodySmall, color = TextSecondaryLight)
+                                    }
                                 }
-                                SuggestionChip(
-                                    onClick = {},
-                                    label = { Text("CASH HANDOVER") },
-                                    icon = { Icon(Icons.Default.AccountBalanceWallet, contentDescription = null, modifier = Modifier.size(16.dp)) },
-                                    colors = SuggestionChipDefaults.suggestionChipColors(
-                                        containerColor = MoneyGreen.copy(alpha = 0.1f),
-                                        labelColor = MoneyGreen
-                                    )
-                                )
+                                Text("₹${item.repayment.amountPaid}", style = MaterialTheme.typography.titleLarge, color = AlertOrange, fontWeight = FontWeight.Bold)
                             }
-
-                            HorizontalDivider(color = BorderSubtleLight.copy(alpha = 0.6f))
-
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Column {
-                                    Text("Cash Amount", style = MaterialTheme.typography.labelSmall, color = TextSecondaryLight)
-                                    Text(
-                                        text = "₹$formattedAmount",
-                                        style = MaterialTheme.typography.headlineSmall,
-                                        fontWeight = FontWeight.Bold,
-                                        color = MoneyGreen
-                                    )
-                                }
-                                Column(horizontalAlignment = Alignment.End) {
-                                    Text("Handover Date", style = MaterialTheme.typography.labelSmall, color = TextSecondaryLight)
-                                    Text(
-                                        text = r.paymentDate?.trim()?.ifBlank { "Today" } ?: "Today",
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        fontWeight = FontWeight.Medium
-                                    )
-                                }
-                            }
-
-                            if (!r.notes.isNullOrBlank()) {
-                                Text(
-                                    text = "Note: ${r.notes}",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = TextSecondaryLight
-                                )
-                            }
-
-                            Spacer(modifier = Modifier.height(4.dp))
-
+                            
+                            Spacer(modifier = Modifier.height(14.dp))
+                            
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.spacedBy(10.dp)
                             ) {
-                                Button(
+                                OutlinedButton(
                                     onClick = {
-                                        val id = r.id ?: return@Button
-                                        processingId = id
+                                        val id = item.repayment.id ?: return@OutlinedButton
+                                        isProcessing = true
                                         scope.launch {
-                                            lenderRepo.verifyRepayment(id, accept = true, lenderId = cleanLenderId)
+                                            lenderRepo.verifyRepayment(id, accept = false)
                                                 .onSuccess {
-                                                    processingId = null
-                                                    Toast.makeText(context, "Cash verified & loan balance updated!", Toast.LENGTH_SHORT).show()
+                                                    isProcessing = false
                                                     loadData()
                                                 }
-                                                .onFailure { error ->
-                                                    processingId = null
-                                                    Toast.makeText(context, "Error: ${error.message}", Toast.LENGTH_SHORT).show()
+                                                .onFailure {
+                                                    isProcessing = false
+                                                    Toast.makeText(context, "Error: ${it.message}", Toast.LENGTH_SHORT).show()
                                                 }
                                         }
                                     },
-                                    enabled = processingId == null,
                                     modifier = Modifier.weight(1f),
+                                    colors = ButtonDefaults.outlinedButtonColors(contentColor = DangerRed),
                                     shape = RoundedCornerShape(10.dp),
-                                    colors = ButtonDefaults.buttonColors(containerColor = MoneyGreen)
+                                    enabled = !isProcessing
                                 ) {
-                                    if (processingId == r.id) {
-                                        CircularProgressIndicator(
-                                            color = MaterialTheme.colorScheme.onPrimary,
-                                            strokeWidth = 2.dp,
-                                            modifier = Modifier.size(16.dp)
-                                        )
-                                        Spacer(modifier = Modifier.width(6.dp))
-                                        Text("Verifying...")
-                                    } else {
-                                        Text("Cash Received")
-                                    }
+                                    Icon(Icons.Default.Close, contentDescription = null, modifier = Modifier.size(16.dp))
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text("Reject")
                                 }
 
-                                OutlinedButton(
+                                Button(
                                     onClick = {
-                                        itemToReject = item
+                                        val id = item.repayment.id ?: return@Button
+                                        isProcessing = true
+                                        scope.launch {
+                                            lenderRepo.verifyRepayment(id, accept = true)
+                                                .onSuccess {
+                                                    isProcessing = false
+                                                    loadData()
+                                                }
+                                                .onFailure {
+                                                    isProcessing = false
+                                                    Toast.makeText(context, "Error: ${it.message}", Toast.LENGTH_SHORT).show()
+                                                }
+                                        }
                                     },
-                                    enabled = processingId == null,
-                                    modifier = Modifier.weight(1f),
+                                    modifier = Modifier.weight(1.3f),
+                                    colors = ButtonDefaults.buttonColors(containerColor = MoneyGreen),
                                     shape = RoundedCornerShape(10.dp),
-                                    colors = ButtonDefaults.outlinedButtonColors(contentColor = DangerRed)
+                                    enabled = !isProcessing
                                 ) {
-                                    Text("Reject")
+                                    Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp))
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text("Cash Received")
                                 }
                             }
                         }
                     }
                 }
             }
-        }
-
-        itemToReject?.let { item ->
-            val repaymentId = item.repayment.id.orEmpty()
-            AlertDialog(
-                onDismissRequest = { if (processingId == null) itemToReject = null },
-                title = { Text("Reject Cash Handover") },
-                text = {
-                    Text(
-                        text = "Are you sure you want to reject the cash handover of ₹${String.format(Locale.US, "%.2f", item.repayment.amountPaid)} from ${item.borrowerName.ifBlank { "Customer" }}? This will keep their due balance open."
-                    )
-                },
-                confirmButton = {
-                    Button(
-                        onClick = {
-                            if (repaymentId.isBlank()) return@Button
-                            processingId = repaymentId
-                            scope.launch {
-                                lenderRepo.verifyRepayment(repaymentId, accept = false, lenderId = cleanLenderId)
-                                    .onSuccess {
-                                        processingId = null
-                                        itemToReject = null
-                                        Toast.makeText(context, "Payment marked as rejected.", Toast.LENGTH_SHORT).show()
-                                        loadData()
-                                    }
-                                    .onFailure { error ->
-                                        processingId = null
-                                        Toast.makeText(context, "Error: ${error.message}", Toast.LENGTH_SHORT).show()
-                                    }
-                            }
-                        },
-                        colors = ButtonDefaults.buttonColors(containerColor = DangerRed),
-                        enabled = processingId == null
-                    ) {
-                        Text("Confirm Reject")
-                    }
-                },
-                dismissButton = {
-                    TextButton(
-                        onClick = { itemToReject = null },
-                        enabled = processingId == null
-                    ) {
-                        Text("Cancel")
-                    }
-                }
-            )
         }
     }
 }

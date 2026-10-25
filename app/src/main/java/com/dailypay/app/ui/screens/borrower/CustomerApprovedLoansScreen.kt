@@ -5,22 +5,28 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.ReceiptLong
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.dailypay.app.data.model.ApprovedLoanDetail
 import com.dailypay.app.data.model.Repayment
 import com.dailypay.app.data.repository.BorrowerRepository
+import com.dailypay.app.ui.components.AppImageView
 import com.dailypay.app.ui.theme.*
 import kotlinx.coroutines.launch
 
@@ -63,7 +69,7 @@ fun CustomerApprovedLoansScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("My Approved Loans (${approvedLoans.size})") },
+                title = { Text("My Active Loans") },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
@@ -91,7 +97,7 @@ fun CustomerApprovedLoansScreen(
                 contentAlignment = Alignment.Center
             ) {
                 Text(
-                    text = "No approved active loans currently.",
+                    text = "No active loans found.",
                     style = MaterialTheme.typography.bodyLarge,
                     color = TextSecondaryLight
                 )
@@ -108,7 +114,7 @@ fun CustomerApprovedLoansScreen(
                     Card(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .border(1.dp, MoneyGreen.copy(alpha = 0.3f), RoundedCornerShape(16.dp)),
+                            .border(1.dp, BorderSubtleLight, RoundedCornerShape(16.dp)),
                         shape = RoundedCornerShape(16.dp),
                         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
                     ) {
@@ -122,30 +128,39 @@ fun CustomerApprovedLoansScreen(
                                 horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Column {
-                                    Text(
-                                        text = "Approved Principal",
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = TextSecondaryLight
+                                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                                    AppImageView(
+                                        data = loan.borrowerProfilePic,
+                                        contentDescription = "Your Profile",
+                                        modifier = Modifier
+                                            .size(46.dp)
+                                            .clip(CircleShape)
+                                            .border(1.5.dp, BrandPrimary.copy(alpha = 0.4f), CircleShape),
+                                        placeholderIcon = Icons.Default.Person,
+                                        contentScale = ContentScale.Crop
                                     )
-                                    Text(
-                                        text = "₹${loan.principalAmount}",
-                                        style = MaterialTheme.typography.titleLarge,
-                                        color = MoneyGreen
-                                    )
-                                }
 
-                                SuggestionChip(
-                                    onClick = {},
-                                    label = { Text("ACTIVE", color = MoneyGreen) }
-                                )
+                                    Spacer(modifier = Modifier.width(12.dp))
+
+                                    Column {
+                                        Text(
+                                            text = "Your Loan Account",
+                                            style = MaterialTheme.typography.titleMedium,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                        Text(
+                                            text = "Status: ${loan.status}",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = BrandPrimary
+                                        )
+                                    }
+                                }
                             }
 
                             Spacer(modifier = Modifier.height(10.dp))
                             HorizontalDivider(color = BorderSubtleLight)
                             Spacer(modifier = Modifier.height(10.dp))
 
-                            // TODAY'S DUE & TODAY'S PAYMENT
                             Surface(
                                 modifier = Modifier.fillMaxWidth(),
                                 shape = RoundedCornerShape(12.dp),
@@ -193,7 +208,7 @@ fun CustomerApprovedLoansScreen(
                                 horizontalArrangement = Arrangement.SpaceBetween
                             ) {
                                 Column {
-                                    Text("Total Lifetime Paid", style = MaterialTheme.typography.labelSmall, color = MoneyGreen)
+                                    Text("Total Paid", style = MaterialTheme.typography.labelSmall, color = MoneyGreen)
                                     Text("₹${loan.totalPaid}", style = MaterialTheme.typography.bodyMedium, color = MoneyGreen)
                                 }
 
